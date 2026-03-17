@@ -31,6 +31,8 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
+.env.local
 .env*.local
 
 # typescript
@@ -39,3 +41,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Firebase native config files (download manually — see FIREBASE_SETUP.md)
+google-services.json
+GoogleService-Info.plist
