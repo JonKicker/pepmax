@@ -1,4 +1,5 @@
 import { Timestamp } from 'firebase/firestore';
+import type { MealSlotConfig } from './nutrition';
 
 export type Goal = 'peptides' | 'nutrition' | 'training' | 'cardio';
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
@@ -9,6 +10,12 @@ export type MacroTargets = {
   proteinG: number;
   carbsG: number;
   fatG: number;
+  // Percentage representation — persisted alongside grams so both the
+  // settings screen (displays pct) and dashboard (displays grams) work
+  // immediately after save without recalculating.
+  proteinPct?: number;
+  carbsPct?: number;
+  fatPct?: number;
 };
 
 export type UserProfile = {
@@ -27,6 +34,12 @@ export type UserProfile = {
   tdee: number;
   calorieTarget: number;
   macros: MacroTargets;
+
+  // Activity multiplier stored for display in Nutrition Settings
+  activityLevel?: number;
+
+  // Custom / reordered meal slots. Falls back to DEFAULT_MEAL_SLOTS when absent.
+  mealSlots?: MealSlotConfig[];
 
   // Meta
   quizCompletedAt: Timestamp;

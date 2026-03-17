@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 import { useTheme } from '../../../src/hooks/useTheme';
+import { Colors } from '../../../src/constants/theme';
 
 export default function PeptidesLayout() {
   const { colors } = useTheme();
@@ -7,11 +8,17 @@ export default function PeptidesLayout() {
     <Stack
       screenOptions={{
         headerStyle: { backgroundColor: colors.surface },
-        headerTintColor: colors.textPrimary,
+        headerTintColor: Colors.peptide,
         headerTitleStyle: { color: colors.textPrimary },
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'Peptides' }} />
+      <Stack.Screen name="index" options={{ title: 'Peptide Library' }} />
+      <Stack.Screen
+        name="peptide-form"
+        options={{ title: 'Add Peptide', presentation: 'modal' }}
+      />
+      <Stack.Screen name="log-dose" options={{ title: 'Log Dose' }} />
+      <Stack.Screen name="history" options={{ title: 'Dose History' }} />
     </Stack>
   );
 }

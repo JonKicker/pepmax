@@ -23,6 +23,7 @@ type AuthState = {
   isLoading: boolean;
   profileLoading: boolean;
   isAuthenticated: boolean;
+  refreshProfile: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -68,6 +69,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   }, []);
 
+  const refreshProfile = async (): Promise<void> => {
+    if (!currentUser) return; // null guard — token may have expired or concurrent sign-out
+    await fetchProfile(currentUser.uid);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -76,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         profileLoading,
         isAuthenticated: currentUser !== null,
+        refreshProfile,
       }}
     >
       {children}

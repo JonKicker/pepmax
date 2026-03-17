@@ -30,6 +30,9 @@ import type { ServiceResult } from '../../types/service';
 
 export const COLLECTIONS = {
   PEPTIDES: 'peptides',
+  DOSES: 'doses',
+  FOOD_LOG: 'foodLog',
+  FAVORITE_FOODS: 'favoriteFoods',
   NUTRITION: 'nutrition',
   WORKOUTS: 'workouts',
   PROFILE: 'profile',

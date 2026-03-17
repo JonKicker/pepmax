@@ -6,7 +6,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { serverTimestamp } from 'firebase/firestore';
 import { useTheme } from '../../src/hooks/useTheme';
-import { Colors } from '../../src/constants/theme';
+import { Colors, Theme } from '../../src/constants/theme';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { setDocument, COLLECTIONS } from '../../src/services/firebase/firestore';
 import { calculateTDEE, calculateMacros, lbsToKg, feetInchesToCm } from '../../src/utils/tdee';
@@ -203,7 +203,7 @@ export default function QuizScreen() {
 
 // ─── Step components ─────────────────────────────────────────────────────────
 
-function Step1({ data, colors, onToggleGoal }: { data: QuizData; colors: any; onToggleGoal: (g: Goal) => void }) {
+function Step1({ data, colors, onToggleGoal }: { data: QuizData; colors: Theme['colors']; onToggleGoal: (g: Goal) => void }) {
   const OPTIONS: { value: Goal; label: string; color: string }[] = [
     { value: 'peptides', label: 'Peptide Tracking', color: Colors.peptide },
     { value: 'nutrition', label: 'Nutrition', color: Colors.nutrition },
@@ -243,7 +243,7 @@ function Step1({ data, colors, onToggleGoal }: { data: QuizData; colors: any; on
   );
 }
 
-function Step2({ data, colors, onSelect }: { data: QuizData; colors: any; onSelect: (v: ExperienceLevel) => void }) {
+function Step2({ data, colors, onSelect }: { data: QuizData; colors: Theme['colors']; onSelect: (v: ExperienceLevel) => void }) {
   const OPTIONS: { value: ExperienceLevel; label: string; desc: string }[] = [
     { value: 'beginner', label: 'Beginner', desc: 'New to training and tracking' },
     { value: 'intermediate', label: 'Intermediate', desc: 'Consistent for 1–3 years' },
@@ -272,7 +272,7 @@ function Step2({ data, colors, onSelect }: { data: QuizData; colors: any; onSele
   );
 }
 
-function Step3({ data, colors, onUpdate }: { data: QuizData; colors: any; onUpdate: <K extends keyof QuizData>(key: K, value: QuizData[K]) => void }) {
+function Step3({ data, colors, onUpdate }: { data: QuizData; colors: Theme['colors']; onUpdate: <K extends keyof QuizData>(key: K, value: QuizData[K]) => void }) {
   const imp = data.inputUnits === 'imperial';
   return (
     <View style={styles.stepContainer}>
@@ -372,7 +372,7 @@ function Step3({ data, colors, onUpdate }: { data: QuizData; colors: any; onUpda
   );
 }
 
-function Step4({ data, colors, onSelect }: { data: QuizData; colors: any; onSelect: (v: Units) => void }) {
+function Step4({ data, colors, onSelect }: { data: QuizData; colors: Theme['colors']; onSelect: (v: Units) => void }) {
   const OPTIONS: { value: Units; label: string; desc: string }[] = [
     { value: 'imperial', label: 'Imperial', desc: 'lbs, inches, miles' },
     { value: 'metric', label: 'Metric', desc: 'kg, cm, km' },

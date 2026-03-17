@@ -4,7 +4,15 @@
  */
 import type { MacroTargets, Sex } from '../types/profile';
 
-const ACTIVITY_MODERATE = 1.55;
+export const ACTIVITY_LEVELS = [
+  { label: 'Sedentary (office job, little exercise)', multiplier: 1.2 },
+  { label: 'Lightly Active (light exercise 1-3 days/week)', multiplier: 1.375 },
+  { label: 'Moderately Active (moderate exercise 3-5 days/week)', multiplier: 1.55 },
+  { label: 'Very Active (hard exercise 6-7 days/week)', multiplier: 1.725 },
+  { label: 'Extremely Active (athlete, physical job + exercise)', multiplier: 1.9 },
+] as const;
+
+export type ActivityLevel = (typeof ACTIVITY_LEVELS)[number];
 
 /**
  * Mifflin-St Jeor BMR calculation.
@@ -17,10 +25,16 @@ export function calculateBMR(weightKg: number, heightCm: number, age: number, se
 
 /**
  * TDEE = BMR × activity factor.
- * Uses moderate activity (1.55) as default — adjustable later in settings.
+ * @param activityMultiplier — defaults to 1.55 (Moderately Active). Backward compatible.
  */
-export function calculateTDEE(weightKg: number, heightCm: number, age: number, sex: Sex): number {
-  return Math.round(calculateBMR(weightKg, heightCm, age, sex) * ACTIVITY_MODERATE);
+export function calculateTDEE(
+  weightKg: number,
+  heightCm: number,
+  age: number,
+  sex: Sex,
+  activityMultiplier: number = 1.55,
+): number {
+  return Math.round(calculateBMR(weightKg, heightCm, age, sex) * activityMultiplier);
 }
 
 /**

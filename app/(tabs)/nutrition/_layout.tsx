@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 import { useTheme } from '../../../src/hooks/useTheme';
+import { Colors } from '../../../src/constants/theme';
 
 export default function NutritionLayout() {
   const { colors } = useTheme();
@@ -7,11 +8,16 @@ export default function NutritionLayout() {
     <Stack
       screenOptions={{
         headerStyle: { backgroundColor: colors.surface },
-        headerTintColor: colors.textPrimary,
+        headerTintColor: Colors.nutrition,
         headerTitleStyle: { color: colors.textPrimary },
       }}
     >
       <Stack.Screen name="index" options={{ title: 'Nutrition' }} />
+      <Stack.Screen name="add-food" options={{ title: 'Add Food' }} />
+      <Stack.Screen name="food-detail" options={{ title: 'Food Detail' }} />
+      <Stack.Screen name="manual-entry" options={{ title: 'Manual Entry' }} />
+      <Stack.Screen name="history" options={{ title: 'Nutrition History' }} />
+      <Stack.Screen name="settings" options={{ title: 'Nutrition Settings' }} />
     </Stack>
   );
 }
