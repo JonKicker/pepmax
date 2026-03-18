@@ -384,6 +384,7 @@ export default function ProgressScreen() {
         </View>
       )}
     </ScrollView>
+    </PremiumGate>
   );
 }
 

@@ -40,6 +40,9 @@ export type UserProfile = {
   calorieTarget: number;
   macros: MacroTargets;
 
+  // Goal weight for body tracking (kg)
+  goalWeight?: number;
+
   // Activity multiplier stored for display in Nutrition Settings
   activityLevel?: number;
 

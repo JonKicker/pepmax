@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import PremiumGate from '../../../src/components/premium/PremiumGate';
 import {
   View,
   Text,
@@ -456,6 +457,7 @@ export default function ProgressScreen() {
   }
 
   return (
+    <PremiumGate mode="blur">
     <ScrollView
       style={{ backgroundColor: colors.background }}
       contentContainerStyle={styles.scroll}
@@ -655,6 +657,7 @@ export default function ProgressScreen() {
 
       <View style={{ height: 40 }} />
     </ScrollView>
+    </PremiumGate>
   );
 }
 

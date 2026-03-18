@@ -12,18 +12,58 @@
  *     authenticated, complete  → /(tabs)
  * - router.replace() is used (not push) so the back button never returns to auth screens.
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useColorScheme } from 'react-native';
 import { Stack, useRouter, useSegments, useRootNavigationState } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
+import { PremiumProvider } from '../src/contexts/PremiumContext';
 import ErrorBoundary from '../src/components/ErrorBoundary';
+import { initSentry, sentryWrap, setUser as sentrySetUser } from '../src/services/errorReporting';
+import { analytics, AnalyticsEvent } from '../src/services/analytics';
+
+// Initialize Sentry once at module load — before any component renders.
+initSentry();
 
 function AuthGuard() {
   const { currentUser, userProfile, isLoading, profileLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const navigationState = useRootNavigationState();
+
+  // Track previous uid to detect login/logout transitions (undefined = first render)
+  const prevUidRef = useRef<string | null | undefined>(undefined);
+
+  // Identify / reset analytics and error reporting when auth state changes
+  useEffect(() => {
+    const uid = currentUser?.uid ?? null;
+    if (prevUidRef.current === undefined) {
+      prevUidRef.current = uid;
+      return;
+    }
+    if (uid === prevUidRef.current) return;
+    prevUidRef.current = uid;
+
+    if (uid) {
+      analytics.identify(uid);
+      sentrySetUser({ id: uid, email: currentUser?.email ?? undefined });
+    } else {
+      analytics.reset();
+      sentrySetUser(null);
+    }
+  }, [currentUser]);
+
+  // Set user properties once profile is loaded
+  useEffect(() => {
+    if (!currentUser || !userProfile) return;
+    analytics.setUserProperties({
+      experience_level: userProfile.experienceLevel ?? '',
+      unit_preference: userProfile.units ?? 'imperial',
+      join_date: userProfile.quizCompletedAt
+        ? userProfile.quizCompletedAt.toDate().toISOString().slice(0, 10)
+        : '',
+    });
+  }, [currentUser, userProfile]);
 
   useEffect(() => {
     if (!navigationState?.key) return; // Navigation container not mounted yet — router.replace would be dropped
@@ -53,21 +93,30 @@ function AuthGuard() {
   return null;
 }
 
-export default function RootLayout() {
+function RootLayout() {
   const scheme = useColorScheme();
+
+  useEffect(() => {
+    analytics.track(AnalyticsEvent.APP_OPENED);
+  }, []);
 
   return (
     <AuthProvider>
-      <AuthGuard />
-      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-      <ErrorBoundary>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(onboarding)" />
-          <Stack.Screen name="(tabs)" />
-        </Stack>
-      </ErrorBoundary>
+      <PremiumProvider>
+        <AuthGuard />
+        <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+        <ErrorBoundary>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(onboarding)" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="paywall" options={{ presentation: 'modal', headerShown: false }} />
+          </Stack>
+        </ErrorBoundary>
+      </PremiumProvider>
     </AuthProvider>
   );
 }
+
+export default sentryWrap(RootLayout);

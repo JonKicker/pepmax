@@ -28,7 +28,11 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "FOREGROUND_SERVICE_LOCATION"]
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "FOREGROUND_SERVICE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -37,9 +41,14 @@
       "expo-router",
       "expo-web-browser",
       "expo-camera",
-      ["expo-location", {
-        "locationAlwaysAndWhenInUsePermission": "PepMax uses your location to track your running, cycling, and walking routes on a map."
-      }]
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "PepMax uses your location to track your running, cycling, and walking routes on a map."
+        }
+      ],
+      "@sentry/react-native",
+      "expo-mail-composer"
     ]
   }
 }

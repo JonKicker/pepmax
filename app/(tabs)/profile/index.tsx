@@ -7,11 +7,15 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Linking,
+  Platform,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors } from '../../../src/constants/theme';
 import { useAuth } from '../../../src/contexts/AuthContext';
+import { usePremium } from '../../../src/contexts/PremiumContext';
 import { signOut } from '../../../src/services/firebase/auth';
 import { cmToFeetInches, kgToLbs } from '../../../src/utils/tdee';
 import type { Goal } from '../../../src/types/profile';
@@ -64,7 +68,10 @@ function formatWeight(weightKg: number, imperial: boolean): string {
 export default function ProfileScreen() {
   const { colors } = useTheme();
   const { userProfile } = useAuth();
+  const { isPremium, plan, expirationDate, restorePurchases } = usePremium();
+  const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
+  const [restoringPurchases, setRestoringPurchases] = useState(false);
 
   // Guard: profile not yet loaded (brief AuthContext resolution window)
   if (!userProfile) {
@@ -169,6 +176,84 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {/* Subscription */}
+      {isPremium ? (
+        <View style={[styles.card, styles.premiumCard, { backgroundColor: colors.surface, borderColor: Colors.gold }]}>
+          <View style={styles.premiumHeader}>
+            <Ionicons name="star" size={18} color={Colors.gold} />
+            <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>PepMax Premium</Text>
+          </View>
+          <Text style={[styles.premiumPlan, { color: colors.textSecondary }]}>
+            {plan === 'annual' ? 'Annual Plan' : 'Monthly Plan'}
+            {expirationDate
+              ? ` · Renews ${new Date(expirationDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+              : ''}
+          </Text>
+          <TouchableOpacity
+            style={[styles.manageBtn, { borderColor: colors.border }]}
+            onPress={() => {
+              const url = Platform.OS === 'ios'
+                ? 'https://apps.apple.com/account/subscriptions'
+                : 'https://play.google.com/store/account/subscriptions';
+              Linking.openURL(url);
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="settings-outline" size={16} color={colors.textPrimary} />
+            <Text style={[styles.manageBtnText, { color: colors.textPrimary }]}>
+              Manage Subscription
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <TouchableOpacity
+          style={[styles.card, styles.upgradeCard, { backgroundColor: Colors.accent + '10', borderColor: Colors.accent }]}
+          onPress={() => router.push('/paywall')}
+          activeOpacity={0.8}
+        >
+          <View style={styles.premiumHeader}>
+            <Ionicons name="star" size={18} color={Colors.accent} />
+            <Text style={[styles.cardTitle, { color: Colors.accent }]}>Upgrade to Premium</Text>
+          </View>
+          <Text style={[styles.upgradeDesc, { color: colors.textSecondary }]}>
+            Unlock AI insights, unlimited templates, and more
+          </Text>
+          <View style={[styles.seePlansBtn, { backgroundColor: Colors.accent }]}>
+            <Text style={styles.seePlansBtnText}>See Plans</Text>
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {/* Restore Purchases */}
+      <TouchableOpacity
+        style={styles.restoreRow}
+        onPress={async () => {
+          setRestoringPurchases(true);
+          try {
+            const restored = await restorePurchases();
+            if (restored) {
+              Alert.alert('Restored!', 'Your premium subscription has been restored.');
+            } else {
+              Alert.alert('No Subscription Found', 'We could not find an active subscription for your account.');
+            }
+          } catch {
+            Alert.alert('Error', 'Could not restore purchases. Please try again.');
+          } finally {
+            setRestoringPurchases(false);
+          }
+        }}
+        disabled={restoringPurchases}
+        activeOpacity={0.7}
+      >
+        {restoringPurchases ? (
+          <ActivityIndicator color={colors.textSecondary} size="small" />
+        ) : (
+          <Text style={[styles.restoreText, { color: colors.textSecondary }]}>
+            Restore Purchases
+          </Text>
+        )}
+      </TouchableOpacity>
+
       {/* Sign Out */}
       <TouchableOpacity
         style={[styles.signOutBtn, signingOut && styles.signOutBtnDisabled]}
@@ -226,6 +311,34 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 12 },
   statValue: { fontSize: 16, fontWeight: '700' },
   statDivider: { width: 1, height: 40, marginHorizontal: 8 },
+
+  premiumCard: { borderWidth: 2 },
+  premiumHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  premiumPlan: { fontSize: 13 },
+  manageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 4,
+  },
+  manageBtnText: { fontSize: 14, fontWeight: '600' },
+
+  upgradeCard: { borderWidth: 2 },
+  upgradeDesc: { fontSize: 13 },
+  seePlansBtn: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  seePlansBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+
+  restoreRow: { alignItems: 'center', paddingVertical: 10, marginBottom: 4 },
+  restoreText: { fontSize: 14, textDecorationLine: 'underline' },
 
   signOutBtn: {
     marginTop: 12,

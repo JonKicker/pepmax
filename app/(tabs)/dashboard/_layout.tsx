@@ -12,6 +12,11 @@ export default function DashboardLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ title: 'Dashboard' }} />
+      <Stack.Screen name="settings" options={{ title: 'Dashboard Settings' }} />
+      <Stack.Screen name="body-tracking" options={{ title: 'Body Tracking' }} />
+      <Stack.Screen name="progress-camera" options={{ title: 'Progress Photos', headerShown: false }} />
+      <Stack.Screen name="photo-comparison" options={{ title: 'Compare' }} />
+      <Stack.Screen name="photo-detail" options={{ title: 'Photo' }} />
     </Stack>
   );
 }

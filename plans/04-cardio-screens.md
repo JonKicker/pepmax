@@ -1,6 +1,6 @@
 # Plan 04 — Cardio Tab Screens
 
-**Status:** BUILT — awaiting Ray code review
+**Status:** COMMITTED (d11633f)
 **Date:** 2026-03-18
 **Author:** Bob
 
