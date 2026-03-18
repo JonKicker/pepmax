@@ -593,8 +593,9 @@ export default function ActiveSessionScreen() {
         workout.addSet(exerciseIndex);
       }
 
-      // Start rest timer (default 90s)
-      restTimer.start(90, exerciseName);
+      // Start rest timer using this exercise's configured rest duration
+      const restSecs = workout.session!.exercises[exerciseIndex]?.restSeconds ?? 90;
+      restTimer.start(restSecs, exerciseName);
     },
     [workout, restTimer],
   );

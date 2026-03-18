@@ -181,6 +181,7 @@ export function useWorkoutSession(): WorkoutSessionHook {
               isPersonalRecord: false,
             })),
             notes: '',
+            restSeconds: te.restSeconds ?? 90,
           };
         });
 
@@ -426,6 +427,7 @@ export function useWorkoutSession(): WorkoutSessionHook {
         primaryMuscle: exercise.primaryMuscles[0] ?? 'Chest',
         order: s.exercises.length,
         supersetGroup: null,
+        restSeconds: 90, // default for ad-hoc exercises added mid-session
         sets: [
           {
             setNumber: 1,
@@ -479,6 +481,7 @@ export function useWorkoutSession(): WorkoutSessionHook {
         order: original.order,
         supersetGroup: original.supersetGroup,
         notes: '',
+        restSeconds: original.restSeconds, // preserve rest time from the replaced exercise
         sets: original.sets.map((set, i) => ({
           setNumber: i + 1,
           weight: 0,

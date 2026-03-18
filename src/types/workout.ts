@@ -24,6 +24,7 @@ export type SessionExercise = {
   supersetGroup: number | null;
   sets: SessionSet[];
   notes: string;
+  restSeconds: number; // per-exercise rest timer duration; defaults to 90 if not set
 };
 
 export type WorkoutSession = {
