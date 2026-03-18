@@ -17,6 +17,8 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors } from '../../../src/constants/theme';
 import { getTodaysWorkouts, deleteWorkout } from '../../../src/services/trainingService';
+import { useWorkoutRecovery } from '../../../src/hooks/useWorkoutRecovery';
+import { updateSession } from '../../../src/services/workoutSessionService';
 import type { WorkoutLog } from '../../../src/types/training';
 
 // ─── Swipeable card ───────────────────────────────────────────────────────────
@@ -144,6 +146,7 @@ function EmptyState({
 export default function TrainingScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const { activeSession, isChecking: recoveryChecking, dismiss: dismissRecovery } = useWorkoutRecovery();
 
   const [workouts, setWorkouts] = useState<WorkoutLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -211,8 +214,78 @@ export default function TrainingScreen() {
     );
   }
 
+  const handleResumeWorkout = () => {
+    if (activeSession) {
+      router.push({
+        pathname: '/(tabs)/training/active-session',
+        params: { sessionId: activeSession.id },
+      });
+    }
+  };
+
+  const handleDiscardRecovery = () => {
+    if (activeSession) {
+      Alert.alert('Discard workout?', 'This will permanently discard the unfinished session.', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: async () => {
+            await updateSession(activeSession.id, { status: 'abandoned' });
+            dismissRecovery();
+          },
+        },
+      ]);
+    }
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Recovery banner */}
+      {activeSession && (
+        <View style={[styles.recoveryBanner, { backgroundColor: Colors.warning + '20', borderColor: Colors.warning + '40' }]}>
+          <View style={styles.recoveryContent}>
+            <Ionicons name="alert-circle" size={20} color={Colors.warning} />
+            <View style={styles.recoveryText}>
+              <Text style={[styles.recoveryTitle, { color: colors.textPrimary }]}>
+                Unfinished workout
+              </Text>
+              <Text style={[styles.recoverySubtitle, { color: colors.textSecondary }]}>
+                {activeSession.templateName}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.recoveryActions}>
+            <TouchableOpacity onPress={handleResumeWorkout} style={[styles.recoveryBtn, { backgroundColor: Colors.gym }]}>
+              <Text style={styles.recoveryBtnText}>Resume</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleDiscardRecovery} style={styles.recoveryDismiss}>
+              <Text style={[styles.recoveryDismissText, { color: colors.textSecondary }]}>Discard</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Quick-action buttons */}
+      <View style={styles.quickActions}>
+        <TouchableOpacity
+          style={[styles.quickBtn, { backgroundColor: Colors.gym + '15', borderColor: Colors.gym + '30' }]}
+          onPress={() => router.push('/(tabs)/training/exercises')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="library-outline" size={18} color={Colors.gym} />
+          <Text style={[styles.quickBtnText, { color: Colors.gym }]}>Exercises</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.quickBtn, { backgroundColor: Colors.gym + '15', borderColor: Colors.gym + '30' }]}
+          onPress={() => router.push('/(tabs)/training/templates')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="clipboard-outline" size={18} color={Colors.gym} />
+          <Text style={[styles.quickBtnText, { color: Colors.gym }]}>Templates</Text>
+        </TouchableOpacity>
+      </View>
+
       <FlatList
         data={workouts}
         keyExtractor={(item) => item.id}
@@ -234,11 +307,14 @@ export default function TrainingScreen() {
         style={[styles.fab, { backgroundColor: Colors.gym }]}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          router.push('/(tabs)/training/log-workout');
+          router.push({
+            pathname: '/(tabs)/training/active-session',
+            params: { mode: 'quick' },
+          });
         }}
         activeOpacity={0.85}
       >
-        <Ionicons name="add" size={30} color="white" />
+        <Ionicons name="flash" size={26} color="white" />
       </TouchableOpacity>
     </View>
   );
@@ -301,6 +377,41 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 20, fontWeight: '700', marginBottom: 8, textAlign: 'center' },
   emptySubtitle: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
+
+  quickActions: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    gap: 10,
+  },
+  quickBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 6,
+  },
+  quickBtnText: { fontSize: 14, fontWeight: '700' },
+
+  recoveryBanner: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  recoveryContent: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  recoveryText: { marginLeft: 10, flex: 1 },
+  recoveryTitle: { fontSize: 15, fontWeight: '700' },
+  recoverySubtitle: { fontSize: 13, marginTop: 2 },
+  recoveryActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  recoveryBtn: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 8 },
+  recoveryBtnText: { color: 'white', fontWeight: '700', fontSize: 14 },
+  recoveryDismiss: { paddingHorizontal: 12, paddingVertical: 8 },
+  recoveryDismissText: { fontSize: 14, fontWeight: '600' },
 
   fab: {
     position: 'absolute',
