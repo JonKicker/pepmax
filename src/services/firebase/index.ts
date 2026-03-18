@@ -12,11 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const { getReactNativePersistence } = require('firebase/auth') as {
   getReactNativePersistence: (storage: typeof AsyncStorage) => Persistence;
 };
-import {
-  initializeFirestore,
-  persistentLocalCache,
-  persistentSingleTabManager,
-} from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
@@ -42,12 +38,11 @@ export const auth = (() => {
   }
 })();
 
-// Offline-capable Firestore with persistent local cache (JS SDK best-effort caching)
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentSingleTabManager({}),
-  }),
-});
+// persistentLocalCache / persistentSingleTabManager use IndexedDB — a web-only
+// browser API unavailable in React Native. Using them here throws at runtime.
+// getFirestore(app) is correct for RN: the JS SDK still provides an in-memory
+// cache; persistent cross-session caching is not available via the JS SDK on RN.
+export const db = getFirestore(app);
 
 export const storage = getStorage(app);
 

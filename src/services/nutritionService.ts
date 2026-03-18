@@ -192,18 +192,49 @@ export async function getFavorites(): Promise<ServiceResult<FavoriteFood[]>> {
 // ─── Open Food Facts search ──────────────────────────────────────────────────
 
 const OFF_BASE =
-  'https://world.openfoodfacts.org/cgi/search.pl?search_simple=1&action=process&json=1&page_size=20';
+  'https://world.openfoodfacts.org/cgi/search.pl?search_simple=1&action=process&json=1&page_size=30&lc=en';
+
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const searchCache = new Map<string, { data: FoodSearchResult[]; ts: number }>();
+
+function relevanceScore(name: string, query: string): number {
+  const n = name.toLowerCase();
+  const q = query.toLowerCase().trim();
+  const qEscaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (n === q) return 100;
+  if (n.startsWith(q)) return 80;
+  if (new RegExp(`\\b${qEscaped}`).test(n)) return 60;
+  if (n.includes(q)) return 40;
+  return 0;
+}
 
 /**
  * Search Open Food Facts. Returns sanitized results — callers never see raw API data.
  * Throws on network failure so the UI can distinguish "no results" from "API down".
+ *
+ * @param signal — optional AbortSignal from the caller (e.g. to cancel stale requests).
+ *                 Aborting via this signal resolves to { data: null, error: AbortError }.
  */
-export async function searchFood(query: string): Promise<ServiceResult<FoodSearchResult[]>> {
+export async function searchFood(
+  query: string,
+  signal?: AbortSignal,
+): Promise<ServiceResult<FoodSearchResult[]>> {
   if (!query.trim()) return { data: [], error: null };
 
+  const cacheKey = query.trim().toLowerCase();
+  const cached = searchCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+    return { data: cached.data, error: null };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10_000);
+  // Propagate caller abort into our internal controller
+  signal?.addEventListener('abort', () => controller.abort(), { once: true });
   try {
     const url = `${OFF_BASE}&search_terms=${encodeURIComponent(query.trim())}`;
-    const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       return { data: null, error: new Error(`Search API returned ${response.status}`) };
@@ -229,10 +260,24 @@ export async function searchFood(query: string): Promise<ServiceResult<FoodSearc
           barcode: s.barcode,
         } satisfies FoodSearchResult;
       })
-      .filter((r: FoodSearchResult) => r.name !== 'Unknown Food');
+      .filter((r: FoodSearchResult) => r.name !== 'Unknown Food')
+      .filter(
+        (r: FoodSearchResult) =>
+          !(r.calories100g === 0 && r.protein100g === 0 && r.carbs100g === 0 && r.fat100g === 0),
+      )
+      .sort(
+        (a: FoodSearchResult, b: FoodSearchResult) =>
+          relevanceScore(b.name, query) - relevanceScore(a.name, query),
+      );
 
+    if (searchCache.size >= 100) {
+      // Evict the oldest entry (Map preserves insertion order)
+      searchCache.delete(searchCache.keys().next().value!);
+    }
+    searchCache.set(cacheKey, { data: products, ts: Date.now() });
     return { data: products, error: null };
   } catch (e) {
+    clearTimeout(timeoutId);
     return { data: null, error: e as Error };
   }
 }

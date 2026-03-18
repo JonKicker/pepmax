@@ -120,15 +120,15 @@ export function sanitizeOFFProduct(raw: any): SanitizedOFFProduct {
   }
 
   return {
-    name: String(raw?.product_name ?? raw?.product_name_en ?? '').trim() || 'Unknown Food',
+    name: String(raw?.product_name_en ?? raw?.product_name ?? '').trim() || 'Unknown Food',
     brand: String(raw?.brands ?? '').split(',')[0].trim(),
     barcode: String(raw?.code ?? raw?._id ?? ''),
     servingSizeG: parseServingSizeG(raw?.serving_size),
     per100g: {
-      calories,
-      protein: clampNutrient(n['proteins_100g'] ?? n['protein_100g']),
-      carbs: clampNutrient(n['carbohydrates_100g'] ?? n['carbs_100g']),
-      fat: clampNutrient(n['fat_100g']),
+      calories: Math.round(calories),
+      protein: Math.round(clampNutrient(n['proteins_100g'] ?? n['protein_100g']) * 10) / 10,
+      carbs: Math.round(clampNutrient(n['carbohydrates_100g'] ?? n['carbs_100g']) * 10) / 10,
+      fat: Math.round(clampNutrient(n['fat_100g']) * 10) / 10,
       fiber: clampOptional(n['fiber_100g'] ?? n['fibers_100g']),
       sugar: clampOptional(n['sugars_100g'] ?? n['sugar_100g']),
       sodium: clampOptional(n['sodium_100g']),

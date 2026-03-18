@@ -198,6 +198,7 @@ export default function AddFoodScreen() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchDone, setSearchDone] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
 
   // Recent tab state
   const [recentFoods, setRecentFoods] = useState<FoodLogEntry[]>([]);
@@ -210,17 +211,27 @@ export default function AddFoodScreen() {
   // ─── Debounced search (400ms as required by Ray) ──────────────────────────
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!query.trim()) {
+    if (query.trim().length < 2) {
       setSearchResults([]);
       setSearchDone(false);
       setSearchError(null);
+      setSearchLoading(false);
       return;
     }
     debounceRef.current = setTimeout(async () => {
+      // Abort any in-flight request before starting a new one
+      searchAbortRef.current?.abort();
+      searchAbortRef.current = new AbortController();
+      const signal = searchAbortRef.current.signal;
+
       setSearchLoading(true);
       setSearchError(null);
       setSearchDone(false);
-      const result = await searchFood(query);
+      const result = await searchFood(query, signal);
+
+      // Ignore results from aborted (stale) requests
+      if (result.error?.name === 'AbortError') return;
+
       setSearchLoading(false);
       setSearchDone(true);
       if (result.error) {
@@ -305,7 +316,7 @@ export default function AddFoodScreen() {
           </TouchableOpacity>
         </View>
       )}
-      {!searchLoading && !searchError && !searchDone && !query.trim() && (
+      {!searchLoading && !searchError && !searchDone && query.trim().length < 2 && (
         <View style={styles.searchFeedback}>
           <Ionicons name="search" size={36} color={colors.textSecondary} style={{ opacity: 0.3 }} />
           <Text style={[styles.feedbackText, { color: colors.textSecondary }]}>

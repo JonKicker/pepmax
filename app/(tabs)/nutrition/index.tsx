@@ -43,7 +43,6 @@ function CalorieRing({
   colors: Theme['colors'];
 }) {
   const progress = target > 0 ? Math.min(consumed / target, 1.2) : 0;
-  const clamped = Math.min(progress, 1);
 
   // Ring color based on proximity to target
   const ringColor =
@@ -54,19 +53,19 @@ function CalorieRing({
       : Colors.nutrition;
 
   // Reanimated shared values for each half-circle
-  const leftRotation = useSharedValue(0);
-  const rightRotation = useSharedValue(0);
+  const leftRotation = useSharedValue(180);
+  const rightRotation = useSharedValue(180);
   const leftVisible = useSharedValue(0);
 
   React.useEffect(() => {
     const p = Math.min(progress, 1);
     // Right half rotates for first 50% of progress (0–180°)
-    rightRotation.value = withTiming(Math.min(p, 0.5) * 360, {
+    rightRotation.value = withTiming(180 + Math.min(p, 0.5) * 360, {
       duration: 900,
       easing: Easing.out(Easing.quad),
     });
     // Left half rotates for second 50% (180–360°)
-    leftRotation.value = withTiming(Math.max(0, p - 0.5) * 360, {
+    leftRotation.value = withTiming(180 + Math.max(0, p - 0.5) * 360, {
       duration: 900,
       easing: Easing.out(Easing.quad),
     });
