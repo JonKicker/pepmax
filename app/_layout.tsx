@@ -17,6 +17,7 @@ import { useColorScheme } from 'react-native';
 import { Stack, useRouter, useSegments, useRootNavigationState } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
+import ErrorBoundary from '../src/components/ErrorBoundary';
 
 function AuthGuard() {
   const { currentUser, userProfile, isLoading, profileLoading } = useAuth();
@@ -59,12 +60,14 @@ export default function RootLayout() {
     <AuthProvider>
       <AuthGuard />
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(onboarding)" />
-        <Stack.Screen name="(tabs)" />
-      </Stack>
+      <ErrorBoundary>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(onboarding)" />
+          <Stack.Screen name="(tabs)" />
+        </Stack>
+      </ErrorBoundary>
     </AuthProvider>
   );
 }
