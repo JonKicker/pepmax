@@ -46,11 +46,12 @@ export function captureException(
 
 /**
  * Set the current user for Sentry error attribution.
+ * Only the opaque uid is sent — no PII (no email, no name).
  * Pass null to clear (on sign-out).
  */
-export function setUser(user: { id: string; email?: string | null } | null): void {
+export function setUser(user: { id: string } | null): void {
   if (!user) { Sentry.setUser(null); return; }
-  Sentry.setUser({ id: user.id, email: user.email ?? undefined });
+  Sentry.setUser({ id: user.id });
 }
 
 /**

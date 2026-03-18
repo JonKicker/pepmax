@@ -119,16 +119,19 @@ export async function getSessionsInDateRange(
   end: Date,
   activityType?: ActivityType
 ): Promise<ServiceResult<CardioSession[]>> {
-  const constraints = [
-    where('status', '==', 'completed'),
+  // Single-field range query (createdAt only) — no composite index needed.
+  // status and activityType are filtered client-side to avoid composite index requirements.
+  const result = await queryDocuments<CardioSession>(COLLECTIONS.CARDIO_SESSIONS, [
     where('createdAt', '>=', Timestamp.fromDate(start)),
     where('createdAt', '<=', Timestamp.fromDate(end)),
     orderBy('createdAt', 'asc'),
-  ];
-  if (activityType) {
-    constraints.unshift(where('activityType', '==', activityType));
-  }
-  return queryDocuments<CardioSession>(COLLECTIONS.CARDIO_SESSIONS, constraints);
+  ]);
+  if (result.error || !result.data) return result;
+
+  const filtered = result.data.filter(
+    (s) => s.status === 'completed' && (!activityType || s.activityType === activityType)
+  );
+  return { data: filtered, error: null };
 }
 
 // ─── PR detection (pure function — client-side computation) ──────────────────

@@ -15,15 +15,21 @@ import {
   Alert,
   Animated,
   Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import Purchases from 'react-native-purchases';
+import Purchases, { PACKAGE_TYPE, type PurchasesPackage } from 'react-native-purchases';
 import { useTheme } from '../src/hooks/useTheme';
 import { Colors } from '../src/constants/theme';
 import { usePremium } from '../src/contexts/PremiumContext';
+
+// ─── Legal URLs ───────────────────────────────────────────────────────────────
+// TODO: Replace with production URLs before App Store / Play Store submission
+const TERMS_URL = 'https://pepmax.app/terms';
+const PRIVACY_URL = 'https://pepmax.app/privacy';
 
 // ─── Feature list ─────────────────────────────────────────────────────────────
 
@@ -47,6 +53,32 @@ export default function PaywallScreen() {
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual'>('annual');
   const [purchasing, setPurchasing] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [monthlyPrice, setMonthlyPrice] = useState<string | null>(null);
+  const [annualPrice, setAnnualPrice] = useState<string | null>(null);
+  const [offeringsLoading, setOfferingsLoading] = useState(true);
+  const [annualPkg, setAnnualPkg] = useState<PurchasesPackage | null>(null);
+  const [monthlyPkg, setMonthlyPkg] = useState<PurchasesPackage | null>(null);
+
+  // Fetch live pricing once on mount — packages cached in state for purchase flow.
+  useEffect(() => {
+    Purchases.getOfferings()
+      .then((offerings) => {
+        const packages = offerings.current?.availablePackages ?? [];
+        const annual = packages.find((p) => p.packageType === PACKAGE_TYPE.ANNUAL) ?? null;
+        const monthly = packages.find((p) => p.packageType === PACKAGE_TYPE.MONTHLY) ?? null;
+        setAnnualPkg(annual);
+        setMonthlyPkg(monthly);
+        if (monthly) setMonthlyPrice(monthly.product.priceString);
+        if (annual) setAnnualPrice(annual.product.priceString);
+      })
+      .catch(() => {})
+      .finally(() => setOfferingsLoading(false));
+  }, []);
+
+  // Derived: does the selected plan have a free trial?
+  const hasTrial = selectedPlan === 'annual'
+    ? !!annualPkg?.product?.introPrice
+    : !!monthlyPkg?.product?.introPrice;
 
   // Staggered feature animations
   const featureAnims = useRef(FEATURES.map(() => new Animated.Value(0))).current;
@@ -70,15 +102,8 @@ export default function PaywallScreen() {
     setPurchasing(true);
 
     try {
-      const offerings = await Purchases.getOfferings();
-      const packages = offerings.current?.availablePackages ?? [];
-
-      // Find the matching package
-      const pkg = packages.find((p) =>
-        selectedPlan === 'annual'
-          ? p.packageType === 'ANNUAL'
-          : p.packageType === 'MONTHLY'
-      );
+      // Use cached packages — no extra network call on purchase tap.
+      const pkg = selectedPlan === 'annual' ? annualPkg : monthlyPkg;
 
       if (!pkg) {
         Alert.alert('Unavailable', 'This plan is not available right now. Please try again later.');
@@ -128,11 +153,12 @@ export default function PaywallScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Close button */}
+      {/* Close button — disabled during active purchase to prevent mid-transaction navigation */}
       <TouchableOpacity
         style={[styles.closeBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
         onPress={() => router.back()}
         activeOpacity={0.7}
+        disabled={purchasing}
       >
         <Ionicons name="close" size={22} color={colors.textPrimary} />
       </TouchableOpacity>
@@ -215,7 +241,13 @@ export default function PaywallScreen() {
             activeOpacity={0.8}
           >
             <Text style={[styles.planName, { color: colors.textPrimary }]}>Monthly</Text>
-            <Text style={[styles.planPrice, { color: colors.textPrimary }]}>$7.99</Text>
+            {offeringsLoading ? (
+              <ActivityIndicator size="small" color={Colors.accent} style={styles.priceLoader} />
+            ) : (
+              <Text style={[styles.planPrice, { color: colors.textPrimary }]}>
+                {monthlyPrice ?? '—'}
+              </Text>
+            )}
             <Text style={[styles.planSub, { color: colors.textSecondary }]}>per month</Text>
             <Text style={[styles.planNote, { color: colors.textSecondary }]}>Cancel anytime</Text>
           </TouchableOpacity>
@@ -241,10 +273,16 @@ export default function PaywallScreen() {
               <Text style={styles.bestValueText}>BEST VALUE</Text>
             </View>
             <Text style={[styles.planName, { color: colors.textPrimary }]}>Annual</Text>
-            <Text style={[styles.planPrice, { color: colors.textPrimary }]}>$49.99</Text>
-            <Text style={[styles.planSub, { color: colors.textSecondary }]}>$4.17/month</Text>
+            {offeringsLoading ? (
+              <ActivityIndicator size="small" color={Colors.gold} style={styles.priceLoader} />
+            ) : (
+              <Text style={[styles.planPrice, { color: colors.textPrimary }]}>
+                {annualPrice ?? '—'}
+              </Text>
+            )}
+            <Text style={[styles.planSub, { color: colors.textSecondary }]}>billed annually</Text>
             <View style={styles.saveBadge}>
-              <Text style={styles.saveBadgeText}>SAVE 48%</Text>
+              <Text style={styles.saveBadgeText}>BEST VALUE</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -259,7 +297,7 @@ export default function PaywallScreen() {
           {purchasing ? (
             <ActivityIndicator color="#FFFFFF" size="small" />
           ) : (
-            <Text style={styles.ctaText}>Subscribe Now</Text>
+            <Text style={styles.ctaText}>{hasTrial ? 'Start Free Trial' : 'Subscribe Now'}</Text>
           )}
         </TouchableOpacity>
 
@@ -282,9 +320,13 @@ export default function PaywallScreen() {
         {/* Legal */}
         <View style={styles.legal}>
           <View style={styles.legalLinks}>
-            <Text style={[styles.legalLink, { color: Colors.accent }]}>Terms of Service</Text>
+            <TouchableOpacity onPress={() => Linking.openURL(TERMS_URL)} activeOpacity={0.7}>
+              <Text style={[styles.legalLink, { color: Colors.accent }]}>Terms of Service</Text>
+            </TouchableOpacity>
             <Text style={[styles.legalDot, { color: colors.textSecondary }]}> · </Text>
-            <Text style={[styles.legalLink, { color: Colors.accent }]}>Privacy Policy</Text>
+            <TouchableOpacity onPress={() => Linking.openURL(PRIVACY_URL)} activeOpacity={0.7}>
+              <Text style={[styles.legalLink, { color: Colors.accent }]}>Privacy Policy</Text>
+            </TouchableOpacity>
           </View>
           <Text style={[styles.legalDisclaimer, { color: colors.textSecondary }]}>
             Payment will be charged to your {Platform.OS === 'ios' ? 'Apple ID' : 'Google Play'} account.
@@ -364,6 +406,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   planName: { fontSize: 14, fontWeight: '600' },
+  priceLoader: { height: 28, justifyContent: 'center' },
   planPrice: { fontSize: 24, fontWeight: '800' },
   planSub: { fontSize: 12 },
   planNote: { fontSize: 11, marginTop: 4 },

@@ -40,13 +40,20 @@ export async function fetchDashboardData(opts?: {
     return entry.data;
   }
 
+  // 90-day window for weight history — avoids unbounded fetch.
+  const ninetyDaysAgo = new Date();
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+  const weightStartDate = ninetyDaysAgo.toISOString().slice(0, 10);
+
   const [dosesResult, nutritionResult, sessionsResult, cardioResult, weightsResult, prefsResult] =
     await Promise.all([
       getTodaysDoses(),
       getDailyTotals(toLocalDateKey()),
-      getRecentSessions(20),
-      getRecentCardio(5),
-      getWeightHistory(),
+      // 100 sessions covers ~20 weeks of 5x/week training — sufficient for streak computation.
+      getRecentSessions(100),
+      // 50 cardio sessions covers ~10 weeks of daily cardio — sufficient for streak computation.
+      getRecentCardio(50),
+      getWeightHistory(weightStartDate),
       getDashboardPreferences(),
     ]);
 
@@ -81,5 +88,6 @@ export async function getDashboardPreferences(): Promise<DashboardPreferences | 
 export async function saveDashboardPreferences(
   prefs: Partial<DashboardPreferences>,
 ): Promise<void> {
-  await mergeDocument(COLLECTIONS.DASHBOARD_PREFERENCES, 'data', prefs as any);
+  // Partial<> is compatible with merge semantics; cast avoids WithFieldValue<T> mismatch
+  await mergeDocument(COLLECTIONS.DASHBOARD_PREFERENCES, 'data', prefs as DashboardPreferences);
 }

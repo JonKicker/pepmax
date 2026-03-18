@@ -13,10 +13,10 @@
  * - router.replace() is used (not push) so the back button never returns to auth screens.
  */
 import { useEffect, useRef } from 'react';
-import { useColorScheme } from 'react-native';
 import { Stack, useRouter, useSegments, useRootNavigationState } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
+import { ThemeProvider, useThemeContext } from '../src/contexts/ThemeContext';
 import { PremiumProvider } from '../src/contexts/PremiumContext';
 import ErrorBoundary from '../src/components/ErrorBoundary';
 import { initSentry, sentryWrap, setUser as sentrySetUser } from '../src/services/errorReporting';
@@ -39,6 +39,10 @@ function AuthGuard() {
     const uid = currentUser?.uid ?? null;
     if (prevUidRef.current === undefined) {
       prevUidRef.current = uid;
+      if (uid) {
+        analytics.identify(uid);
+        sentrySetUser({ id: uid });
+      }
       return;
     }
     if (uid === prevUidRef.current) return;
@@ -46,7 +50,7 @@ function AuthGuard() {
 
     if (uid) {
       analytics.identify(uid);
-      sentrySetUser({ id: uid, email: currentUser?.email ?? undefined });
+      sentrySetUser({ id: uid });
     } else {
       analytics.reset();
       sentrySetUser(null);
@@ -93,19 +97,23 @@ function AuthGuard() {
   return null;
 }
 
-function RootLayout() {
-  const scheme = useColorScheme();
+function ThemedStatusBar() {
+  const { theme } = useThemeContext();
+  return <StatusBar style={theme.dark ? 'light' : 'dark'} />;
+}
 
+function RootLayout() {
   useEffect(() => {
     analytics.track(AnalyticsEvent.APP_OPENED);
   }, []);
 
   return (
+    <ThemeProvider>
     <AuthProvider>
-      <PremiumProvider>
-        <AuthGuard />
-        <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-        <ErrorBoundary>
+      <AuthGuard />
+      <ThemedStatusBar />
+      <ErrorBoundary>
+        <PremiumProvider>
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="index" />
             <Stack.Screen name="(auth)" />
@@ -113,9 +121,10 @@ function RootLayout() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="paywall" options={{ presentation: 'modal', headerShown: false }} />
           </Stack>
-        </ErrorBoundary>
-      </PremiumProvider>
+        </PremiumProvider>
+      </ErrorBoundary>
     </AuthProvider>
+    </ThemeProvider>
   );
 }
 
