@@ -16,9 +16,11 @@ import { Colors, Theme } from '../../../src/constants/theme';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { getTodaysDoses } from '../../../src/services/peptideService';
 import { getDailyTotals } from '../../../src/services/nutritionService';
+import { getTodaysWorkouts } from '../../../src/services/trainingService';
 import { toLocalDateKey } from '../../../src/utils/nutrition';
 import type { Dose } from '../../../src/types/peptide';
 import type { DailyTotals } from '../../../src/types/nutrition';
+import type { WorkoutLog } from '../../../src/types/training';
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -70,6 +72,8 @@ export default function DashboardScreen() {
   const [dosesError, setDosesError] = useState(false);
   const [totals, setTotals] = useState<DailyTotals | null>(null);
   const [nutritionError, setNutritionError] = useState(false);
+  const [workouts, setWorkouts] = useState<WorkoutLog[]>([]);
+  const [workoutsError, setWorkoutsError] = useState(false);
 
   const name = userProfile?.firstName ?? '';
   const greeting = name ? `${getGreeting()}, ${name}` : getGreeting();
@@ -83,9 +87,10 @@ export default function DashboardScreen() {
         setDosesError(false);
         setNutritionError(false);
 
-        const [dosesResult, nutritionResult] = await Promise.all([
+        const [dosesResult, nutritionResult, workoutsResult] = await Promise.all([
           getTodaysDoses(),
           getDailyTotals(toLocalDateKey()),
+          getTodaysWorkouts(),
         ]);
 
         if (cancelled) return;
@@ -102,6 +107,13 @@ export default function DashboardScreen() {
           setNutritionError(true);
         } else {
           setTotals(nutritionResult.data);
+        }
+
+        if (workoutsResult.error) {
+          console.error('[Dashboard] workouts fetch error:', workoutsResult.error);
+          setWorkoutsError(true);
+        } else {
+          setWorkouts(workoutsResult.data ?? []);
         }
 
         setLoading(false);
@@ -180,9 +192,29 @@ export default function DashboardScreen() {
         )}
       </SectionCard>
 
-      {/* Today's Training — static, no service yet */}
-      <SectionCard title="Today's Training" icon="barbell-outline" iconColor={Colors.warning} colors={colors}>
-        <EmptyState message="No workouts logged today." colors={colors} />
+      {/* Today's Training */}
+      <SectionCard title="Today's Training" icon="barbell-outline" iconColor={Colors.gym} colors={colors}>
+        {loading ? (
+          <ActivityIndicator size="small" color={Colors.gym} style={styles.loader} />
+        ) : workoutsError ? (
+          <EmptyState message="Could not load today's workouts." colors={colors} />
+        ) : workouts.length === 0 ? (
+          <EmptyState message="No workouts logged today." colors={colors} />
+        ) : (
+          workouts.map((w, i) => (
+            <View
+              key={w.id ?? i}
+              style={[styles.doseRow, { borderTopColor: colors.border }]}
+            >
+              <Text style={[styles.doseName, { color: colors.textPrimary }]} numberOfLines={1}>
+                {w.exercises.map((e) => e.name).join(', ')}
+              </Text>
+              <Text style={[styles.doseAmount, { color: colors.textSecondary }]}>
+                {w.exercises.reduce((s, e) => s + e.sets, 0)} sets
+              </Text>
+            </View>
+          ))
+        )}
       </SectionCard>
 
       {/* Body Weight — static, no service yet */}

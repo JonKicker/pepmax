@@ -12,6 +12,7 @@ export default function TrainingLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ title: 'Training' }} />
+      <Stack.Screen name="log-workout" options={{ title: 'Log Workout' }} />
     </Stack>
   );
 }
