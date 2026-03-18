@@ -47,12 +47,14 @@
 
 ## Ray Review Notes (Milestone 11)
 
-**Status:** CONDITIONAL APPROVAL — cleared to commit
+**Status:** REJECTED → FIXED (7bc2a3c)
 
-**Follow-up items for next milestone:**
-1. Add `maxLength` on `notes` TextInput in `LogSideEffectModal` (no Firestore doc size issue, but good practice)
-2. Surface `getSideEffects` errors in `useHalfLifeTimeline` (currently silently empty)
-3. Improve `colorForPeptide` hash to reduce collision risk with 8+ peptides
+**Fixed items:**
+1. ✅ `maxLength={500}` added to notes TextInput in `LogSideEffectModal`
+2. ✅ `seResult.error` surfaced in `useHalfLifeTimeline` error guard
+3. ✅ `colorForPeptide` upgraded to djb2-style full-string hash (eliminates first-char collisions)
+4. ✅ `getDoses()` now accepts optional `startDate` filter; hook passes 90-day lookback bound
+5. ✅ `getFilteredSessions` activityType moved to client-side filter (same fix as `getSessionsInDateRange`)
 
 ---
 
