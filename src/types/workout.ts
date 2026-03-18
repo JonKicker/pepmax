@@ -39,6 +39,9 @@ export type WorkoutSession = {
   duration: number;
   notes: string;
   rating: number | null;
+  isBareMinimum?: boolean;
+  bareMinimumTimeCap?: number;
+  originalTotalSets?: number;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 };

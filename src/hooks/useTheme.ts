@@ -1,7 +1,11 @@
-import { useColorScheme } from 'react-native';
-import { LightTheme, DarkTheme, Theme } from '../constants/theme';
+import { useThemeContext } from '../contexts/ThemeContext';
+import type { Theme } from '../constants/theme';
 
+/**
+ * Returns the current resolved Theme (light or dark).
+ * Respects the user's explicit preference via ThemeContext.
+ * All existing callsites (useTheme().colors.*) continue to work unchanged.
+ */
 export function useTheme(): Theme {
-  const scheme = useColorScheme();
-  return scheme === 'dark' ? DarkTheme : LightTheme;
+  return useThemeContext().theme;
 }

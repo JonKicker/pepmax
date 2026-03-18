@@ -49,6 +49,15 @@ export type UserProfile = {
   // Custom / reordered meal slots. Falls back to DEFAULT_MEAL_SLOTS when absent.
   mealSlots?: MealSlotConfig[];
 
+  // Goal for calorie targeting (applied as offset to TDEE)
+  goalType?: 'lose' | 'maintain' | 'gain';
+
+  // Notification opt-ins (default: both enabled)
+  notificationPrefs?: {
+    doseReminders: boolean;
+    workoutReminders: boolean;
+  };
+
   // Meta
   onboardingComplete?: boolean;
   quizCompletedAt: Timestamp;

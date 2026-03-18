@@ -21,8 +21,9 @@ import {
   queryDocuments,
   COLLECTIONS,
 } from './firebase/firestore';
-import type { Peptide, Dose, Unit, InjectionSite, Frequency } from '../types/peptide';
+import type { Peptide, Dose, Unit, InjectionSite, Frequency, PeptideCategory, Route } from '../types/peptide';
 import type { ServiceResult } from '../types/service';
+import type { PresetCompound } from '../data/presetCompounds';
 
 // ─── Input types (strip server-managed fields) ──────────────────────────────
 
@@ -33,6 +34,14 @@ type PeptideInput = {
   frequency: Frequency;
   customDays?: string[];
   notes: string;
+  // Extended metadata — optional for backward compatibility
+  category?: PeptideCategory;
+  halfLifeHours?: number;
+  route?: Route;
+  concentrationMgMl?: number;
+  storageTemp?: string;
+  isPreset?: boolean;
+  presetId?: string;
 };
 
 type DoseInput = {
@@ -72,6 +81,29 @@ export async function getPeptides(): Promise<ServiceResult<Peptide[]>> {
 
 export async function getPeptideById(id: string): Promise<ServiceResult<Peptide | null>> {
   return getDocument<Peptide>(COLLECTIONS.PEPTIDES, id);
+}
+
+/**
+ * Add a preset compound to the user's personal library.
+ * Maps the catalog entry + selected dose into a PeptideInput for Firestore.
+ */
+export async function addPeptideFromPreset(
+  preset: PresetCompound,
+  selectedDose: number,
+): Promise<ServiceResult<string>> {
+  return addPeptide({
+    name: preset.name,
+    defaultDose: selectedDose,
+    unit: preset.unit,
+    frequency: preset.defaultFrequency,
+    notes: preset.defaultNotes,
+    category: preset.category,
+    halfLifeHours: preset.halfLifeHours,
+    route: preset.defaultRoute,
+    storageTemp: preset.storageTemp,
+    isPreset: true,
+    presetId: preset.presetId,
+  });
 }
 
 // ─── Dose CRUD ───────────────────────────────────────────────────────────────

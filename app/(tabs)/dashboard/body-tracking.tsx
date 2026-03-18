@@ -75,9 +75,7 @@ export default function BodyTrackingScreen() {
     date: string,
     note?: string,
   ) => {
-    setSaving(true);
     const result = await logWeight({ weight: weightKg, displayUnit, date, note });
-    setSaving(false);
     setModalVisible(false);
 
     if (result.error) {

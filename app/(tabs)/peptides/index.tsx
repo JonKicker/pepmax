@@ -16,9 +16,11 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors } from '../../../src/constants/theme';
-import { getPeptides, deletePeptide } from '../../../src/services/peptideService';
+import { getPeptides, deletePeptide, addPeptideFromPreset } from '../../../src/services/peptideService';
 import { FREQUENCY_LABELS } from '../../../src/types/peptide';
 import type { Peptide } from '../../../src/types/peptide';
+import PresetBrowser from '../../../src/components/peptides/PresetBrowser';
+import type { PresetCompound } from '../../../src/data/presetCompounds';
 
 // ─── Swipeable card ──────────────────────────────────────────────────────────
 
@@ -108,6 +110,20 @@ function SwipeableCard({
                     {FREQUENCY_LABELS[peptide.frequency]}
                   </Text>
                 </View>
+                {!!peptide.category && (
+                  <View style={[styles.badge, { marginLeft: 6 }]}>
+                    <Text style={[styles.badgeText, { color: colors.textSecondary }]}>
+                      {peptide.category}
+                    </Text>
+                  </View>
+                )}
+                {!!peptide.route && (
+                  <View style={[styles.badge, { marginLeft: 6 }]}>
+                    <Text style={[styles.badgeText, { color: colors.textSecondary }]}>
+                      {peptide.route}
+                    </Text>
+                  </View>
+                )}
               </View>
               {!!peptide.notes && (
                 <Text style={[styles.cardNotes, { color: colors.textSecondary }]} numberOfLines={1}>
@@ -153,6 +169,7 @@ export default function PeptidesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [presetModalVisible, setPresetModalVisible] = useState(false);
 
   const load = async (refresh = false) => {
     if (refresh) setRefreshing(true);
@@ -202,6 +219,17 @@ export default function PeptidesScreen() {
     router.push('/(tabs)/peptides/peptide-form');
   };
 
+  const handleAddPreset = async (preset: PresetCompound, dose: number) => {
+    const result = await addPeptideFromPreset(preset, dose);
+    if (result.error) {
+      Alert.alert('Error', 'Could not add compound. Please try again.');
+      return;
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setPresetModalVisible(false);
+    load();
+  };
+
   if (loading) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
@@ -231,10 +259,32 @@ export default function PeptidesScreen() {
       <View style={[styles.actionRow, { borderBottomColor: colors.border }]}>
         <TouchableOpacity
           style={[styles.actionBtn, { borderColor: Colors.peptide }]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setPresetModalVisible(true);
+          }}
+        >
+          <Ionicons name="flask-outline" size={16} color={Colors.peptide} />
+          <Text style={[styles.actionBtnText, { color: Colors.peptide }]}>Browse Presets</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionBtn, { borderColor: Colors.peptide }]}
           onPress={() => router.push('/(tabs)/peptides/history')}
         >
           <Ionicons name="time-outline" size={16} color={Colors.peptide} />
           <Text style={[styles.actionBtnText, { color: Colors.peptide }]}>Dose History</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionBtn, { borderColor: Colors.peptide }]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.push('/(tabs)/peptides/recon-calculator');
+          }}
+        >
+          <Ionicons name="calculator-outline" size={16} color={Colors.peptide} />
+          <Text style={[styles.actionBtnText, { color: Colors.peptide }]}>Calculator</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -266,6 +316,13 @@ export default function PeptidesScreen() {
       <TouchableOpacity style={[styles.fab, { backgroundColor: Colors.peptide }]} onPress={handleAdd} activeOpacity={0.85}>
         <Ionicons name="add" size={30} color="white" />
       </TouchableOpacity>
+
+      <PresetBrowser
+        visible={presetModalVisible}
+        onClose={() => setPresetModalVisible(false)}
+        onAdd={handleAddPreset}
+        existingPeptideNames={peptides.map((p) => p.name)}
+      />
     </View>
   );
 }

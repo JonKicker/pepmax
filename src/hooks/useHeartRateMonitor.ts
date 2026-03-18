@@ -56,6 +56,7 @@ export function useHeartRateMonitor(savedDeviceId?: string) {
   const subscriptionRef = useRef<any>(null);
   const reconnectCountRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
 
   const cleanup = useCallback(() => {
@@ -70,6 +71,10 @@ export function useHeartRateMonitor(savedDeviceId?: string) {
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
+    }
+    if (scanTimeoutRef.current) {
+      clearTimeout(scanTimeoutRef.current);
+      scanTimeoutRef.current = null;
     }
     managerRef.current?.stopDeviceScan();
   }, []);
@@ -162,6 +167,11 @@ export function useHeartRateMonitor(savedDeviceId?: string) {
 
   const startScan = useCallback(() => {
     if (!bleAvailable || !managerRef.current || scanning) return;
+    // Clear any previous scan timeout to prevent double-tap accumulation
+    if (scanTimeoutRef.current) {
+      clearTimeout(scanTimeoutRef.current);
+      scanTimeoutRef.current = null;
+    }
     setScanning(true);
     reconnectCountRef.current = 0;
     managerRef.current.startDeviceScan(
@@ -178,10 +188,11 @@ export function useHeartRateMonitor(savedDeviceId?: string) {
       }
     );
     // Auto-stop scan after 30 seconds to prevent battery drain
-    setTimeout(() => {
+    scanTimeoutRef.current = setTimeout(() => {
       if (!mountedRef.current) return;
       managerRef.current?.stopDeviceScan();
       setScanning(false);
+      scanTimeoutRef.current = null;
     }, 30000);
   }, [scanning, connectToDevice]);
 

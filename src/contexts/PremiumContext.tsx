@@ -20,6 +20,7 @@ import React, {
 import { AppState, Platform } from 'react-native';
 import Purchases, {
   LOG_LEVEL,
+  PACKAGE_TYPE,
   PurchasesPackage,
   CustomerInfo,
   PURCHASES_ERROR_CODE,
@@ -77,11 +78,28 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
     configuredRef.current = true;
   }, []);
 
-  // ─── Identify user ─────────────────────────────────────────────────────────
+  // ─── Identify / de-identify user ───────────────────────────────────────────
 
   useEffect(() => {
+    if (!currentUser?.uid) {
+      // User signed out — always clear local state + cache regardless of SDK config
+      if (identifiedUidRef.current !== null) {
+        identifiedUidRef.current = null;
+        setIsPremium(false);
+        setPlan(null);
+        setExpirationDate(null);
+        AsyncStorage.removeItem(CACHE_KEY).catch(() => {});
+        // Only call SDK logOut if RevenueCat was configured
+        if (configuredRef.current) {
+          Purchases.logOut().catch((err) => {
+            console.warn('[PremiumContext] logOut failed:', err);
+          });
+        }
+      }
+      return;
+    }
+
     if (!configuredRef.current) return;
-    if (!currentUser?.uid) return;
     if (identifiedUidRef.current === currentUser.uid) return;
 
     identifiedUidRef.current = currentUser.uid;
@@ -111,14 +129,25 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
 
   // ─── Check subscription ─────────────────────────────────────────────────────
 
+  const detectPlan = useCallback(
+    (pkg: PurchasesPackage | null, productId: string): SubscriptionPlan => {
+      // Prefer the explicit PackageType from RevenueCat
+      if (pkg?.packageType === PACKAGE_TYPE.ANNUAL) return 'annual';
+      if (pkg?.packageType === PACKAGE_TYPE.MONTHLY) return 'monthly';
+      // Fallback: inspect product identifier string
+      const lower = productId.toLowerCase();
+      if (lower.includes('annual') || lower.includes('yearly') || lower.includes('year')) return 'annual';
+      return 'monthly';
+    },
+    []
+  );
+
   const applyCustomerInfo = useCallback(
-    (info: CustomerInfo) => {
+    (info: CustomerInfo, purchasedPkg?: PurchasesPackage) => {
       const premiumEntitlement = info.entitlements.active[ENTITLEMENT_ID];
       const active = premiumEntitlement !== undefined;
       const detectedPlan: SubscriptionPlan | null = premiumEntitlement
-        ? premiumEntitlement.productIdentifier.includes('annual')
-          ? 'annual'
-          : 'monthly'
+        ? detectPlan(purchasedPkg ?? null, premiumEntitlement.productIdentifier)
         : null;
       const expDate = premiumEntitlement?.expirationDate ?? null;
 
@@ -133,7 +162,7 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
         checkedAt: Date.now(),
       });
     },
-    [cacheStatus]
+    [cacheStatus, detectPlan]
   );
 
   const checkSubscription = useCallback(async () => {
@@ -177,13 +206,12 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
     async (pkg: PurchasesPackage): Promise<boolean> => {
       try {
         const { customerInfo } = await Purchases.purchasePackage(pkg);
-        applyCustomerInfo(customerInfo);
+        applyCustomerInfo(customerInfo, pkg);
 
         // Log to Firestore
         const premiumEnt = customerInfo.entitlements.active[ENTITLEMENT_ID];
         if (premiumEnt) {
-          const detectedPlan: SubscriptionPlan =
-            premiumEnt.productIdentifier.includes('annual') ? 'annual' : 'monthly';
+          const detectedPlan: SubscriptionPlan = detectPlan(pkg, premiumEnt.productIdentifier);
           const record = buildSubscriptionRecord(
             detectedPlan,
             premiumEnt.productIdentifier,
@@ -203,7 +231,7 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
         throw err;
       }
     },
-    [applyCustomerInfo]
+    [applyCustomerInfo, detectPlan]
   );
 
   // ─── Restore ────────────────────────────────────────────────────────────────

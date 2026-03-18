@@ -19,6 +19,8 @@ import { Colors } from '../../../src/constants/theme';
 import { getTodaysWorkouts, deleteWorkout } from '../../../src/services/trainingService';
 import { useWorkoutRecovery } from '../../../src/hooks/useWorkoutRecovery';
 import { updateSession } from '../../../src/services/workoutSessionService';
+import { useEquipmentProfiles } from '../../../src/hooks/useEquipmentProfiles';
+import { EquipmentQuickSwitch } from '../../../src/components/training/EquipmentQuickSwitch';
 import type { WorkoutLog } from '../../../src/types/training';
 
 // ─── Swipeable card ───────────────────────────────────────────────────────────

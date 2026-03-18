@@ -457,7 +457,7 @@ export default function ProgressScreen() {
   }
 
   return (
-    <PremiumGate mode="blur">
+    <PremiumGate mode="blur" fullScreen>
     <ScrollView
       style={{ backgroundColor: colors.background }}
       contentContainerStyle={styles.scroll}

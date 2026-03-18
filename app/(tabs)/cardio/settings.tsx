@@ -123,6 +123,14 @@ export default function CardioSettingsScreen() {
   );
   const [maxHRError, setMaxHRError] = useState('');
 
+  // Sync field once AsyncStorage finishes loading (initial useState value is stale
+  // because useCardioSettings resolves asynchronously after first render)
+  React.useEffect(() => {
+    if (!loading && settings.maxHeartRate != null) {
+      setMaxHRStr(String(settings.maxHeartRate));
+    }
+  }, [loading, settings.maxHeartRate]);
+
   const haptic = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
   const handleMaxHRBlur = () => {

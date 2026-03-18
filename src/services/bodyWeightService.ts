@@ -14,7 +14,6 @@ import {
 } from './firebase/firestore';
 import type { ServiceResult } from '../types/service';
 import type { BodyWeightEntry, BodyWeightInput } from '../types/bodyTracking';
-import { computeWeightStats } from '../utils/bodyTracking';
 
 export { computeWeightStats } from '../utils/bodyTracking';
 
@@ -56,6 +55,3 @@ export async function deleteWeightEntry(date: string): Promise<ServiceResult<voi
   return deleteDocument(COLLECTIONS.BODY_WEIGHT, date);
 }
 
-// computeWeightStats is a pure util — re-exported from utils/bodyTracking for
-// convenience. Direct callers can import from either location.
-void computeWeightStats; // prevent unused-var lint

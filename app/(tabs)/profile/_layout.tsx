@@ -11,7 +11,7 @@ export default function ProfileLayout() {
         headerTitleStyle: { color: colors.textPrimary },
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'Profile' }} />
+      <Stack.Screen name="index" options={{ title: 'Settings' }} />
     </Stack>
   );
 }

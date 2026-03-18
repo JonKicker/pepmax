@@ -47,6 +47,8 @@ export const COLLECTIONS = {
   DASHBOARD_PREFERENCES: 'dashboardPreferences',
   PROGRESS_PHOTOS: 'progressPhotos',
   SUBSCRIPTION: 'subscription',
+  RECON_PROTOCOLS: 'reconProtocols',
+  EQUIPMENT_PROFILES: 'equipmentProfiles',
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];

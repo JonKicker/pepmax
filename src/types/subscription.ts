@@ -1,4 +1,5 @@
 /** Subscription types for RevenueCat integration. */
+import type { PurchasesPackage } from 'react-native-purchases';
 
 export type SubscriptionPlan = 'monthly' | 'annual';
 
@@ -19,6 +20,6 @@ export type PremiumState = {
   plan: SubscriptionPlan | null;
   expirationDate: string | null;
   checkSubscription: () => Promise<void>;
-  purchasePackage: (pkg: any) => Promise<boolean>;
+  purchasePackage: (pkg: PurchasesPackage) => Promise<boolean>;
   restorePurchases: () => Promise<boolean>;
 };

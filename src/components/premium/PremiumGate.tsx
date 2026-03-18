@@ -17,9 +17,11 @@ type Props = {
   children: React.ReactNode;
   mode?: 'blur' | 'hide';
   fallback?: React.ReactNode;
+  /** Remove borderRadius + overflow clipping — use when gating full-screen content. */
+  fullScreen?: boolean;
 };
 
-export default function PremiumGate({ children, mode = 'blur', fallback }: Props) {
+export default function PremiumGate({ children, mode = 'blur', fallback, fullScreen = false }: Props) {
   const { isPremium } = usePremium();
   const { colors } = useTheme();
   const router = useRouter();
@@ -35,12 +37,12 @@ export default function PremiumGate({ children, mode = 'blur', fallback }: Props
   };
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, fullScreen && styles.wrapperFullScreen]}>
       <View style={styles.blurred} pointerEvents="none">
         {children}
       </View>
       <TouchableOpacity
-        style={[styles.overlay, { backgroundColor: colors.background + 'DD' }]}
+        style={[styles.overlay, { backgroundColor: colors.background + 'DD' }, fullScreen && styles.overlayFullScreen]}
         onPress={openPaywall}
         activeOpacity={0.9}
       >
@@ -56,6 +58,7 @@ export default function PremiumGate({ children, mode = 'blur', fallback }: Props
 
 const styles = StyleSheet.create({
   wrapper: { position: 'relative', overflow: 'hidden', borderRadius: 14 },
+  wrapperFullScreen: { borderRadius: 0, overflow: 'visible' },
   blurred: { opacity: 0.3 },
   overlay: {
     ...StyleSheet.absoluteFillObject,
@@ -64,6 +67,7 @@ const styles = StyleSheet.create({
     gap: 8,
     borderRadius: 14,
   },
+  overlayFullScreen: { borderRadius: 0 },
   lockCircle: {
     width: 48,
     height: 48,
