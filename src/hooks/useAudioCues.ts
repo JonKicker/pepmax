@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 import * as Speech from 'expo-speech';
 import { useCardioSettings } from './useCardioSettings';
 import { speakPace, speakDistance, speakDuration } from '../utils/cardio';
@@ -58,4 +58,12 @@ export function useAudioCues(
       Speech.speak(parts.join('. '), { rate: 0.95, pitch: 1.0 });
     }
   }, [distance, elapsedActive, settings, currentPace, unit]);
+
+  /** Announce a heart rate zone change, respecting the audioCuesEnabled setting. */
+  const announceZoneChange = useCallback((zoneName: string) => {
+    if (!settings.audioCuesEnabled) return;
+    Speech.speak(`Entering ${zoneName} zone`, { rate: 0.95, pitch: 1.0 });
+  }, [settings.audioCuesEnabled]);
+
+  return { announceZoneChange };
 }

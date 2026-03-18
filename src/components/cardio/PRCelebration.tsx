@@ -2,35 +2,8 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { formatPace, formatDistance, formatDuration } from '../../utils/cardio';
+import { PR_LABELS, formatPRValue } from '../../utils/cardio';
 import type { CardioPR, DistanceUnit } from '../../types/cardio';
-
-const PR_LABELS: Record<string, string> = {
-  fastestPace: 'Fastest Pace',
-  fastestSplit: 'Fastest Split',
-  longestDistance: 'Longest Distance',
-  longestDuration: 'Longest Duration',
-  mostCalories: 'Most Calories',
-  mostElevation: 'Most Elevation',
-};
-
-function formatPRValue(pr: CardioPR, unit: DistanceUnit): string {
-  switch (pr.metric) {
-    case 'fastestPace':
-    case 'fastestSplit':
-      return formatPace(pr.value, unit);
-    case 'longestDistance':
-      return formatDistance(pr.value, unit);
-    case 'longestDuration':
-      return formatDuration(pr.value);
-    case 'mostCalories':
-      return `${Math.round(pr.value)} kcal`;
-    case 'mostElevation':
-      return `${Math.round(pr.value)} m`;
-    default:
-      return String(pr.value);
-  }
-}
 
 type Props = {
   pr: CardioPR | null;

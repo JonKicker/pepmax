@@ -30,6 +30,8 @@ import {
   formatDuration,
   metersToMiles,
   metersToKm,
+  PR_LABELS,
+  formatPRValue,
 } from '../../../src/utils/cardio';
 import type { ActivityType, CardioPR, DistanceUnit } from '../../../src/types/cardio';
 
@@ -99,34 +101,7 @@ function SectionHeader({ title, subtitle, colors }: { title: string; subtitle?: 
   );
 }
 
-// ─── PR labels ────────────────────────────────────────────────────────────────
-
-const PR_LABELS: Record<string, string> = {
-  fastestPace: 'Fastest Pace',
-  fastestSplit: 'Fastest Split',
-  longestDistance: 'Longest Distance',
-  longestDuration: 'Longest Duration',
-  mostCalories: 'Most Calories',
-  mostElevation: 'Most Elevation',
-};
-
-function formatPRValue(pr: CardioPR, unit: DistanceUnit): string {
-  switch (pr.metric) {
-    case 'fastestPace':
-    case 'fastestSplit':
-      return formatPace(pr.value, unit);
-    case 'longestDistance':
-      return formatDistance(pr.value, unit);
-    case 'longestDuration':
-      return formatDuration(pr.value);
-    case 'mostCalories':
-      return `${Math.round(pr.value)} kcal`;
-    case 'mostElevation':
-      return `${Math.round(pr.value)} m`;
-    default:
-      return String(pr.value);
-  }
-}
+// PR_LABELS and formatPRValue imported from src/utils/cardio (DRY)
 
 // ─── Activity heatmap colors ──────────────────────────────────────────────────
 
@@ -194,7 +169,7 @@ export default function ProgressScreen() {
     : 0;
 
   return (
-    <PremiumGate mode="blur">
+    <PremiumGate mode="blur" fullScreen>
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}

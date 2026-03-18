@@ -22,6 +22,10 @@ import {
   isGoalMet,
 } from '../../../src/utils/cardio';
 import RouteMap from '../../../src/components/cardio/RouteMap';
+import HeartRateChart from '../../../src/components/cardio/HeartRateChart';
+import TimeInZones from '../../../src/components/cardio/TimeInZones';
+import { useHeartRateZones } from '../../../src/hooks/useHeartRateZones';
+import { getTrainingEffect } from '../../../src/utils/cardio';
 import type { CardioSession, Split } from '../../../src/types/cardio';
 
 // ─── Stat row ─────────────────────────────────────────────────────────────────
@@ -166,6 +170,9 @@ export default function SessionDetailScreen() {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   });
 
+  const maxHR = settings.maxHeartRate ?? 180;
+  const { zones } = useHeartRateZones(maxHR);
+
   // Find fastest / slowest splits
   let fastestIdx = -1;
   let slowestIdx = -1;
@@ -253,6 +260,39 @@ export default function SessionDetailScreen() {
               colors={colors}
             />
           ))}
+        </View>
+      )}
+
+      {/* Heart Rate section — only shown when HR data is present */}
+      {(session.heartRateData && session.heartRateData.length > 0) && (
+        <View style={[styles.statsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.hrHeader}>
+            <Text style={[styles.splitsTitle, { color: colors.textPrimary }]}>Heart Rate</Text>
+            {session.timeInZones && (
+              <Text style={[styles.trainingEffect, { color: Colors.cardio }]}>
+                {getTrainingEffect(session.timeInZones)}
+              </Text>
+            )}
+          </View>
+          {session.avgHeartRate != null && (
+            <StatRow label="Avg Heart Rate" value={`${session.avgHeartRate} bpm`} colors={colors} />
+          )}
+          {session.maxHeartRate != null && (
+            <StatRow label="Max Heart Rate" value={`${session.maxHeartRate} bpm`} colors={colors} />
+          )}
+          <View style={styles.hrChartWrap}>
+            <HeartRateChart
+              hrData={session.heartRateData}
+              zones={zones}
+              maxHR={maxHR}
+            />
+          </View>
+          {session.timeInZones && session.timeInZones.length > 0 && (
+            <View style={styles.timeInZonesWrap}>
+              <Text style={[styles.subLabel, { color: colors.textSecondary }]}>Time in Zones</Text>
+              <TimeInZones timeInZones={session.timeInZones} />
+            </View>
+          )}
         </View>
       )}
 
@@ -346,6 +386,11 @@ const styles = StyleSheet.create({
   splitNum: { width: 28, fontSize: 13, fontWeight: '600' },
   splitCell: { flex: 1, fontSize: 13 },
 
+  hrHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 14 },
+  trainingEffect: { fontSize: 13, fontWeight: '600' },
+  hrChartWrap: { paddingTop: 8, paddingHorizontal: 8 },
+  timeInZonesWrap: { padding: 16, gap: 8 },
+  subLabel: { fontSize: 12, fontWeight: '600' },
   notesCard: { borderRadius: 14, borderWidth: 1, padding: 14 },
   notesLabel: { fontSize: 12, fontWeight: '600', marginBottom: 6 },
   notesText: { fontSize: 14, lineHeight: 20 },

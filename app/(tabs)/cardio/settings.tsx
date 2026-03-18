@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,12 +6,16 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors } from '../../../src/constants/theme';
 import { useCardioSettings } from '../../../src/hooks/useCardioSettings';
+import { useHeartRateMonitor } from '../../../src/hooks/useHeartRateMonitor';
+import { useAuth } from '../../../src/contexts/AuthContext';
+import { estimateMaxHR } from '../../../src/utils/cardio';
 import type { AudioCueFrequency, AudioCueContent, DistanceUnit } from '../../../src/types/cardio';
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
@@ -109,8 +113,49 @@ const UNIT_OPTIONS: { value: DistanceUnit; label: string }[] = [
 export default function CardioSettingsScreen() {
   const { colors } = useTheme();
   const { settings, updateSettings, loading } = useCardioSettings();
+  const { userProfile } = useAuth();
+  const hrMonitor = useHeartRateMonitor(settings.hrMonitorId);
+
+  // Max HR text field — seed from settings or estimate from age
+  const estimatedMax = userProfile?.age ? estimateMaxHR(userProfile.age) : 180;
+  const [maxHRStr, setMaxHRStr] = useState(
+    settings.maxHeartRate != null ? String(settings.maxHeartRate) : String(estimatedMax)
+  );
+  const [maxHRError, setMaxHRError] = useState('');
 
   const haptic = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+  const handleMaxHRBlur = () => {
+    const n = Number(maxHRStr);
+    if (!Number.isInteger(n) || n < 100 || n > 220) {
+      setMaxHRError('Must be between 100 and 220');
+      setMaxHRStr(String(settings.maxHeartRate ?? estimatedMax));
+    } else {
+      setMaxHRError('');
+      updateSettings({ maxHeartRate: n });
+    }
+  };
+
+  const handleBLEConnect = () => {
+    haptic();
+    hrMonitor.startScan();
+  };
+
+  const handleBLEDisconnect = () => {
+    haptic();
+    hrMonitor.disconnect();
+    updateSettings({ hrMonitorId: undefined, hrMonitorName: undefined });
+  };
+
+  // When scan succeeds and device connects, save to settings
+  React.useEffect(() => {
+    if (hrMonitor.connected && hrMonitor.connectedDeviceId) {
+      updateSettings({
+        hrMonitorId: hrMonitor.connectedDeviceId,
+        hrMonitorName: hrMonitor.deviceName ?? 'HR Monitor',
+      });
+    }
+  }, [hrMonitor.connected, hrMonitor.connectedDeviceId]);
 
   const toggleCueContent = (value: AudioCueContent) => {
     haptic();
@@ -205,6 +250,70 @@ export default function CardioSettingsScreen() {
         </SettingRow>
       </View>
 
+      {/* Heart Rate */}
+      <SectionHeader title="HEART RATE" colors={colors} />
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {/* Max HR input */}
+        <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Max Heart Rate</Text>
+            {estimatedMax > 0 && (
+              <Text style={[styles.settingSubLabel, { color: colors.textSecondary }]}>
+                Estimated: {estimatedMax} bpm (age-based)
+              </Text>
+            )}
+            {maxHRError ? (
+              <Text style={[styles.settingSubLabel, { color: Colors.error }]}>{maxHRError}</Text>
+            ) : null}
+          </View>
+          <View style={styles.maxHRInputWrap}>
+            <TextInput
+              style={[styles.maxHRInput, { color: colors.textPrimary, borderColor: maxHRError ? Colors.error : colors.border, backgroundColor: colors.background }]}
+              value={maxHRStr}
+              onChangeText={(t) => { setMaxHRStr(t); setMaxHRError(''); }}
+              onBlur={handleMaxHRBlur}
+              keyboardType="number-pad"
+              maxLength={3}
+            />
+            <Text style={[styles.maxHRUnit, { color: colors.textSecondary }]}>bpm</Text>
+          </View>
+        </View>
+
+        {/* BLE connect section */}
+        {!hrMonitor.isAvailable ? (
+          <View style={[styles.subSection, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}>
+            <Text style={[styles.subLabel, { color: colors.textSecondary }]}>
+              HR Monitor pairing requires a custom dev build. Manual entry is available after each session.
+            </Text>
+          </View>
+        ) : hrMonitor.connected ? (
+          <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Connected</Text>
+              <Text style={[styles.settingSubLabel, { color: colors.textSecondary }]}>{hrMonitor.deviceName}</Text>
+            </View>
+            <TouchableOpacity onPress={handleBLEDisconnect}>
+              <Text style={[styles.chipText, { color: Colors.error }]}>Forget</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>
+              {hrMonitor.scanning ? 'Scanning…' : settings.hrMonitorName ?? 'No device paired'}
+            </Text>
+            <TouchableOpacity
+              style={[styles.scanBtn, { backgroundColor: Colors.cardio }]}
+              onPress={handleBLEConnect}
+              disabled={hrMonitor.scanning}
+            >
+              <Text style={styles.scanBtnText}>
+                {hrMonitor.scanning ? 'Scanning…' : 'Scan'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+
       <Text style={[styles.footer, { color: colors.textSecondary }]}>
         Settings are saved automatically.
       </Text>
@@ -262,4 +371,23 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 13, fontWeight: '600' },
 
   footer: { fontSize: 12, textAlign: 'center', marginTop: 24 },
+
+  settingSubLabel: { fontSize: 11, marginTop: 2 },
+  maxHRInputWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  maxHRInput: {
+    width: 56,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 15,
+    textAlign: 'center',
+  },
+  maxHRUnit: { fontSize: 13 },
+  scanBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 16,
+  },
+  scanBtnText: { color: 'white', fontWeight: '700', fontSize: 13 },
 });

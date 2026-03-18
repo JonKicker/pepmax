@@ -24,6 +24,10 @@ export type CardioSettings = {
   distanceUnit: DistanceUnit;
   autoPauseRun: boolean;
   autoPauseCycle: boolean;
+  // Heart rate
+  maxHeartRate?: number;
+  hrMonitorId?: string;
+  hrMonitorName?: string;
 };
 
 export type RoutePoint = {
@@ -67,9 +71,36 @@ export type CardioSession = {
   lapCount: number | null;
   poolLength: PoolLength | null;
   poolLengthCustomM: number | null;
+  // Heart rate (optional — only set when HR monitor was used or manually entered)
+  avgHeartRate?: number;
+  maxHeartRate?: number;
+  heartRateData?: HeartRatePoint[];
+  timeInZones?: TimeInZone[];
   // Meta
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
+};
+
+// ─── Heart Rate ───────────────────────────────────────────────────────────────
+
+export type HeartRatePoint = {
+  timestamp: number; // ms since epoch
+  bpm: number;
+};
+
+export type HeartRateZone = {
+  zone: 1 | 2 | 3 | 4 | 5;
+  name: string;
+  minPct: number;
+  maxPct: number;
+  color: string;
+};
+
+export type TimeInZone = {
+  zone: number;
+  name: string;
+  seconds: number;
+  color: string;
 };
 
 export type CardioSessionInput = Omit<CardioSession, 'id' | 'createdAt' | 'updatedAt'>;

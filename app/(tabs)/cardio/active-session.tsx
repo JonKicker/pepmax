@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,9 @@ import { useAuth } from '../../../src/contexts/AuthContext';
 import { useCardioSettings } from '../../../src/hooks/useCardioSettings';
 import { useCardioSession } from '../../../src/hooks/useCardioSession';
 import { useAudioCues } from '../../../src/hooks/useAudioCues';
+import { useHeartRateMonitor } from '../../../src/hooks/useHeartRateMonitor';
+import { useHeartRateZones } from '../../../src/hooks/useHeartRateZones';
+import HeartRateBar from '../../../src/components/cardio/HeartRateBar';
 import {
   formatDuration,
   formatDistance,
@@ -95,6 +98,7 @@ export default function ActiveSessionScreen() {
     resume,
     stop,
     abandon,
+    addHeartRatePoint,
   } = useCardioSession(sessionId, weightKg, settings, distanceUnit);
 
   // Option A: call start() only after session loads (Ray's required fix)
@@ -106,8 +110,28 @@ export default function ActiveSessionScreen() {
     }
   }, [session]);
 
-  // Audio cues
-  useAudioCues(distance, elapsedActive, currentPace, distanceUnit);
+  // Audio cues — returns announceZoneChange
+  const { announceZoneChange } = useAudioCues(distance, elapsedActive, currentPace, distanceUnit);
+
+  // HR monitor
+  const maxHR = settings.maxHeartRate ?? 180;
+  const hrMonitor = useHeartRateMonitor(settings.hrMonitorId);
+  const { zones, getZone } = useHeartRateZones(maxHR);
+  const prevZoneRef = useRef<number | null>(null);
+
+  // Feed HR data into session + detect zone changes — single useEffect (Ray note)
+  useEffect(() => {
+    const { currentBpm, connected } = hrMonitor;
+    if (!connected || currentBpm <= 0) return;
+
+    addHeartRatePoint(currentBpm, Date.now());
+
+    const zone = getZone(currentBpm);
+    if (zone && zone.zone !== prevZoneRef.current) {
+      prevZoneRef.current = zone.zone;
+      announceZoneChange(zone.name);
+    }
+  }, [hrMonitor.currentBpm, hrMonitor.connected]);
 
   const [stopModalVisible, setStopModalVisible] = useState(false);
   const [stopping, setStopping] = useState(false);
@@ -192,6 +216,17 @@ export default function ActiveSessionScreen() {
           )}
           <StatTile label="Calories" value={`${calories} kcal`} colors={colors} />
         </View>
+
+        {/* HR monitor bar — only shown when connected */}
+        {hrMonitor.connected && (
+          <View style={[styles.hrCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <HeartRateBar
+              currentBpm={hrMonitor.currentBpm}
+              maxHR={maxHR}
+              zones={zones}
+            />
+          </View>
+        )}
 
         {/* Splits table */}
         {splits.length > 0 && (
@@ -310,6 +345,7 @@ const styles = StyleSheet.create({
   statValueLarge: { fontSize: 28 },
   statLabel: { fontSize: 12, marginTop: 3 },
 
+  hrCard: { borderRadius: 14, borderWidth: 1, padding: 14 },
   splitsCard: { borderRadius: 14, borderWidth: 1, padding: 14 },
   splitsTitle: { fontSize: 15, fontWeight: '700', marginBottom: 10 },
   splitHeaderRow: { flexDirection: 'row', paddingBottom: 8, borderBottomWidth: 1, marginBottom: 4 },

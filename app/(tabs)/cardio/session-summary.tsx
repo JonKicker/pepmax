@@ -11,7 +11,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors } from '../../../src/constants/theme';
-import { getSessionById, getRecentSessions, detectNewPRs } from '../../../src/services/cardioService';
+import { getSessionById, getRecentSessions, detectNewPRs, updateCardioSession } from '../../../src/services/cardioService';
 import { useCardioSettings } from '../../../src/hooks/useCardioSettings';
 import {
   formatDuration,
@@ -20,6 +20,8 @@ import {
 } from '../../../src/utils/cardio';
 import RouteMap from '../../../src/components/cardio/RouteMap';
 import PRCelebration from '../../../src/components/cardio/PRCelebration';
+import ManualHREntry from '../../../src/components/cardio/ManualHREntry';
+import TimeInZones from '../../../src/components/cardio/TimeInZones';
 import type { CardioSession, CardioPR } from '../../../src/types/cardio';
 
 // ─── Stat row ─────────────────────────────────────────────────────────────────
@@ -54,6 +56,7 @@ export default function SessionSummaryScreen() {
   const [loadError, setLoadError] = useState(false);
   const [prs, setPrs] = useState<CardioPR[]>([]);
   const [currentPRIdx, setCurrentPRIdx] = useState(0);
+  const [hrDismissed, setHrDismissed] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -148,6 +151,35 @@ export default function SessionSummaryScreen() {
           <StatRow label="Laps" value={String(session.lapCount)} colors={colors} />
         )}
       </View>
+
+      {/* Heart rate — show TimeInZones if HR data present, otherwise offer manual entry */}
+      {session.timeInZones && session.timeInZones.length > 0 ? (
+        <View style={[styles.statsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.splitsTitle, { color: colors.textPrimary, paddingHorizontal: 16, paddingTop: 14 }]}>Heart Rate</Text>
+          {session.avgHeartRate != null && (
+            <StatRow label="Avg Heart Rate" value={`${session.avgHeartRate} bpm`} colors={colors} />
+          )}
+          {session.maxHeartRate != null && (
+            <StatRow label="Max Heart Rate" value={`${session.maxHeartRate} bpm`} colors={colors} />
+          )}
+          <View style={{ padding: 16 }}>
+            <TimeInZones timeInZones={session.timeInZones} />
+          </View>
+        </View>
+      ) : !hrDismissed && !session.avgHeartRate ? (
+        <ManualHREntry
+          onSave={async (avgBpm, maxBpm) => {
+            setHrDismissed(true);
+            // No heartRateData available for manual entry — only store avg/max
+            await updateCardioSession(sessionId, { avgHeartRate: avgBpm, maxHeartRate: maxBpm });
+            setSession((prev) => prev
+              ? { ...prev, avgHeartRate: avgBpm, maxHeartRate: maxBpm }
+              : prev
+            );
+          }}
+          onSkip={() => setHrDismissed(true)}
+        />
+      ) : null}
 
       {/* Splits */}
       {session.splits.length > 0 && (

@@ -2,13 +2,15 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import { Timestamp } from 'firebase/firestore';
-import type { CardioSession, RoutePoint, Split, DistanceUnit, CardioSettings } from '../types/cardio';
+import type { CardioSession, RoutePoint, Split, DistanceUnit, CardioSettings, HeartRatePoint } from '../types/cardio';
 import { getSessionById, updateCardioSession } from '../services/cardioService';
 import {
   haversineDistance,
   maxSpeedForActivity,
   rollingPace,
   calculateCalories,
+  getHRZones,
+  computeTimeInZones,
 } from '../utils/cardio';
 import { cacheSessionState, clearCachedSession, getCachedSession } from '../utils/cardioCache';
 
@@ -51,6 +53,11 @@ export function useCardioSession(
   const lapCountRef = useRef<number>(0);
   const caloriesRef = useRef<number>(0);
   const sessionRef = useRef<CardioSession | null>(null);
+  // HR data — downsampled to 1 point per 5s (Ray condition: Firestore doc size)
+  const hrDataRef = useRef<HeartRatePoint[]>([]);
+  const hrLastTimestampRef = useRef<number>(0);
+  const avgHeartRateRef = useRef<number>(0);
+  const maxHeartRateRef = useRef<number>(0);
   // Refs for params that change between renders but are read inside stable callbacks
   const weightKgRef = useRef<number>(weightKg);
   const settingsRef = useRef<CardioSettings>(settings);
@@ -306,6 +313,13 @@ export function useCardioSession(
       ? (finalElapsed / finalDistance) * 1000
       : 0;
 
+    // Build HR fields if monitor was used
+    const hrData = hrDataRef.current;
+    const hasHR = hrData.length > 0;
+    const maxHR = settingsRef.current.maxHeartRate ?? 180;
+    const zones = hasHR ? getHRZones(maxHR) : [];
+    const timeInZones = hasHR ? computeTimeInZones(hrData, zones, maxHR) : undefined;
+
     await updateCardioSession(sessionId, {
       status: 'completed',
       endedAt: Timestamp.now(),
@@ -315,10 +329,16 @@ export function useCardioSession(
       totalPausedTime: totalPausedRef.current,
       averagePace: finalPace,
       splits: splitsRef.current,
-      calories: caloriesRef.current, // use ref, not stale state
+      calories: caloriesRef.current,
       elevationGain: elevationGainRef.current,
       elevationLoss: elevationLossRef.current,
       lapCount: lapCountRef.current,
+      ...(hasHR && {
+        avgHeartRate: avgHeartRateRef.current,
+        maxHeartRate: maxHeartRateRef.current,
+        heartRateData: hrData,
+        timeInZones,
+      }),
     });
 
     await clearCachedSession();
@@ -341,6 +361,24 @@ export function useCardioSession(
 
     distanceRef.current += lapMeters;
     setDistance(distanceRef.current);
+  }, []);
+
+  /** Called by active-session when HR monitor delivers a BPM reading.
+   *  Downsamples to 1 point per 5 seconds to keep Firestore doc size bounded.
+   */
+  const addHeartRatePoint = useCallback((bpm: number, timestamp: number) => {
+    if (bpm <= 0 || bpm > 300) return;
+    const SAMPLE_INTERVAL_MS = 5000;
+    if (timestamp - hrLastTimestampRef.current < SAMPLE_INTERVAL_MS) return;
+
+    hrLastTimestampRef.current = timestamp;
+    hrDataRef.current.push({ timestamp, bpm });
+
+    // Update rolling average and max
+    const data = hrDataRef.current;
+    const sum = data.reduce((s, p) => s + p.bpm, 0);
+    avgHeartRateRef.current = Math.round(sum / data.length);
+    if (bpm > maxHeartRateRef.current) maxHeartRateRef.current = bpm;
   }, []);
 
   const abandon = useCallback(async () => {
@@ -374,5 +412,6 @@ export function useCardioSession(
     stop,
     addLap,
     abandon,
+    addHeartRatePoint,
   };
 }

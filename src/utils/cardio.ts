@@ -1,4 +1,12 @@
-import type { ActivityType, DistanceUnit, RoutePoint } from '../types/cardio';
+import type {
+  ActivityType,
+  DistanceUnit,
+  RoutePoint,
+  CardioPR,
+  HeartRatePoint,
+  HeartRateZone,
+  TimeInZone,
+} from '../types/cardio';
 
 // ─── Distance ─────────────────────────────────────────────────────────────────
 
@@ -256,4 +264,86 @@ export function speakDuration(seconds: number): string {
   if (m > 0) parts.push(m === 1 ? '1 minute' : `${m} minutes`);
   if (s > 0 && h === 0) parts.push(s === 1 ? '1 second' : `${s} seconds`);
   return parts.join(' ') || '0 seconds';
+}
+
+// ─── PR display helpers ──────────────────────────────────────────────────────
+
+export const PR_LABELS: Record<string, string> = {
+  fastestPace: 'Fastest Pace',
+  fastestSplit: 'Fastest Split',
+  longestDistance: 'Longest Distance',
+  longestDuration: 'Longest Duration',
+  mostCalories: 'Most Calories',
+  mostElevation: 'Most Elevation',
+};
+
+export function formatPRValue(pr: CardioPR, unit: DistanceUnit): string {
+  switch (pr.metric) {
+    case 'fastestPace':
+    case 'fastestSplit':
+      return formatPace(pr.value, unit);
+    case 'longestDistance':
+      return formatDistance(pr.value, unit);
+    case 'longestDuration':
+      return formatDuration(pr.value);
+    case 'mostCalories':
+      return `${Math.round(pr.value)} kcal`;
+    case 'mostElevation':
+      return `${Math.round(pr.value)} m`;
+    default:
+      return String(pr.value);
+  }
+}
+
+// ─── Heart rate utils ────────────────────────────────────────────────────────
+
+export function estimateMaxHR(age: number): number {
+  return Math.round(220 - age);
+}
+
+export function getHRZones(maxHR: number): HeartRateZone[] {
+  return [
+    { zone: 1, name: 'Recovery',  minPct: 0.50, maxPct: 0.60, color: '#3498DB' },
+    { zone: 2, name: 'Aerobic',   minPct: 0.60, maxPct: 0.70, color: '#2ECC71' },
+    { zone: 3, name: 'Tempo',     minPct: 0.70, maxPct: 0.80, color: '#F39C12' },
+    { zone: 4, name: 'Threshold', minPct: 0.80, maxPct: 0.90, color: '#E67E22' },
+    { zone: 5, name: 'Max',       minPct: 0.90, maxPct: 1.00, color: '#E74C3C' },
+  ];
+}
+
+export function getZoneForBpm(bpm: number, zones: HeartRateZone[], maxHR: number): HeartRateZone | null {
+  if (bpm <= 0 || maxHR <= 0) return null;
+  const pct = bpm / maxHR;
+  return zones.find((z) => pct >= z.minPct && pct < z.maxPct) ?? zones[zones.length - 1];
+}
+
+export function computeTimeInZones(hrData: HeartRatePoint[], zones: HeartRateZone[], maxHR: number): TimeInZone[] {
+  // Each stored point represents SAMPLE_INTERVAL_S seconds (downsampled at 5s intervals)
+  const SAMPLE_INTERVAL_S = 5;
+  const zoneSeconds: Record<number, number> = {};
+  zones.forEach((z) => { zoneSeconds[z.zone] = 0; });
+
+  for (const point of hrData) {
+    const zone = getZoneForBpm(point.bpm, zones, maxHR);
+    if (zone) {
+      zoneSeconds[zone.zone] += SAMPLE_INTERVAL_S;
+    }
+  }
+
+  return zones.map((z) => ({
+    zone: z.zone,
+    name: z.name,
+    seconds: zoneSeconds[z.zone] ?? 0,
+    color: z.color,
+  }));
+}
+
+export function getTrainingEffect(timeInZones: TimeInZone[]): string {
+  const total = timeInZones.reduce((sum, z) => sum + z.seconds, 0);
+  if (total === 0) return 'No Data';
+  const pcts = timeInZones.map((z) => z.seconds / total);
+  if ((pcts[3] ?? 0) + (pcts[4] ?? 0) >= 0.30) return 'High Intensity';
+  if ((pcts[2] ?? 0) >= 0.40) return 'Threshold Training';
+  if ((pcts[1] ?? 0) >= 0.40) return 'Aerobic Fitness';
+  return 'Recovery';
 }
