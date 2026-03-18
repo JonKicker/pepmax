@@ -18,6 +18,7 @@ import {
   formatDistance,
   formatPace,
 } from '../../../src/utils/cardio';
+import RouteMap from '../../../src/components/cardio/RouteMap';
 import type { CardioSession } from '../../../src/types/cardio';
 
 // ─── Stat row ─────────────────────────────────────────────────────────────────
@@ -148,20 +149,33 @@ export default function SessionSummaryScreen() {
         </View>
       )}
 
-      {/* Map placeholder */}
-      <View style={[styles.mapPlaceholder, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Ionicons name="map-outline" size={32} color={colors.textSecondary} />
-        <Text style={[styles.mapPlaceholderText, { color: colors.textSecondary }]}>
-          Route map coming soon
-        </Text>
-      </View>
+      {/* Route map */}
+      <RouteMap
+        route={session.route}
+        averagePace={session.averagePace}
+        interactive={false}
+        style={styles.routeMap}
+      />
 
-      <TouchableOpacity
-        style={[styles.doneBtn, { backgroundColor: Colors.cardio }]}
-        onPress={() => router.replace('/(tabs)/cardio')}
-      >
-        <Text style={styles.doneBtnText}>Done</Text>
-      </TouchableOpacity>
+      {/* Action buttons */}
+      <View style={styles.buttonRow}>
+        <TouchableOpacity
+          style={[styles.detailBtn, { borderColor: Colors.cardio }]}
+          onPress={() => router.push({
+            pathname: '/(tabs)/cardio/session-detail',
+            params: { sessionId },
+          })}
+        >
+          <Ionicons name="map" size={16} color={Colors.cardio} />
+          <Text style={[styles.detailBtnText, { color: Colors.cardio }]}>View Details</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.doneBtn, { backgroundColor: Colors.cardio }]}
+          onPress={() => router.replace('/(tabs)/cardio')}
+        >
+          <Text style={styles.doneBtnText}>Done</Text>
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 }
@@ -207,18 +221,23 @@ const styles = StyleSheet.create({
   splitNum: { width: 28, fontSize: 13, fontWeight: '600' },
   splitCell: { flex: 1, fontSize: 13 },
 
-  mapPlaceholder: {
-    borderRadius: 14,
-    borderWidth: 1,
-    height: 140,
+  routeMap: { width: '100%', height: 160, borderRadius: 14 },
+
+  buttonRow: { flexDirection: 'row', gap: 12 },
+  detailBtn: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 8,
   },
-  mapPlaceholderText: { fontSize: 13 },
-
+  detailBtnText: { fontWeight: '700', fontSize: 15 },
   doneBtn: {
-    paddingVertical: 16,
+    flex: 1,
+    paddingVertical: 14,
     borderRadius: 14,
     alignItems: 'center',
   },

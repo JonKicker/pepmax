@@ -74,6 +74,15 @@ export type CardioSession = {
 
 export type CardioSessionInput = Omit<CardioSession, 'id' | 'createdAt' | 'updatedAt'>;
 
+export type DateRange = 'week' | 'month' | '3months' | 'all';
+
+export type HistoryFilter = {
+  activityType?: ActivityType;
+  dateRange?: DateRange;
+  minDistanceM?: number;
+  maxDistanceM?: number;
+};
+
 // For the activity cards "last session" display
 export type LastSessionSummary = {
   activityType: ActivityType;

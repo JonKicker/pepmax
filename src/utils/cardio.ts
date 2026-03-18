@@ -108,6 +108,123 @@ export function rollingPace(points: RoutePoint[], windowMs = 30000): number {
   return (timeSec / dist) * 1000; // seconds per km
 }
 
+// ─── Goal check ──────────────────────────────────────────────────────────────
+
+/** Check if a session's goal was achieved */
+export function isGoalMet(session: { goals: { type: string; value: number } | null; distance: number; duration: number; averagePace: number }): boolean {
+  if (!session.goals || session.goals.type === 'none') return false;
+  if (session.goals.type === 'distance') return session.distance >= session.goals.value;
+  if (session.goals.type === 'time') return session.duration >= session.goals.value;
+  if (session.goals.type === 'pace') return session.averagePace > 0 && session.averagePace <= session.goals.value;
+  return false;
+}
+
+// ─── Route map helpers ───────────────────────────────────────────────────────
+
+/** Get pace-based color: green (fast), yellow (avg), red (slow) */
+export function getPaceColor(pace: number, avgPace: number): string {
+  if (!pace || !avgPace || !isFinite(pace) || !isFinite(avgPace)) return '#F39C12'; // yellow default
+  const ratio = pace / avgPace;
+  if (ratio <= 0.9) return '#27AE60'; // fast — green
+  if (ratio >= 1.1) return '#E74C3C'; // slow — red
+  return '#F39C12'; // average — yellow
+}
+
+/** Compute MapView region to fit entire route with padding */
+export function getRouteBounds(route: RoutePoint[]): {
+  latitude: number;
+  longitude: number;
+  latitudeDelta: number;
+  longitudeDelta: number;
+} {
+  if (route.length === 0) {
+    return { latitude: 0, longitude: 0, latitudeDelta: 0.01, longitudeDelta: 0.01 };
+  }
+
+  let minLat = route[0].latitude;
+  let maxLat = route[0].latitude;
+  let minLng = route[0].longitude;
+  let maxLng = route[0].longitude;
+
+  for (const p of route) {
+    if (p.latitude < minLat) minLat = p.latitude;
+    if (p.latitude > maxLat) maxLat = p.latitude;
+    if (p.longitude < minLng) minLng = p.longitude;
+    if (p.longitude > maxLng) maxLng = p.longitude;
+  }
+
+  const pad = 0.2; // 20% padding
+  const latDelta = Math.max((maxLat - minLat) * (1 + pad), 0.005);
+  const lngDelta = Math.max((maxLng - minLng) * (1 + pad), 0.005);
+
+  return {
+    latitude: (minLat + maxLat) / 2,
+    longitude: (minLng + maxLng) / 2,
+    latitudeDelta: latDelta,
+    longitudeDelta: lngDelta,
+  };
+}
+
+/** Build pace-colored polyline segments from route points */
+export function buildPaceSegments(
+  route: RoutePoint[],
+  avgPace: number
+): { coordinates: { latitude: number; longitude: number }[]; color: string }[] {
+  if (route.length < 2) return [];
+
+  const SEGMENT_SIZE = 5; // points per segment
+  const segments: { coordinates: { latitude: number; longitude: number }[]; color: string }[] = [];
+
+  for (let i = 0; i < route.length - 1; i += SEGMENT_SIZE) {
+    const end = Math.min(i + SEGMENT_SIZE + 1, route.length);
+    const chunk = route.slice(i, end);
+
+    // Calculate segment pace
+    let dist = 0;
+    for (let j = 1; j < chunk.length; j++) {
+      dist += haversineDistance(chunk[j - 1].latitude, chunk[j - 1].longitude, chunk[j].latitude, chunk[j].longitude);
+    }
+    const timeSec = (chunk[chunk.length - 1].timestamp - chunk[0].timestamp) / 1000;
+    const segPace = dist > 0 && timeSec > 0 ? (timeSec / dist) * 1000 : avgPace;
+
+    segments.push({
+      coordinates: chunk.map((p) => ({ latitude: p.latitude, longitude: p.longitude })),
+      color: getPaceColor(segPace, avgPace),
+    });
+  }
+
+  return segments;
+}
+
+/** Find mile/km marker positions along a route */
+export function getMileMarkers(
+  route: RoutePoint[],
+  unitMeters: number // 1609.344 for miles, 1000 for km
+): { latitude: number; longitude: number; label: string }[] {
+  if (route.length < 2) return [];
+
+  const markers: { latitude: number; longitude: number; label: string }[] = [];
+  let totalDist = 0;
+  let nextMarker = unitMeters;
+  let markerNum = 1;
+
+  for (let i = 1; i < route.length; i++) {
+    const d = haversineDistance(route[i - 1].latitude, route[i - 1].longitude, route[i].latitude, route[i].longitude);
+    totalDist += d;
+    if (totalDist >= nextMarker) {
+      markers.push({
+        latitude: route[i].latitude,
+        longitude: route[i].longitude,
+        label: String(markerNum),
+      });
+      markerNum++;
+      nextMarker += unitMeters;
+    }
+  }
+
+  return markers;
+}
+
 // ─── Speech helpers ───────────────────────────────────────────────────────────
 
 /** Speak-friendly pace "eight minutes thirty-two seconds per mile" */
