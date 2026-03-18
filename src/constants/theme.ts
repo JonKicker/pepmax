@@ -9,6 +9,7 @@ export const Colors = {
   peptide: '#2E86C1',
   nutrition: '#27AE60',
   gym: '#8E44AD',
+  cardio: '#E74C3C',
 
   // Light mode
   light: {
@@ -51,6 +52,7 @@ export type Theme = {
     peptide: string;
     nutrition: string;
     gym: string;
+    cardio: string;
   };
 };
 
@@ -67,6 +69,7 @@ function buildTheme(dark: boolean): Theme {
       peptide: Colors.peptide,
       nutrition: Colors.nutrition,
       gym: Colors.gym,
+      cardio: Colors.cardio,
     },
   };
 }

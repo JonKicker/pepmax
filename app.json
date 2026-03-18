@@ -15,7 +15,9 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "PepMax uses the camera to scan food barcodes."
+        "NSCameraUsageDescription": "PepMax uses the camera to scan food barcodes.",
+        "NSLocationWhenInUseUsageDescription": "PepMax uses your location to track your running, cycling, and walking routes on a map.",
+        "NSLocationAlwaysUsageDescription": "PepMax uses your location to track your running, cycling, and walking routes on a map."
       }
     },
     "android": {
@@ -25,7 +27,8 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "FOREGROUND_SERVICE_LOCATION"]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -33,7 +36,10 @@
     "plugins": [
       "expo-router",
       "expo-web-browser",
-      "expo-camera"
+      "expo-camera",
+      ["expo-location", {
+        "locationAlwaysAndWhenInUsePermission": "PepMax uses your location to track your running, cycling, and walking routes on a map."
+      }]
     ]
   }
 }

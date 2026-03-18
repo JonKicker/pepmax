@@ -37,6 +37,9 @@ export const COLLECTIONS = {
   NUTRITION: 'nutrition',
   WORKOUTS: 'workouts',
   PROFILE: 'profile',
+  CARDIO_SESSIONS: 'cardioSessions',
+  CUSTOM_EXERCISES: 'customExercises',
+  WORKOUT_TEMPLATES: 'workoutTemplates',
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];
