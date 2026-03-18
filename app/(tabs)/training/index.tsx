@@ -154,6 +154,9 @@ export default function TrainingScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [quickSwitchVisible, setQuickSwitchVisible] = useState(false);
+
+  const { profiles, activeProfile, loadProfiles, switchProfile } = useEquipmentProfiles();
 
   const load = async (refresh = false) => {
     if (refresh) setRefreshing(true);
@@ -172,7 +175,8 @@ export default function TrainingScreen() {
     useCallback(() => {
       load();
       checkRecovery();
-    }, [checkRecovery])
+      loadProfiles();
+    }, [checkRecovery, loadProfiles])
   );
 
   const handleDelete = (id: string) => {
@@ -269,6 +273,21 @@ export default function TrainingScreen() {
         </View>
       )}
 
+      {/* Equipment profile chip */}
+      {activeProfile && (
+        <TouchableOpacity
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setQuickSwitchVisible(true); }}
+          style={[styles.equipChip, { backgroundColor: Colors.gym + '15', borderColor: Colors.gym + '30' }]}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="barbell-outline" size={14} color={Colors.gym} />
+          <Text style={[styles.equipChipText, { color: Colors.gym }]}>
+            Equipment: {activeProfile.name}
+          </Text>
+          <Ionicons name="chevron-down" size={14} color={Colors.gym} />
+        </TouchableOpacity>
+      )}
+
       {/* Quick-action buttons */}
       <View style={styles.quickActions}>
         <TouchableOpacity
@@ -335,6 +354,16 @@ export default function TrainingScreen() {
       >
         <Ionicons name="flash" size={26} color="white" />
       </TouchableOpacity>
+
+      <EquipmentQuickSwitch
+        visible={quickSwitchVisible}
+        onClose={() => setQuickSwitchVisible(false)}
+        profiles={profiles}
+        activeProfileId={activeProfile?.id ?? null}
+        onSwitch={switchProfile}
+        onManage={() => router.push('/(tabs)/training/equipment-profiles')}
+        colors={colors}
+      />
     </View>
   );
 }
@@ -397,6 +426,19 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 20, fontWeight: '700', marginBottom: 8, textAlign: 'center' },
   emptySubtitle: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
 
+  equipChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 6,
+  },
+  equipChipText: { fontSize: 13, fontWeight: '700' },
   quickActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',

@@ -220,13 +220,13 @@ export default function PeptidesScreen() {
   };
 
   const handleAddPreset = async (preset: PresetCompound, dose: number) => {
+    setPresetModalVisible(false);
     const result = await addPeptideFromPreset(preset, dose);
     if (result.error) {
       Alert.alert('Error', 'Could not add compound. Please try again.');
       return;
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setPresetModalVisible(false);
     load();
   };
 
