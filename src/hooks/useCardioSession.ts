@@ -13,6 +13,7 @@ import {
   computeTimeInZones,
 } from '../utils/cardio';
 import { cacheSessionState, clearCachedSession, getCachedSession } from '../utils/cardioCache';
+import { analytics, AnalyticsEvent } from '../services/analytics';
 
 export function useCardioSession(
   sessionId: string,
@@ -270,6 +271,10 @@ export function useCardioSession(
       await startWatcher();
     }
     startCacheTimer();
+    analytics.track(AnalyticsEvent.CARDIO_SESSION_STARTED, {
+      activity_type: sessionRef.current?.activityType ?? 'unknown',
+      indoor_mode: sessionRef.current?.indoorMode ? 1 : 0,
+    });
   }, [startTimer, startWatcher, startCacheTimer]);
 
   const pause = useCallback(() => {
@@ -342,6 +347,11 @@ export function useCardioSession(
     });
 
     await clearCachedSession();
+    analytics.track(AnalyticsEvent.CARDIO_SESSION_COMPLETED, {
+      activity_type: sessionRef.current?.activityType ?? 'unknown',
+      duration_minutes: Math.round(finalElapsed / 60),
+      distance_m: Math.round(finalDistance),
+    });
   }, [stopWatcher, stopCacheTimer, sessionId]);
 
   const addLap = useCallback(() => {

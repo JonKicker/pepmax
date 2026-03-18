@@ -25,6 +25,7 @@ import Purchases, { PACKAGE_TYPE, type PurchasesPackage } from 'react-native-pur
 import { useTheme } from '../src/hooks/useTheme';
 import { Colors } from '../src/constants/theme';
 import { usePremium } from '../src/contexts/PremiumContext';
+import { analytics, AnalyticsEvent } from '../src/services/analytics';
 
 // ─── Legal URLs ───────────────────────────────────────────────────────────────
 // TODO: Replace with production URLs before App Store / Play Store submission
@@ -58,6 +59,11 @@ export default function PaywallScreen() {
   const [offeringsLoading, setOfferingsLoading] = useState(true);
   const [annualPkg, setAnnualPkg] = useState<PurchasesPackage | null>(null);
   const [monthlyPkg, setMonthlyPkg] = useState<PurchasesPackage | null>(null);
+
+  // Track paywall view on mount
+  useEffect(() => {
+    analytics.track(AnalyticsEvent.PAYWALL_VIEWED);
+  }, []);
 
   // Fetch live pricing once on mount — packages cached in state for purchase flow.
   useEffect(() => {
@@ -113,6 +119,7 @@ export default function PaywallScreen() {
 
       const success = await purchasePackage(pkg);
       if (success) {
+        analytics.track(AnalyticsEvent.SUBSCRIPTION_STARTED, { plan: selectedPlan });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.back();
         Alert.alert('Welcome to Premium!', 'You now have full access to all PepMax features.');
@@ -133,6 +140,7 @@ export default function PaywallScreen() {
     try {
       const restored = await restorePurchases();
       if (restored) {
+        analytics.track(AnalyticsEvent.SUBSCRIPTION_RESTORED);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.back();
         Alert.alert('Restored!', 'Your premium subscription has been restored.');

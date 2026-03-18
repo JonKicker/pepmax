@@ -22,6 +22,7 @@ import { findExerciseById } from '../services/exerciseService';
 import { exerciseLibrary } from '../data/exerciseLibrary';
 import { setLastWeight } from '../utils/weightMemory';
 import { consumePendingBareMinimum } from '../utils/sessionPreviewStore';
+import { analytics, AnalyticsEvent } from '../services/analytics';
 import type { Exercise } from '../types/exercise';
 import type {
   WorkoutSession,
@@ -229,6 +230,10 @@ export function useWorkoutSession(): WorkoutSessionHook {
         // Non-critical — screen may sleep.
       }
 
+      analytics.track(AnalyticsEvent.WORKOUT_STARTED, {
+        template_name: templateName,
+        has_template: templateId != null,
+      });
       setIsLoading(false);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       return result.data!;
@@ -318,6 +323,9 @@ export function useWorkoutSession(): WorkoutSessionHook {
       }
 
       const isPR = prResult?.isAnyPR ?? false;
+      if (isPR) {
+        analytics.track(AnalyticsEvent.PR_ACHIEVED, { exercise_name: exerciseName });
+      }
 
       const updatedSet: SessionSet = {
         ...set,
@@ -550,6 +558,12 @@ export function useWorkoutSession(): WorkoutSessionHook {
 
       await updateSession(s.id, update);
       await clearCache();
+
+      analytics.track(AnalyticsEvent.WORKOUT_COMPLETED, {
+        duration_minutes: Math.round(elapsedRef.current / 60),
+        total_sets: completedSets.length,
+        total_volume: Math.round(totalVolume),
+      });
 
       syncSession(null);
       setElapsedSeconds(0);

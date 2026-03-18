@@ -16,6 +16,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { analytics, AnalyticsEvent } from '../../../src/services/analytics';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../src/hooks/useTheme';
@@ -82,6 +83,7 @@ export default function BodyTrackingScreen() {
       Alert.alert('Error', 'Failed to save weight entry. Please try again.');
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      analytics.track(AnalyticsEvent.WEIGHT_LOGGED, { display_unit: displayUnit });
     }
   }, [logWeight]);
 

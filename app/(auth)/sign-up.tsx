@@ -11,6 +11,7 @@ import { Colors } from '../../src/constants/theme';
 import { signUp } from '../../src/services/firebase/auth';
 import { mergeDocument, COLLECTIONS } from '../../src/services/firebase/firestore';
 import { getAuthErrorMessage } from '../../src/constants/authErrors';
+import { analytics, AnalyticsEvent } from '../../src/services/analytics';
 
 type FormErrors = {
   firstName?: string;
@@ -101,6 +102,7 @@ export default function SignUpScreen() {
       return;
     }
 
+    analytics.track(AnalyticsEvent.SIGNUP_COMPLETED, { method: 'email' });
     setLoading(false);
     // AuthGuard detects no onboardingComplete → redirects to /(onboarding)/quiz
   }

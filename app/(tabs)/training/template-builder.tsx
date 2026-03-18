@@ -15,6 +15,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../src/hooks/useTheme';
+import { analytics, AnalyticsEvent } from '../../../src/services/analytics';
 import { Colors } from '../../../src/constants/theme';
 import { useExercisePicker } from '../../../src/contexts/ExercisePickerContext';
 import { useExerciseLibrary } from '../../../src/hooks/useExerciseLibrary';
@@ -152,6 +153,12 @@ export default function TemplateBuilderScreen() {
     if (result.error) {
       Alert.alert('Error', 'Failed to save template. Please try again.');
     } else {
+      if (!isEdit) {
+        analytics.track(AnalyticsEvent.TEMPLATE_CREATED, {
+          exercise_count: exercises.length,
+          estimated_duration: input.estimatedDuration,
+        });
+      }
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       router.back();
     }

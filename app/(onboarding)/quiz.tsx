@@ -9,6 +9,7 @@ import { useTheme } from '../../src/hooks/useTheme';
 import { Colors, Theme } from '../../src/constants/theme';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { mergeDocument, COLLECTIONS } from '../../src/services/firebase/firestore';
+import { analytics, AnalyticsEvent } from '../../src/services/analytics';
 import { calculateTDEE, calculateMacros, lbsToKg, feetInchesToCm } from '../../src/utils/tdee';
 import type { Goal, ExperienceLevel, Units, Sex } from '../../src/types/profile';
 
@@ -88,6 +89,7 @@ export default function QuizScreen() {
 
     if (step < TOTAL_STEPS) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      analytics.track(AnalyticsEvent.ONBOARDING_STEP_VIEWED, { step: step + 1, total_steps: TOTAL_STEPS });
       setStep((s) => s + 1);
       return;
     }
@@ -148,6 +150,10 @@ export default function QuizScreen() {
     // Refresh full profile from Firestore — returns onboardingComplete: true + all quiz data (TDEE, macros, etc.)
     // AuthGuard re-evaluates on profileLoading → false and redirects to /(tabs).
     await refreshProfile();
+    analytics.track(AnalyticsEvent.ONBOARDING_COMPLETED, {
+      goals: data.goals.join(','),
+      experience_level: data.experienceLevel ?? '',
+    });
     console.log('[quiz] refreshProfile complete — AuthGuard should redirect to /(tabs)');
     setSaving(false);
   }
