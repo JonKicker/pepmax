@@ -47,6 +47,7 @@ export type UserProfile = {
   mealSlots?: MealSlotConfig[];
 
   // Meta
+  onboardingComplete: boolean;
   quizCompletedAt: Timestamp;
   updatedAt: Timestamp;
 };

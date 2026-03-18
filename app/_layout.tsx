@@ -24,21 +24,25 @@ function AuthGuard() {
   const router = useRouter();
 
   useEffect(() => {
-    // Wait until both auth and profile state are resolved
     if (isLoading || profileLoading) return;
 
     const inAuth = segments[0] === '(auth)';
     const inOnboarding = segments[0] === '(onboarding)';
     const inTabs = segments[0] === '(tabs)';
 
+    console.log('[AuthGuard]', {
+      uid: currentUser?.uid ?? null,
+      onboardingComplete: userProfile?.onboardingComplete ?? false,
+      segment: segments[0] ?? '/',
+    });
+
     if (!currentUser) {
-      // Not signed in — send to welcome
       if (!inAuth) router.replace('/(auth)/welcome');
-    } else if (!userProfile?.quizCompletedAt) {
-      // Signed in but quiz not done
+    } else if (!userProfile?.onboardingComplete) {
+      // Signed in but onboarding not complete
       if (!inOnboarding) router.replace('/(onboarding)/quiz');
     } else {
-      // Fully onboarded — send to app (also covers the bare index "/" route)
+      // Fully onboarded
       if (!inTabs) router.replace('/(tabs)');
     }
   }, [currentUser, userProfile, isLoading, profileLoading, segments]);

@@ -41,7 +41,7 @@ const INITIAL: QuizData = {
 
 export default function QuizScreen() {
   const { colors } = useTheme();
-  const { currentUser } = useAuth();
+  const { currentUser, refreshProfile } = useAuth();
   const [step, setStep] = useState(1);
   const [data, setData] = useState<QuizData>(INITIAL);
   const [error, setError] = useState<string | null>(null);
@@ -98,8 +98,12 @@ export default function QuizScreen() {
   }
 
   async function saveProfile() {
-    if (!currentUser) return;
+    if (!currentUser) {
+      console.log('[quiz] saveProfile: no currentUser, aborting');
+      return;
+    }
     setSaving(true);
+    console.log('[quiz] saveProfile: starting for uid', currentUser.uid);
 
     // Convert body stats to metric
     let heightCm: number;
@@ -118,6 +122,8 @@ export default function QuizScreen() {
     const tdee = calculateTDEE(weightKg, heightCm, age, sex);
     const macros = calculateMacros(tdee);
 
+    console.log('[quiz] writing profile to Firestore:', { heightCm, weightKg, age, sex, tdee });
+
     const result = await mergeDocument(COLLECTIONS.PROFILE, 'data', {
       goals: data.goals,
       experienceLevel: data.experienceLevel!,
@@ -129,16 +135,22 @@ export default function QuizScreen() {
       tdee,
       calorieTarget: tdee,
       macros,
+      onboardingComplete: true,
       quizCompletedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
 
-    setSaving(false);
-
     if (result.error) {
+      console.error('[quiz] Firestore write failed:', result.error);
+      setSaving(false);
       setError('Failed to save. Check your connection and try again.');
+      return;
     }
-    // On success: AuthGuard detects quizCompletedAt and redirects to /(tabs)
+
+    console.log('[quiz] Firestore write succeeded — refreshing profile in AuthContext');
+    await refreshProfile();
+    console.log('[quiz] refreshProfile complete — AuthGuard should redirect to /(tabs)');
+    setSaving(false);
   }
 
   function handleBack() {

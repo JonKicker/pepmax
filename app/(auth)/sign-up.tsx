@@ -62,6 +62,7 @@ export default function SignUpScreen() {
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [rawError, setRawError] = useState<string | null>(null);
 
   function clearFieldError(field: keyof FormErrors) {
     setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
@@ -79,12 +80,15 @@ export default function SignUpScreen() {
     setLoading(true);
     setFieldErrors({});
     setSubmitError(null);
+    setRawError(null);
 
     const result = await signUp(email.trim(), password);
 
     if (result.error) {
       setLoading(false);
+      const err = result.error as { code?: string; message?: string };
       setSubmitError(getAuthErrorMessage(result.error));
+      setRawError(`code: ${err?.code ?? 'none'} | ${err?.message ?? String(result.error)}`);
       return;
     }
 
@@ -222,6 +226,11 @@ export default function SignUpScreen() {
           {submitError && (
             <View style={[styles.errorBox, { backgroundColor: Colors.error + '18', borderColor: Colors.error + '40' }]}>
               <Text style={[styles.errorText, { color: Colors.error }]}>{submitError}</Text>
+              {rawError && (
+                <Text style={[styles.errorText, { color: Colors.error, opacity: 0.7, marginTop: 4, fontSize: 11 }]}>
+                  DEBUG: {rawError}
+                </Text>
+              )}
             </View>
           )}
 
