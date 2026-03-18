@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
+import { analytics, AnalyticsEvent } from '../../../src/services/analytics';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as Linking from 'expo-linking';
@@ -146,6 +147,7 @@ export default function ProgressCameraScreen() {
     if (result.error) {
       Alert.alert('Upload Failed', 'Could not save your photos. Please try again.');
     } else {
+      analytics.track(AnalyticsEvent.PROGRESS_PHOTO_TAKEN, { photo_count: captures.length });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     }

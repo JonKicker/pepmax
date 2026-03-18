@@ -50,8 +50,27 @@ function getRelativeTime(date: Date): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+function computeWeeklySummary(sessions: CardioSession[]): { distanceM: number; count: number; durationSecs: number } {
+  const cutoff = Date.now() - 7 * 86400000;
+  let distanceM = 0;
+  let durationSecs = 0;
+  let count = 0;
+  for (const s of sessions) {
+    // Guard: createdAt is optional — skip sessions missing it (older documents)
+    if (!s.createdAt) continue;
+    const ts = s.createdAt.toMillis();
+    if (ts >= cutoff) {
+      distanceM += s.distance;
+      durationSecs += s.duration;
+      count++;
+    }
+  }
+  return { distanceM, count, durationSecs };
+}
+
 export function CardioCard({ sessions, colors, error, units, onPress }: Props) {
   const recent = sessions.length > 0 ? sessions[0] : null;
+  const weekly = computeWeeklySummary(sessions);
 
   return (
     <DashboardCard
@@ -66,24 +85,33 @@ export function CardioCard({ sessions, colors, error, units, onPress }: Props) {
       ) : !recent ? (
         <Text style={[styles.empty, { color: colors.textSecondary }]}>No cardio sessions yet.</Text>
       ) : (
-        <View style={styles.row}>
-          <Ionicons
-            name={ACTIVITY_ICONS[recent.activityType] ?? 'fitness-outline'}
-            size={24}
-            color={Colors.cardio}
-            style={styles.icon}
-          />
-          <View style={styles.details}>
-            <Text style={[styles.type, { color: colors.textPrimary }]}>
-              {recent.activityType.charAt(0).toUpperCase() + recent.activityType.slice(1)}
-            </Text>
-            <Text style={[styles.stats, { color: colors.textSecondary }]}>
-              {formatDistance(recent.distance, units)} · {formatDuration(recent.duration)} · {getRelativeTime(
-                recent.startedAt?.toDate ? recent.startedAt.toDate() : new Date(),
-              )}
-            </Text>
+        <>
+          <View style={styles.row}>
+            <Ionicons
+              name={ACTIVITY_ICONS[recent.activityType] ?? 'fitness-outline'}
+              size={24}
+              color={Colors.cardio}
+              style={styles.icon}
+            />
+            <View style={styles.details}>
+              <Text style={[styles.type, { color: colors.textPrimary }]}>
+                {recent.activityType.charAt(0).toUpperCase() + recent.activityType.slice(1)}
+              </Text>
+              <Text style={[styles.stats, { color: colors.textSecondary }]}>
+                {formatDistance(recent.distance, units)} · {formatDuration(recent.duration)} · {getRelativeTime(
+                  recent.startedAt?.toDate ? recent.startedAt.toDate() : new Date(),
+                )}
+              </Text>
+            </View>
           </View>
-        </View>
+          {weekly.count > 0 && (
+            <View style={[styles.weeklyRow, { borderTopColor: colors.border }]}>
+              <Text style={[styles.weeklyText, { color: colors.textSecondary }]}>
+                This week: {weekly.count} {weekly.count === 1 ? 'session' : 'sessions'} · {formatDistance(weekly.distanceM, units)}
+              </Text>
+            </View>
+          )}
+        </>
       )}
     </DashboardCard>
   );
@@ -96,4 +124,10 @@ const styles = StyleSheet.create({
   details: { flex: 1 },
   type: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
   stats: { fontSize: 13 },
+  weeklyRow: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  weeklyText: { fontSize: 12 },
 });

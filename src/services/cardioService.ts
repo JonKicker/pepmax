@@ -134,6 +134,29 @@ export async function getSessionsInDateRange(
   return { data: filtered, error: null };
 }
 
+// ─── Weekly summary ──────────────────────────────────────────────────────────
+
+export type WeeklyCardioSummary = {
+  totalDistanceM: number;
+  totalDurationSecs: number;
+  sessionCount: number;
+};
+
+export async function getThisWeekCardioSummary(): Promise<ServiceResult<WeeklyCardioSummary>> {
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000);
+  const result = await getSessionsInDateRange(sevenDaysAgo, now);
+  if (result.error) return { data: null, error: result.error };
+
+  const sessions = result.data ?? [];
+  const summary: WeeklyCardioSummary = {
+    totalDistanceM: sessions.reduce((sum, s) => sum + s.distance, 0),
+    totalDurationSecs: sessions.reduce((sum, s) => sum + s.duration, 0),
+    sessionCount: sessions.length,
+  };
+  return { data: summary, error: null };
+}
+
 // ─── PR detection (pure function — client-side computation) ──────────────────
 
 export function detectNewPRs(

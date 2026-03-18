@@ -12,10 +12,12 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors } from '../../../src/constants/theme';
-import { getLastSessionByType } from '../../../src/services/cardioService';
+import { getLastSessionByType, getThisWeekCardioSummary } from '../../../src/services/cardioService';
 import { formatDistance, formatDuration } from '../../../src/utils/cardio';
 import { useCardioSettings } from '../../../src/hooks/useCardioSettings';
+import WeeklySummaryCard from '../../../src/components/cardio/WeeklySummaryCard';
 import type { ActivityType, LastSessionSummary } from '../../../src/types/cardio';
+import type { WeeklyCardioSummary } from '../../../src/services/cardioService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -90,6 +92,7 @@ function ActivityCard({
 export default function CardioScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const { settings } = useCardioSettings();
 
   const [lastSessions, setLastSessions] = useState<Record<ActivityType, LastSessionSummary | null>>({
     run: null,
@@ -97,13 +100,18 @@ export default function CardioScreen() {
     walk: null,
     swim: null,
   });
+  const [weeklySummary, setWeeklySummary] = useState<WeeklyCardioSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadLastSessions = useCallback(async () => {
     setLoading(true);
-    const results = await Promise.all(
-      ACTIVITIES.map((a) => getLastSessionByType(a.type))
-    );
+    const [weeklyResult, ...activityResults] = await Promise.all([
+      getThisWeekCardioSummary(),
+      ...ACTIVITIES.map((a) => getLastSessionByType(a.type)),
+    ]);
+
+    setWeeklySummary(weeklyResult.data ?? null);
+
     const map: Record<ActivityType, LastSessionSummary | null> = {
       run: null,
       cycle: null,
@@ -111,7 +119,7 @@ export default function CardioScreen() {
       swim: null,
     };
     ACTIVITIES.forEach((a, i) => {
-      const s = results[i].data;
+      const s = activityResults[i].data;
       if (s) {
         map[a.type] = {
           activityType: s.activityType,
@@ -139,6 +147,10 @@ export default function CardioScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.list}>
+        <WeeklySummaryCard
+          summary={loading ? null : weeklySummary}
+          distanceUnit={settings.distanceUnit}
+        />
         {ACTIVITIES.map((activity) => (
           <ActivityCard
             key={activity.type}
