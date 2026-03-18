@@ -135,7 +135,7 @@ function EmptyState({
       </View>
       <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No workouts today</Text>
       <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-        Tap + to log your first exercise.
+        Hit Quick Start to begin a workout.
       </Text>
     </View>
   );
@@ -146,7 +146,7 @@ function EmptyState({
 export default function TrainingScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { activeSession, isChecking: recoveryChecking, dismiss: dismissRecovery } = useWorkoutRecovery();
+  const { activeSession, isChecking: recoveryChecking, dismiss: dismissRecovery, check: checkRecovery } = useWorkoutRecovery();
 
   const [workouts, setWorkouts] = useState<WorkoutLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -169,7 +169,8 @@ export default function TrainingScreen() {
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [])
+      checkRecovery();
+    }, [checkRecovery])
   );
 
   const handleDelete = (id: string) => {
@@ -284,6 +285,22 @@ export default function TrainingScreen() {
           <Ionicons name="clipboard-outline" size={18} color={Colors.gym} />
           <Text style={[styles.quickBtnText, { color: Colors.gym }]}>Templates</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.quickBtn, { backgroundColor: Colors.gym + '15', borderColor: Colors.gym + '30' }]}
+          onPress={() => router.push('/(tabs)/training/history')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="time-outline" size={18} color={Colors.gym} />
+          <Text style={[styles.quickBtnText, { color: Colors.gym }]}>History</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.quickBtn, { backgroundColor: Colors.gym + '15', borderColor: Colors.gym + '30' }]}
+          onPress={() => router.push('/(tabs)/training/progress')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="analytics-outline" size={18} color={Colors.gym} />
+          <Text style={[styles.quickBtnText, { color: Colors.gym }]}>Progress</Text>
+        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -380,12 +397,14 @@ const styles = StyleSheet.create({
 
   quickActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: 16,
     paddingTop: 12,
     gap: 10,
   },
   quickBtn: {
-    flex: 1,
+    width: '47%',
+    flexGrow: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

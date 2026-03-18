@@ -22,6 +22,9 @@ export default function TrainingLayout() {
         <Stack.Screen name="template-builder" options={{ title: 'Template Builder' }} />
         <Stack.Screen name="active-session" options={{ headerShown: false }} />
         <Stack.Screen name="session-summary" options={{ title: 'Workout Summary' }} />
+        <Stack.Screen name="history" options={{ title: 'Training History' }} />
+        <Stack.Screen name="session-detail" options={{ title: 'Session Detail' }} />
+        <Stack.Screen name="progress" options={{ title: 'Progress' }} />
       </Stack>
     </ExercisePickerProvider>
   );

@@ -41,6 +41,12 @@ export const COLLECTIONS = {
   CUSTOM_EXERCISES: 'customExercises',
   WORKOUT_TEMPLATES: 'workoutTemplates',
   WORKOUT_SESSIONS: 'workoutSessions',
+  PERSONAL_RECORDS: 'personalRecords',
+  BODY_WEIGHT: 'bodyWeight',
+  BODY_WEIGHT_LOGS: 'bodyWeightLogs',
+  DASHBOARD_PREFERENCES: 'dashboardPreferences',
+  PROGRESS_PHOTOS: 'progressPhotos',
+  SUBSCRIPTION: 'subscription',
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];

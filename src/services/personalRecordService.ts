@@ -10,7 +10,7 @@ import {
   queryDocuments,
   COLLECTIONS,
 } from './firebase/firestore';
-import { estimateOneRepMax } from '../utils/training';
+import { estimateOneRepMax, toKg } from '../utils/training';
 import { toLocalDateKey } from '../utils/nutrition';
 import type { ServiceResult } from '../types/service';
 import type {
@@ -66,10 +66,17 @@ export async function detectAndUpdatePRs(
   const today = toLocalDateKey();
   const volume = set.weight * set.reps;
   const e1rm = estimateOneRepMax(set.weight, set.reps);
-  const weightKey = String(set.weight);
+  // Rep PR key uses kg-normalized weight to avoid "135 lbs" vs "61 kg" being separate brackets
+  const weightKeyKg = Math.round(toKg(set.weight, set.weightUnit));
+  const weightKey = String(weightKeyKg);
 
   const newRecords: PRType[] = [];
   const details: string[] = [];
+
+  // All comparisons normalize to kg so lbs↔kg switches don't break detection
+  const setWeightKg = toKg(set.weight, set.weightUnit);
+  const volumeKg = setWeightKg * set.reps;
+  const e1rmKg = toKg(e1rm, set.weightUnit);
 
   // Build updated PR doc starting from current or defaults
   let weightPR: PREntry | null = current?.weightPR ?? null;
@@ -77,8 +84,9 @@ export async function detectAndUpdatePRs(
   let repPRs = { ...(current?.repPRs ?? {}) };
   let estimated1RM: PREntry | null = current?.estimated1RM ?? null;
 
-  // 1. Weight PR — heaviest weight for at least 1 rep
-  if (!weightPR || set.weight > weightPR.value) {
+  // 1. Weight PR — heaviest weight for at least 1 rep (compared in kg)
+  const storedWeightKg = weightPR ? toKg(weightPR.value, weightPR.unit) : 0;
+  if (!weightPR || setWeightKg > storedWeightKg) {
     weightPR = {
       value: set.weight,
       unit: set.weightUnit,
@@ -90,8 +98,9 @@ export async function detectAndUpdatePRs(
     details.push(`New Weight PR: ${set.weight} ${set.weightUnit}!`);
   }
 
-  // 2. Volume PR — highest single-set volume (weight * reps)
-  if (!volumePR || volume > volumePR.value) {
+  // 2. Volume PR — highest single-set volume (compared in kg*reps)
+  const storedVolumeKg = volumePR ? toKg(volumePR.value, volumePR.unit) : 0;
+  if (!volumePR || volumeKg > storedVolumeKg) {
     volumePR = {
       value: volume,
       unit: set.weightUnit,
@@ -102,16 +111,17 @@ export async function detectAndUpdatePRs(
     details.push(`New Volume PR: ${volume.toLocaleString()} ${set.weightUnit}!`);
   }
 
-  // 3. Rep PR — most reps at a given weight bracket
+  // 3. Rep PR — most reps at a given weight bracket (bracket keyed by rounded kg)
   const currentRepPR = repPRs[weightKey];
   if (!currentRepPR || set.reps > currentRepPR.reps) {
-    repPRs[weightKey] = { reps: set.reps, date: today, sessionId };
+    repPRs[weightKey] = { reps: set.reps, unit: set.weightUnit, date: today, sessionId };
     newRecords.push('reps');
     details.push(`New Rep PR: ${set.reps} reps @ ${set.weight} ${set.weightUnit}!`);
   }
 
-  // 4. Estimated 1RM PR
-  if (!estimated1RM || e1rm > estimated1RM.value) {
+  // 4. Estimated 1RM PR (compared in kg)
+  const stored1rmKg = estimated1RM ? toKg(estimated1RM.value, estimated1RM.unit) : 0;
+  if (!estimated1RM || e1rmKg > stored1rmKg) {
     estimated1RM = {
       value: e1rm,
       unit: set.weightUnit,

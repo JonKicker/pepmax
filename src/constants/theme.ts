@@ -10,6 +10,7 @@ export const Colors = {
   nutrition: '#27AE60',
   gym: '#8E44AD',
   cardio: '#E74C3C',
+  body: '#00897B',
 
   // Light mode
   light: {
@@ -34,6 +35,7 @@ export const Colors = {
   // Shared
   warning: '#E67E22',
   error: '#E74C3C',
+  gold: '#FFD700',
 } as const;
 
 export type Theme = {
@@ -53,6 +55,8 @@ export type Theme = {
     nutrition: string;
     gym: string;
     cardio: string;
+    body: string;
+    gold: string;
   };
 };
 
@@ -70,6 +74,8 @@ function buildTheme(dark: boolean): Theme {
       nutrition: Colors.nutrition,
       gym: Colors.gym,
       cardio: Colors.cardio,
+      body: Colors.body,
+      gold: Colors.gold,
     },
   };
 }

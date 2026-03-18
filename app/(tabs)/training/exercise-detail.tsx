@@ -1,11 +1,13 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import React, { useMemo, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors } from '../../../src/constants/theme';
 import { useExerciseLibrary } from '../../../src/hooks/useExerciseLibrary';
 import { findExerciseById } from '../../../src/services/exerciseService';
+import { getPersonalRecords } from '../../../src/services/personalRecordService';
+import type { PersonalRecord } from '../../../src/types/personalRecord';
 
 const CATEGORY_COLORS: Record<string, string> = {
   Compound: '#8E44AD',
@@ -18,12 +20,26 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 export default function ExerciseDetailScreen() {
   const { colors } = useTheme();
+  const router = useRouter();
   const { exerciseId } = useLocalSearchParams<{ exerciseId: string }>();
   const { allExercises } = useExerciseLibrary();
+  const [prData, setPrData] = useState<PersonalRecord | null>(null);
+  const [prLoading, setPrLoading] = useState(true);
 
   const exercise = useMemo(
     () => findExerciseById(allExercises, exerciseId ?? ''),
     [allExercises, exerciseId],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!exerciseId) return;
+      setPrLoading(true);
+      getPersonalRecords(exerciseId).then((result) => {
+        setPrData(result.data ?? null);
+        setPrLoading(false);
+      });
+    }, [exerciseId]),
   );
 
   if (!exercise) {
@@ -94,6 +110,90 @@ export default function ExerciseDetailScreen() {
           ))}
         </>
       )}
+
+      {/* Personal Records */}
+      <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Personal Records</Text>
+      {prLoading ? (
+        <ActivityIndicator size="small" color={Colors.gym} style={{ marginVertical: 8 }} />
+      ) : !prData ? (
+        <Text style={[styles.prEmpty, { color: colors.textSecondary }]}>
+          No personal records yet — start training to set your first!
+        </Text>
+      ) : (
+        <View style={styles.prGrid}>
+          {prData.weightPR && (
+            <TouchableOpacity
+              onPress={() => router.push({ pathname: '/(tabs)/training/session-detail', params: { sessionId: prData.weightPR!.sessionId } })}
+              style={[styles.prCard, { backgroundColor: Colors.gold + '15', borderColor: Colors.gold + '30' }]}
+            >
+              <View style={styles.prCardHeader}>
+                <Ionicons name="trophy" size={16} color={Colors.gold} />
+                <Text style={[styles.prCardLabel, { color: colors.textSecondary }]}>Weight PR</Text>
+              </View>
+              <Text style={[styles.prCardValue, { color: colors.textPrimary }]}>
+                {prData.weightPR.value} {prData.weightPR.unit}
+              </Text>
+              <Text style={[styles.prCardDate, { color: colors.textSecondary }]}>
+                {prData.weightPR.date}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {prData.volumePR && (
+            <TouchableOpacity
+              onPress={() => router.push({ pathname: '/(tabs)/training/session-detail', params: { sessionId: prData.volumePR!.sessionId } })}
+              style={[styles.prCard, { backgroundColor: Colors.gold + '15', borderColor: Colors.gold + '30' }]}
+            >
+              <View style={styles.prCardHeader}>
+                <Ionicons name="trophy" size={16} color={Colors.gold} />
+                <Text style={[styles.prCardLabel, { color: colors.textSecondary }]}>Volume PR</Text>
+              </View>
+              <Text style={[styles.prCardValue, { color: colors.textPrimary }]}>
+                {prData.volumePR.value.toLocaleString()} {prData.volumePR.unit}
+              </Text>
+              <Text style={[styles.prCardDate, { color: colors.textSecondary }]}>
+                {prData.volumePR.date}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {prData.estimated1RM && (
+            <TouchableOpacity
+              onPress={() => router.push({ pathname: '/(tabs)/training/session-detail', params: { sessionId: prData.estimated1RM!.sessionId } })}
+              style={[styles.prCard, { backgroundColor: Colors.gold + '15', borderColor: Colors.gold + '30' }]}
+            >
+              <View style={styles.prCardHeader}>
+                <Ionicons name="trophy" size={16} color={Colors.gold} />
+                <Text style={[styles.prCardLabel, { color: colors.textSecondary }]}>Est. 1RM</Text>
+              </View>
+              <Text style={[styles.prCardValue, { color: colors.textPrimary }]}>
+                {prData.estimated1RM.value} {prData.estimated1RM.unit}
+              </Text>
+              <Text style={[styles.prCardDate, { color: colors.textSecondary }]}>
+                {prData.estimated1RM.date}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Rep PRs */}
+          {Object.keys(prData.repPRs).length > 0 && (
+            <View style={[styles.prCard, { backgroundColor: Colors.gold + '15', borderColor: Colors.gold + '30', width: '100%' }]}>
+              <View style={styles.prCardHeader}>
+                <Ionicons name="trophy" size={16} color={Colors.gold} />
+                <Text style={[styles.prCardLabel, { color: colors.textSecondary }]}>Rep Records</Text>
+              </View>
+              {Object.entries(prData.repPRs)
+                .sort(([a], [b]) => Number(b) - Number(a))
+                .slice(0, 5)
+                .map(([weight, entry]) => (
+                  <Text key={weight} style={[styles.repPrLine, { color: colors.textPrimary }]}>
+                    {entry.reps} reps @ {weight} {entry.unit ?? 'lbs'}
+                  </Text>
+                ))}
+            </View>
+          )}
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -116,4 +216,16 @@ const styles = StyleSheet.create({
   tipRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6, paddingRight: 8 },
   bullet: { fontSize: 18, marginRight: 8, lineHeight: 22 },
   tipText: { flex: 1, fontSize: 15, lineHeight: 22 },
+
+  prEmpty: { fontSize: 14, fontStyle: 'italic' },
+  prGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  prCard: {
+    width: '47%', flexGrow: 1,
+    borderRadius: 12, borderWidth: 1, padding: 12,
+  },
+  prCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  prCardLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase' },
+  prCardValue: { fontSize: 18, fontWeight: '700' },
+  prCardDate: { fontSize: 11, marginTop: 4 },
+  repPrLine: { fontSize: 14, marginTop: 4 },
 });
