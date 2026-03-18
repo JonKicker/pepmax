@@ -340,6 +340,7 @@ export default function NutritionScreen() {
     setLoadError(null);
     const result = await getTodaysLog();
     if (result.error) {
+      console.error('[NutritionScreen] load error:', result.error);
       setLoadError('Failed to load today\'s log. Pull down to retry.');
     } else {
       setEntries(result.data ?? []);

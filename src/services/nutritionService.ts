@@ -9,7 +9,7 @@
  * being returned to callers. Callers receive clean FoodSearchResult objects,
  * never raw API responses.
  */
-import { orderBy, where, limit } from 'firebase/firestore';
+import { orderBy, where, limit, Timestamp } from 'firebase/firestore';
 import {
   addDocument,
   deleteDocument,
@@ -65,24 +65,46 @@ export async function deleteFood(id: string): Promise<ServiceResult<void>> {
 }
 
 /**
- * All food log entries for today (local date).
+ * All food log entries for today (local date), sorted by createdAt ascending.
+ *
+ * Sorting is done client-side to avoid requiring a composite Firestore index
+ * on (date, createdAt). Null-safe: serverTimestamp() may be null briefly on
+ * cache reads before the server value commits.
  */
 export async function getTodaysLog(): Promise<ServiceResult<FoodLogEntry[]>> {
   const today = toLocalDateKey();
-  return queryDocuments<FoodLogEntry>(COLLECTIONS.FOOD_LOG, [
+  const result = await queryDocuments<FoodLogEntry>(COLLECTIONS.FOOD_LOG, [
     where('date', '==', today),
-    orderBy('createdAt', 'asc'),
   ]);
+  if (result.error) return result;
+  return {
+    data: result.data!.slice().sort((a, b) => {
+      const aMs = (a.createdAt as unknown as Timestamp)?.toMillis?.() ?? 0;
+      const bMs = (b.createdAt as unknown as Timestamp)?.toMillis?.() ?? 0;
+      return aMs - bMs;
+    }),
+    error: null,
+  };
 }
 
 /**
- * All food log entries for a specific date string (YYYY-MM-DD local).
+ * All food log entries for a specific date string (YYYY-MM-DD local), sorted by createdAt ascending.
+ *
+ * Client-side sort — same reasoning as getTodaysLog (avoids composite index).
  */
 export async function getLogForDate(date: string): Promise<ServiceResult<FoodLogEntry[]>> {
-  return queryDocuments<FoodLogEntry>(COLLECTIONS.FOOD_LOG, [
+  const result = await queryDocuments<FoodLogEntry>(COLLECTIONS.FOOD_LOG, [
     where('date', '==', date),
-    orderBy('createdAt', 'asc'),
   ]);
+  if (result.error) return result;
+  return {
+    data: result.data!.slice().sort((a, b) => {
+      const aMs = (a.createdAt as unknown as Timestamp)?.toMillis?.() ?? 0;
+      const bMs = (b.createdAt as unknown as Timestamp)?.toMillis?.() ?? 0;
+      return aMs - bMs;
+    }),
+    error: null,
+  };
 }
 
 /**
