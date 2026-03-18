@@ -82,6 +82,7 @@ export type FoodNavPayload = {
   fat100g: number;
   fiber100g: number | null;
   sugar100g: number | null;
+  /** grams per 100g — same contract as FoodSearchResult.sodium100g. */
   sodium100g: number | null;
   servingSizeG: number;
   barcode: string;
@@ -96,15 +97,16 @@ export type FoodNavPayload = {
 export type FoodSource = 'usda' | 'off';
 
 export type Micronutrients = {
-  vitaminA: number | null;   // mcg
-  vitaminC: number | null;   // mg
-  vitaminD: number | null;   // mcg
-  calcium: number | null;    // mg
-  iron: number | null;       // mg
-  potassium: number | null;  // mg
-  sodium: number | null;     // mg
-  magnesium: number | null;  // mg
-  zinc: number | null;       // mg
+  vitaminA: number | null;   // mcg per 100g
+  vitaminC: number | null;   // mg per 100g
+  vitaminD: number | null;   // mcg per 100g
+  calcium: number | null;    // mg per 100g
+  iron: number | null;       // mg per 100g
+  potassium: number | null;  // mg per 100g
+  /** mg per 100g — raw USDA value, NOT normalized to grams. Different unit than FoodSearchResult.sodium100g. */
+  sodium: number | null;
+  magnesium: number | null;  // mg per 100g
+  zinc: number | null;       // mg per 100g
 };
 
 export type FoodPortion = {
@@ -125,6 +127,7 @@ export type FoodSearchResult = {
   fat100g: number;
   fiber100g: number | null;
   sugar100g: number | null;
+  /** grams per 100g — USDA values are divided by 1000 at parse time to match this contract. */
   sodium100g: number | null;
   servingSizeG: number;
   barcode: string;

@@ -318,10 +318,17 @@ export async function searchFood(
 
   const merged = [...usdaData, ...offData];
 
-  if (searchCache.size >= 100) {
-    searchCache.delete(searchCache.keys().next().value!);
+  // Only cache when neither source errored. If either source failed (e.g. USDA
+  // temporarily down), the merged result is incomplete. Caching it would serve
+  // stale partial data for up to CACHE_TTL_MS after the source recovers.
+  // Note: USDA returning [] because no API key is not an error (usdaErr is null).
+  if (!usdaErr && !offErr) {
+    if (searchCache.size >= 100) {
+      searchCache.delete(searchCache.keys().next().value!);
+    }
+    searchCache.set(cacheKey, { data: merged, ts: Date.now() });
   }
-  searchCache.set(cacheKey, { data: merged, ts: Date.now() });
+
   return { data: merged, error: null };
 }
 

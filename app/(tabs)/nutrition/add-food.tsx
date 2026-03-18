@@ -11,6 +11,7 @@ import {
   Switch,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { analytics, AnalyticsEvent } from '../../../src/services/analytics';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../src/hooks/useTheme';
@@ -279,6 +280,10 @@ export default function AddFoodScreen() {
         setSearchResults([]);
       } else {
         setSearchResults(result.data ?? []);
+        analytics.track(AnalyticsEvent.FOOD_SEARCH_PERFORMED, {
+          query_length: query.trim().length,
+          results_count: result.data?.length ?? 0,
+        });
       }
     }, 400);
     return () => {

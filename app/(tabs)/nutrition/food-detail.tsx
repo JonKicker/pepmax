@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { analytics, AnalyticsEvent } from '../../../src/services/analytics';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../src/hooks/useTheme';
@@ -21,7 +22,7 @@ import { Colors, Theme } from '../../../src/constants/theme';
 import { logFood, addFavorite, removeFavorite, getFavorites } from '../../../src/services/nutritionService';
 import { toLocalDateKey, recalculateMacros, recalculateMicronutrients, getRDAPercent, getTrafficLight } from '../../../src/utils/nutrition';
 import { MEAL_SLOTS, MEAL_SLOT_LABELS } from '../../../src/types/nutrition';
-import { MICRONUTRIENT_LABELS, MICRONUTRIENT_UNITS, RDA_VALUES } from '../../../src/constants/nutrition';
+import { MICRONUTRIENT_LABELS, MICRONUTRIENT_UNITS } from '../../../src/constants/nutrition';
 import type { FoodNavPayload, MealSlot, Micronutrients } from '../../../src/types/nutrition';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
@@ -243,7 +244,11 @@ export default function FoodDetailScreen() {
         servingSize: validServing ? servingG : baseServingSizeG,
         servingUnit,
       });
-      if (!result.error && result.data) { setIsFavorite(true); setFavoriteId(result.data); }
+      if (!result.error && result.data) {
+        setIsFavorite(true);
+        setFavoriteId(result.data);
+        analytics.track(AnalyticsEvent.FAVORITE_FOOD_SAVED);
+      }
     }
   };
 
@@ -279,6 +284,11 @@ export default function FoodDetailScreen() {
     }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    analytics.track(AnalyticsEvent.FOOD_LOGGED, {
+      meal_slot: mealSlot,
+      method: food.source ?? 'search',
+      calories: Math.round(scaled.calories),
+    });
 
     // If starred, also save/update favorite with current serving
     if (isFavorite && favoriteId) {
@@ -397,9 +407,9 @@ export default function FoodDetailScreen() {
                 </TouchableOpacity>
               ))}
               {/* USDA descriptive portions */}
-              {food.portions?.map((portion) => (
+              {food.portions?.map((portion, i) => (
                 <TouchableOpacity
-                  key={portion.description}
+                  key={`${portion.description}-${i}`}
                   style={[
                     styles.presetBtn,
                     styles.presetBtnWide,
