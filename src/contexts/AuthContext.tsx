@@ -84,7 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (currentUidRef.current !== uid) return;
       setUserProfile(snap.exists() ? (snap.data() as UserProfile) : null);
     } catch (e) {
-      console.error('[AuthContext] fetchProfile failed for uid:', uid, e);
+      if (__DEV__) console.error('[AuthContext] fetchProfile failed for uid:', uid, e);
       // Intentionally conditional — don't wipe a newly signed-in user's profile
       // if a stale fetch (from the previous user) errors out after a quick sign-out/sign-in.
       if (currentUidRef.current === uid) setUserProfile(null);

@@ -101,7 +101,7 @@ export default function QuizScreen() {
 
   async function saveProfile() {
     if (!currentUser) {
-      console.log('[quiz] saveProfile: no currentUser, aborting');
+      if (__DEV__) console.log('[quiz] saveProfile: no currentUser, aborting');
       return;
     }
     setSaving(true);
@@ -146,7 +146,7 @@ export default function QuizScreen() {
       return;
     }
 
-    console.log('[quiz] Firestore write confirmed — onboardingComplete: true saved to users/{uid}/profile/data');
+    if (__DEV__) console.log('[quiz] Firestore write confirmed — onboardingComplete: true saved to users/{uid}/profile/data');
     // Refresh full profile from Firestore — returns onboardingComplete: true + all quiz data (TDEE, macros, etc.)
     // AuthGuard re-evaluates on profileLoading → false and redirects to /(tabs).
     await refreshProfile();
@@ -154,7 +154,7 @@ export default function QuizScreen() {
       goals: data.goals.join(','),
       experience_level: data.experienceLevel ?? '',
     });
-    console.log('[quiz] refreshProfile complete — AuthGuard should redirect to /(tabs)');
+    if (__DEV__) console.log('[quiz] refreshProfile complete — AuthGuard should redirect to /(tabs)');
     setSaving(false);
   }
 

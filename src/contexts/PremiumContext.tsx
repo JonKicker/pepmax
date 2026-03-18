@@ -68,7 +68,7 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
     const apiKey = Platform.OS === 'ios' ? APPLE_KEY : GOOGLE_KEY;
     if (!apiKey || apiKey === 'appl_xxxxx' || apiKey === 'goog_xxxxx') {
       // Placeholder keys — skip configuration (dev without RevenueCat setup)
-      console.log('[PremiumContext] Skipping RevenueCat — no valid API key');
+      if (__DEV__) console.log('[PremiumContext] Skipping RevenueCat — no valid API key');
       setLoading(false);
       return;
     }

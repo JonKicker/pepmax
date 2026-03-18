@@ -58,6 +58,27 @@
 
 ---
 
+## Pre-Launch Audit — Console / PII Cleanup
+
+**Status:** ✅ Committed
+**Date:** 2026-03-18
+
+### Changes
+
+- Wrapped 5 debug `console.log` calls in `__DEV__` guards:
+  - `app/_layout.tsx` — AuthGuard state log
+  - `app/(onboarding)/quiz.tsx` — 3 quiz flow logs (no currentUser, Firestore confirmed, refreshProfile complete)
+  - `src/contexts/PremiumContext.tsx` — RevenueCat skip log
+- Wrapped 2 PII-leaking `console.error` calls in `__DEV__` guards (Ray-flagged):
+  - `src/services/firebase/auth.ts` — `JSON.stringify(e)` could embed email addresses
+  - `src/contexts/AuthContext.tsx` — logged user UID on fetchProfile failure
+
+### Not changed
+- All `console.error`/`console.warn` on real failure paths with no user data retained as-is
+- `LogWeightModal` consolidation skipped — incompatible APIs, both components actively used
+
+---
+
 ## Previous Milestones
 
 | Milestone | Description | Status |

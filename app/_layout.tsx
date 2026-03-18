@@ -77,7 +77,7 @@ function AuthGuard() {
     const inOnboarding = segments[0] === '(onboarding)';
     const inTabs = segments[0] === '(tabs)';
 
-    console.log('[AuthGuard]', {
+    if (__DEV__) console.log('[AuthGuard]', {
       authenticated: currentUser !== null,
       onboardingComplete: userProfile?.onboardingComplete ?? false,
       segment: segments[0] ?? '/',
