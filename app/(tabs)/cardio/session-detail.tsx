@@ -95,6 +95,10 @@ export default function SessionDetailScreen() {
   const [deleting, setDeleting] = useState(false);
   const [shareModalVisible, setShareModalVisible] = useState(false);
 
+  // Must be called unconditionally (Rules of Hooks) — zones only used when session is loaded
+  const maxHR = settings.maxHeartRate ?? 180;
+  const { zones } = useHeartRateZones(maxHR);
+
   useEffect(() => {
     (async () => {
       const result = await getSessionById(sessionId);
@@ -171,9 +175,6 @@ export default function SessionDetailScreen() {
   const date = session.startedAt.toDate().toLocaleDateString(undefined, {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   });
-
-  const maxHR = settings.maxHeartRate ?? 180;
-  const { zones } = useHeartRateZones(maxHR);
 
   // Find fastest / slowest splits
   let fastestIdx = -1;

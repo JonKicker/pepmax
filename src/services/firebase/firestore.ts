@@ -49,6 +49,7 @@ export const COLLECTIONS = {
   SUBSCRIPTION: 'subscription',
   RECON_PROTOCOLS: 'reconProtocols',
   EQUIPMENT_PROFILES: 'equipmentProfiles',
+  SIDE_EFFECTS: 'sideEffects',
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];
