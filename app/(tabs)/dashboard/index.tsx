@@ -2,7 +2,7 @@
  * Dashboard — unified command center.
  *
  * Modular card system with skeleton loading, pull-to-refresh (5-min cache),
- * streak tracking, body weight sparkline, and card visibility preferences.
+ * consistency tracking, body weight sparkline, and card visibility preferences.
  */
 import React, { useState } from 'react';
 import { ScrollView, RefreshControl, StyleSheet, TouchableOpacity } from 'react-native';
@@ -21,6 +21,7 @@ import { CardioCard } from '../../../src/components/dashboard/CardioCard';
 import { BodyWeightCard } from '../../../src/components/dashboard/BodyWeightCard';
 import { AIInsightCard } from '../../../src/components/dashboard/AIInsightCard';
 import { SmartInsightsCard } from '../../../src/components/dashboard/SmartInsightsCard';
+import { ConsistencyCard } from '../../../src/components/dashboard/ConsistencyCard';
 import { LogWeightModal } from '../../../src/components/dashboard/LogWeightModal';
 import { OnboardingChecklist } from '../../../src/components/dashboard/OnboardingChecklist';
 import PremiumGate from '../../../src/components/premium/PremiumGate';
@@ -38,7 +39,7 @@ export default function DashboardScreen() {
   const { colors } = useTheme();
   const { userProfile, updateProfile } = useAuth();
   const router = useRouter();
-  const dashboard = useDashboard();
+  const dashboard = useDashboard(userProfile);
   const smartInsights = useSmartInsights(dashboard.data, userProfile);
   const [showWeightModal, setShowWeightModal] = useState(false);
 
@@ -66,6 +67,15 @@ export default function DashboardScreen() {
     }
 
     switch (cardId) {
+      case 'consistency':
+        return (
+          <ConsistencyCard
+            key={cardId}
+            consistency={data?.consistency ?? null}
+            colors={colors}
+            onToggleRestDay={dashboard.toggleRestDay}
+          />
+        );
       case 'peptides':
         return (
           <PeptideCard
@@ -164,11 +174,10 @@ export default function DashboardScreen() {
           />
         }
       >
-        {/* Greeting + streak */}
+        {/* Greeting */}
         <GreetingSection
           greeting={greeting}
           colors={colors}
-          streak={data?.streak ?? null}
         />
 
         {/* Settings gear */}

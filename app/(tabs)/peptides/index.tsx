@@ -22,6 +22,85 @@ import { FREQUENCY_LABELS } from '../../../src/types/peptide';
 import type { Peptide } from '../../../src/types/peptide';
 import PresetBrowser from '../../../src/components/peptides/PresetBrowser';
 import type { PresetCompound } from '../../../src/data/presetCompounds';
+import { useCycleStatus } from '../../../src/hooks/useCycleStatus';
+import type { ActiveCycleInfo } from '../../../src/hooks/useCycleStatus';
+
+// ─── Active cycle card ────────────────────────────────────────────────────────
+
+function ActiveCycleCard({
+  info,
+  colors,
+}: {
+  info: ActiveCycleInfo;
+  colors: ReturnType<typeof import('../../../src/hooks/useTheme').useTheme>['colors'];
+}) {
+  const { cycle, currentWeek, totalWeeks, currentDose, missedCount, completedCount, totalPlanned, nextDoseDate } = info;
+  const progressPct = totalPlanned > 0 ? completedCount / totalPlanned : 0;
+
+  function fmtDate(dateStr: string): string {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  return (
+    <View style={[cycleCardStyles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={[cycleCardStyles.accent, { backgroundColor: Colors.peptide }]} />
+      <View style={cycleCardStyles.body}>
+        <View style={cycleCardStyles.titleRow}>
+          <Text style={[cycleCardStyles.name, { color: colors.textPrimary }]} numberOfLines={1}>
+            {cycle.compoundName}
+          </Text>
+          <View style={[cycleCardStyles.badge, { backgroundColor: Colors.peptide + '1A' }]}>
+            <Text style={[cycleCardStyles.badgeText, { color: Colors.peptide }]}>Active</Text>
+          </View>
+        </View>
+        <Text style={[cycleCardStyles.detail, { color: colors.textSecondary }]}>
+          Week {currentWeek}{totalWeeks ? ` of ${totalWeeks}` : ''} · Current dose: {currentDose} {cycle.unit}
+        </Text>
+        <View style={[cycleCardStyles.progressTrack, { backgroundColor: colors.border }]}>
+          <View
+            style={[
+              cycleCardStyles.progressFill,
+              {
+                backgroundColor: Colors.peptide,
+                width: `${Math.min(progressPct * 100, 100)}%` as `${number}%`,
+              },
+            ]}
+          />
+        </View>
+        <View style={cycleCardStyles.statsRow}>
+          <Text style={[cycleCardStyles.statText, { color: colors.textSecondary }]}>
+            {completedCount}/{totalPlanned} logged
+          </Text>
+          {missedCount > 0 && (
+            <Text style={cycleCardStyles.missedText}>{missedCount} missed</Text>
+          )}
+          {nextDoseDate && (
+            <Text style={[cycleCardStyles.statText, { color: colors.textSecondary }]}>
+              Next: {fmtDate(nextDoseDate)}
+            </Text>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const cycleCardStyles = StyleSheet.create({
+  card: { flexDirection: 'row', borderWidth: 1, borderRadius: 12, marginHorizontal: 16, marginTop: 10, overflow: 'hidden' },
+  accent: { width: 4 },
+  body: { flex: 1, paddingVertical: 12, paddingHorizontal: 12 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  name: { fontSize: 15, fontWeight: '700', flex: 1 },
+  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
+  badgeText: { fontSize: 11, fontWeight: '700' },
+  detail: { fontSize: 13, marginBottom: 8 },
+  progressTrack: { height: 4, borderRadius: 2, marginBottom: 6 },
+  progressFill: { height: 4, borderRadius: 2 },
+  statsRow: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
+  statText: { fontSize: 12 },
+  missedText: { fontSize: 12, fontWeight: '600', color: '#E67E22' },
+});
 
 // ─── Swipeable card ──────────────────────────────────────────────────────────
 
@@ -171,6 +250,7 @@ export default function PeptidesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [presetModalVisible, setPresetModalVisible] = useState(false);
+  const { activeCycles } = useCycleStatus();
 
   const load = async (refresh = false) => {
     if (refresh) setRefreshing(true);
@@ -267,6 +347,17 @@ export default function PeptidesScreen() {
             style={[styles.actionBtn, { borderColor: Colors.peptide }]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/(tabs)/peptides/cycle-planner');
+            }}
+          >
+            <Ionicons name="calendar-outline" size={16} color={Colors.peptide} />
+            <Text style={[styles.actionBtnText, { color: Colors.peptide }]}>Plan Cycle</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionBtn, { borderColor: Colors.peptide }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setPresetModalVisible(true);
             }}
           >
@@ -316,6 +407,14 @@ export default function PeptidesScreen() {
           </TouchableOpacity>
         </ScrollView>
       </View>
+
+      {activeCycles.length > 0 && (
+        <View style={{ paddingBottom: 4 }}>
+          {activeCycles.map((info) => (
+            <ActiveCycleCard key={info.cycle.id} info={info} colors={colors} />
+          ))}
+        </View>
+      )}
 
       <FlatList
         data={peptides}

@@ -6,9 +6,12 @@ import type { DailyTotals } from './nutrition';
 import type { WorkoutSession } from './workout';
 import type { CardioSession } from './cardio';
 import type { BodyWeightEntry } from './bodyTracking';
+import type { FoodLogEntry } from './nutrition';
+import type { ConsistencyData } from './consistency';
 
 export type DashboardCardId =
   | 'greeting'
+  | 'consistency'
   | 'peptides'
   | 'nutrition'
   | 'training'
@@ -37,10 +40,14 @@ export type DashboardData = {
   recentWeights: BodyWeightEntry[] | null;
   preferences: DashboardPreferences | null;
   streak: StreakData | null;
+  consistency: ConsistencyData | null;
+  allDoses: Dose[] | null;
+  nutritionLogs: FoodLogEntry[] | null;
 };
 
 export const DEFAULT_CARD_ORDER: DashboardCardId[] = [
   'greeting',
+  'consistency',
   'peptides',
   'nutrition',
   'training',

@@ -52,6 +52,10 @@ export type UserProfile = {
   // Goal for calorie targeting (applied as offset to TDEE)
   goalType?: 'lose' | 'maintain' | 'gain';
 
+  // Training day schedule — 0=Sun..6=Sat. Non-training days are rest days.
+  // Default when absent: all 7 days (every day is planned).
+  trainingDays?: number[];
+
   // Notification opt-ins (default: both enabled)
   notificationPrefs?: {
     doseReminders: boolean;

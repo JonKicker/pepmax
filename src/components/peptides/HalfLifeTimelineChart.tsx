@@ -5,7 +5,7 @@
  * Follows WeightChart.tsx structure.
  */
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import {
   VictoryChart,
   VictoryLine,
@@ -38,13 +38,6 @@ function formatXTick(epochMs: number, range: TimelineRange): string {
     return `${m}/${day} ${h}:${min}`;
   }
   return `${m}/${day}`;
-}
-
-function msToHoursElapsed(x: number, doses: { amount: number; timestampMs: number }[]): number {
-  const prior = doses.filter((d) => d.timestampMs <= x);
-  if (prior.length === 0) return 0;
-  const latest = Math.max(...prior.map((d) => d.timestampMs));
-  return Math.round((x - latest) / 3_600_000);
 }
 
 export default function HalfLifeTimelineChart({
