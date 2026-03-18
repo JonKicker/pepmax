@@ -307,7 +307,7 @@ export function checkVolumeTrend(sessions: WorkoutSession[]): Insight | null {
     }
   }
 
-  if (thisWeekCount < 1 || lastWeekCount < 1) return null;
+  if (thisWeekCount < 1 || lastWeekCount < 1 || lastWeekVolume === 0) return null;
 
   const pctChange = ((thisWeekVolume - lastWeekVolume) / lastWeekVolume) * 100;
 
