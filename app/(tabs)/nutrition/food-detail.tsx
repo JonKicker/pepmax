@@ -71,9 +71,10 @@ function NutrientRow({
 export default function FoodDetailScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { foodData: rawFoodData, mealSlot: paramSlot } = useLocalSearchParams<{
+  const { foodData: rawFoodData, mealSlot: paramSlot, fromScan } = useLocalSearchParams<{
     foodData: string;
     mealSlot?: MealSlot;
+    fromScan?: string;
   }>();
 
   // Parse the stripped nav payload
@@ -200,8 +201,12 @@ export default function FoodDetailScreen() {
     setToastVisible(true);
     setTimeout(() => {
       setToastVisible(false);
-      router.back();
-      router.back(); // back through add-food to dashboard
+      if (fromScan === 'true') {
+        router.navigate('/(tabs)/nutrition');
+      } else {
+        router.back();
+        router.back(); // back through add-food to dashboard
+      }
     }, 1200);
   };
 

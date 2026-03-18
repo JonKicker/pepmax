@@ -283,16 +283,25 @@ export default function AddFoodScreen() {
   // ─── Render search tab content ────────────────────────────────────────────
   const renderSearch = () => (
     <View style={{ flex: 1 }}>
-      <TextInput
-        style={[styles.searchInput, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.border }]}
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Search foods…"
-        placeholderTextColor={colors.textSecondary}
-        returnKeyType="search"
-        autoFocus
-        clearButtonMode="while-editing"
-      />
+      <View style={{ flexDirection: 'row', gap: 8, marginHorizontal: 12, marginVertical: 12 }}>
+        <TextInput
+          style={[styles.searchInput, { flex: 1, backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.border, margin: 0 }]}
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search foods…"
+          placeholderTextColor={colors.textSecondary}
+          returnKeyType="search"
+          autoFocus
+          clearButtonMode="while-editing"
+        />
+        <TouchableOpacity
+          style={[styles.barcodeBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          onPress={() => router.push(`/(tabs)/nutrition/barcode-scan?mealSlot=${mealSlot}`)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="barcode-outline" size={22} color={Colors.nutrition} />
+        </TouchableOpacity>
+      </View>
       {searchLoading && (
         <View style={styles.searchFeedback}>
           <ActivityIndicator color={Colors.nutrition} />
@@ -546,4 +555,5 @@ const styles = StyleSheet.create({
   resultCal: { fontSize: 16, fontWeight: '700' },
   resultCalUnit: { fontSize: 11 },
   removeFavBtn: { padding: 8, marginLeft: 4 },
+  barcodeBtn: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
 });

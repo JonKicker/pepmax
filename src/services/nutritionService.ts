@@ -281,3 +281,50 @@ export async function searchFood(
     return { data: null, error: e as Error };
   }
 }
+
+const BARCODE_RE = /^[a-zA-Z0-9]+$/;
+
+/**
+ * Look up a single product by barcode on Open Food Facts.
+ * Returns { data: null, error: null } for invalid barcodes or not-found products.
+ */
+export async function getFoodByBarcode(
+  barcode: string,
+  signal?: AbortSignal,
+): Promise<ServiceResult<FoodSearchResult | null>> {
+  if (!BARCODE_RE.test(barcode)) return { data: null, error: null };
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10_000);
+  signal?.addEventListener('abort', () => controller.abort(), { once: true });
+
+  try {
+    const url = `https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(barcode)}.json`;
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    const json = await response.json();
+    if (json.status !== 1 || !json.product) return { data: null, error: null };
+
+    const s = sanitizeOFFProduct(json.product);
+    return {
+      data: {
+        name: s.name,
+        brand: s.brand,
+        calories100g: s.per100g.calories,
+        protein100g: s.per100g.protein,
+        carbs100g: s.per100g.carbs,
+        fat100g: s.per100g.fat,
+        fiber100g: s.per100g.fiber,
+        sugar100g: s.per100g.sugar,
+        sodium100g: s.per100g.sodium,
+        servingSizeG: s.servingSizeG,
+        barcode: s.barcode,
+      } satisfies FoodSearchResult,
+      error: null,
+    };
+  } catch (e) {
+    clearTimeout(timeoutId);
+    return { data: null, error: e as Error };
+  }
+}
