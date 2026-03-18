@@ -86,6 +86,7 @@ export default function DashboardScreen() {
         setLoading(true);
         setDosesError(false);
         setNutritionError(false);
+        setWorkoutsError(false);
 
         const [dosesResult, nutritionResult, workoutsResult] = await Promise.all([
           getTodaysDoses(),

@@ -44,7 +44,7 @@ export default function LogWorkoutScreen() {
     const exercise: ExerciseSet = {
       name: exerciseName.trim(),
       sets: parsedSets,
-      ...(reps.trim() ? { reps: parseInt(reps, 10) } : {}),
+      ...(reps.trim() && !isNaN(parseInt(reps, 10)) ? { reps: parseInt(reps, 10) } : {}),
       ...(weightKg.trim() ? { weightKg: parseFloat(weightKg) } : {}),
       ...(durationMin.trim() ? { durationMin: parseFloat(durationMin) } : {}),
       ...(notes.trim() ? { notes: notes.trim() } : {}),
