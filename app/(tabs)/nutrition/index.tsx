@@ -511,7 +511,7 @@ const styles = StyleSheet.create({
   dateLabel: { fontSize: 13, textAlign: 'center', marginTop: 14, marginBottom: 4 },
 
   // Calorie ring
-  ringContainer: { alignItems: 'center', justifyContent: 'center', marginVertical: 20, height: RING_SIZE },
+  ringContainer: { width: RING_SIZE, height: RING_SIZE, alignSelf: 'center', marginVertical: 20 },
   ringTrack: { position: 'absolute', borderWidth: RING_THICKNESS, opacity: 0.15 },
   halfClip: { position: 'absolute', width: HALF, height: RING_SIZE, overflow: 'hidden' },
   rightClip: { left: HALF },
@@ -526,7 +526,7 @@ const styles = StyleSheet.create({
   },
   rightHalf: { left: -HALF, borderLeftColor: 'transparent', borderBottomColor: 'transparent' },
   leftHalf: { left: 0, borderRightColor: 'transparent', borderTopColor: 'transparent' },
-  ringCenter: { alignItems: 'center' },
+  ringCenter: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   ringConsumed: { fontSize: 38, fontWeight: '800', lineHeight: 42 },
   ringUnit: { fontSize: 13, marginTop: 2 },
   ringDivider: { width: 40, height: 1, marginVertical: 6 },
@@ -534,6 +534,7 @@ const styles = StyleSheet.create({
   overBadge: {
     position: 'absolute',
     bottom: -8,
+    alignSelf: 'center',
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 12,
