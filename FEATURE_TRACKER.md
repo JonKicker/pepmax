@@ -4,6 +4,48 @@
 
 ---
 
+## Milestone 12 — Peptide Cycle Planner, Consistency Tracking, AI Insight, Notifications
+
+**Status:** ✅ Committed (3185fe3)
+**Date:** 2026-03-18
+
+### Features included
+
+#### Peptide Cycle Planner
+- `src/types/cycle.ts` — IncrementFrequency, InjectionFrequency, DayOfWeek, PlannedDose, Cycle, CycleWizardData
+- `src/utils/cyclePlanner.ts` — pure `generateCyclePlan()` (dose titration, taper, EOD/2x/3x, no React/Firebase deps)
+- `src/services/cycleService.ts` — CRUD + `markPlannedDoseCompleted`, `getActiveCycles` (client-side filter)
+- `src/hooks/useCycleStatus.ts` — ActiveCycleInfo hook (currentWeek, currentDose, missedCount in yellow)
+- `app/(tabs)/peptides/cycle-planner.tsx` — 4-step wizard: compound picker → dose schedule → timing + calendar → review
+- `app/(tabs)/peptides/index.tsx` — Plan Cycle quick-action button + ActiveCycleCard on dashboard
+- `app/(tabs)/peptides/log-dose.tsx` — auto-marks matching planned cycle dose as completed on save
+- `src/services/firebase/firestore.ts` — CYCLES collection constant added
+
+#### Consistency Tracking
+- `DayConsistency` type with `future` status, `isRestDay`, `isBareMinimum`
+- `computeConsistency()` — 30-day on-plan computation from sessions/doses/nutrition
+- `ConsistencyCard` — 30-day dot calendar, weekly ring, rest-day toggle
+- Dashboard settings screen for card reordering/visibility
+
+#### AI Weekly Insight
+- `aiInsightService` — Claude API call (max_tokens 300), 7-day Firestore cache, AbortController dedup
+- `AIInsightCard` — tap-to-refresh, loading state, cache age display
+
+#### Notifications
+- `notificationService` — notification scheduling service
+
+### Ray Review Notes (Milestone 12 — Cycle Planner)
+
+**Status:** APPROVED (after conditional approval round)
+
+**Conditional fixes applied before approval:**
+1. ✅ Review calendar navigates to cycle start month (`current={planResult.plannedDoses[0]?.date ?? data.startDate}`)
+2. ✅ `isTaperDay` only fires when dose actually decreases (`taperWeeksElapsed > 0 && ...`)
+3. ✅ Empty plan guard in `handleSave()` with user-facing error message
+4. ✅ `planError` state from `useMemo` → Step4 renders error UI instead of perpetual spinner
+
+---
+
 ## Milestone 11 — Cardio Sharing, Peptide Side Effects, USDA Nutrition, Training Enhancements
 
 **Status:** ✅ Committed (8f1e670)

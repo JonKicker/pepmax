@@ -216,16 +216,17 @@ export async function getConsistencyDocs(
 }
 
 export async function persistConsistencyDay(day: DayConsistency): Promise<void> {
-  await setDocument(COLLECTIONS.CONSISTENCY, day.date, {
-    ...day,
-  } as unknown as DayConsistency);
+  await setDocument(COLLECTIONS.CONSISTENCY, day.date, { ...day, updatedAt: Date.now() } as DayConsistency);
 }
+
+const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Mark a specific day as a manual rest day override.
  * Called when user taps "Mark as rest day" in the calendar tooltip.
  */
 export async function markRestDayOverride(dateKey: string): Promise<void> {
+  if (!DATE_KEY_RE.test(dateKey)) return;
   await mergeDocument(COLLECTIONS.CONSISTENCY, dateKey, {
     date: dateKey,
     status: 'rest' as DayStatus,
@@ -240,6 +241,7 @@ export async function markRestDayOverride(dateKey: string): Promise<void> {
  * Sets restDayOverride to the given value.
  */
 export async function toggleRestDay(dateKey: string, isRestDay: boolean): Promise<void> {
+  if (!DATE_KEY_RE.test(dateKey)) return;
   await mergeDocument(COLLECTIONS.CONSISTENCY, dateKey, {
     date: dateKey,
     restDayOverride: isRestDay,

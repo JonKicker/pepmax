@@ -36,7 +36,6 @@ function dotColor(status: DayConsistency['status'], colors: Theme['colors']): st
     case 'partial': return Colors.warning;
     case 'rest':    return colors.border;
     case 'missed':  return Colors.error;
-    case 'future':  return colors.border;
   }
 }
 
@@ -153,7 +152,6 @@ export function ConsistencyCard({ consistency, colors, onToggleRestDay }: Props)
                     styles.dot,
                     {
                       backgroundColor: dotColor(day.status, colors),
-                      opacity: day.status === 'future' ? 0.3 : 1,
                       borderWidth: isSelected ? 2 : 0,
                       borderColor: colors.textPrimary,
                     },

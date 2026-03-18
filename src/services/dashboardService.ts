@@ -120,11 +120,15 @@ export async function fetchDashboardData(opts?: {
   });
 
   // Fire-and-forget: persist today + yesterday for cross-device sync.
+  // Only write days that have real activity — skip gap-filled placeholder entries (updatedAt === 0
+  // with no activity means the day was never computed from real data, just defaulted to 'missed').
   const days = data.consistency.days;
   const todayEntry = days[days.length - 1];
   const yesterdayEntry = days[days.length - 2];
-  if (todayEntry) persistConsistencyDay(todayEntry).catch(() => {});
-  if (yesterdayEntry) persistConsistencyDay(yesterdayEntry).catch(() => {});
+  const hasActivity = (d: (typeof days)[number]) =>
+    d.workoutLogged || d.nutritionPercent > 0 || d.peptideLogged || d.restDayOverride;
+  if (todayEntry && hasActivity(todayEntry)) persistConsistencyDay(todayEntry).catch(() => {});
+  if (yesterdayEntry && hasActivity(yesterdayEntry)) persistConsistencyDay(yesterdayEntry).catch(() => {});
 
   // Only cache if user is still authenticated (guard against sign-out mid-fetch)
   if (auth.currentUser?.uid === uid) {

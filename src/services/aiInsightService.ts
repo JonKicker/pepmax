@@ -163,6 +163,10 @@ export async function getWeeklyInsight(
   inflightController = new AbortController();
   const { signal } = inflightController;
 
+  // 15-second timeout — aborts via the same AbortController so the existing
+  // AbortError catch path handles cleanup correctly. (Ray build-blocker fix)
+  const timeoutId = setTimeout(() => inflightController?.abort(), 15_000);
+
   try {
     // ── 3. Gather aggregated data (no free-text) ──────────────────────────
     const payload = await gatherPayload();
@@ -222,6 +226,7 @@ export async function getWeeklyInsight(
     }
     return { data: null, error: err as Error };
   } finally {
+    clearTimeout(timeoutId);
     inflightController = null;
   }
 }
