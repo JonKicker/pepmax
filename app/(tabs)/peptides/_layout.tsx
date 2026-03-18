@@ -20,6 +20,7 @@ export default function PeptidesLayout() {
       <Stack.Screen name="log-dose" options={{ title: 'Log Dose' }} />
       <Stack.Screen name="history" options={{ title: 'Dose History' }} />
       <Stack.Screen name="recon-calculator" options={{ title: 'Recon Calculator' }} />
+      <Stack.Screen name="half-life-timeline" options={{ title: 'Activity Timeline' }} />
     </Stack>
   );
 }

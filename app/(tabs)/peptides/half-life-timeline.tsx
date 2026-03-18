@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,8 +20,13 @@ import LogSideEffectModal from '../../../src/components/peptides/LogSideEffectMo
 export default function HalfLifeTimelineScreen() {
   const { colors } = useTheme();
   const [range, setRange] = useState<TimelineRange>('14d');
-  const { series, sideEffects, loading, error, yMax } = useHalfLifeTimeline(range);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const { series, sideEffects, loading, error, yMax } = useHalfLifeTimeline(range, refreshKey);
   const [showLogSideEffect, setShowLogSideEffect] = useState(false);
+
+  useEffect(() => {
+    if (error) Alert.alert('Error', error);
+  }, [error]);
 
   if (loading) {
     return (
@@ -29,10 +34,6 @@ export default function HalfLifeTimelineScreen() {
         <ActivityIndicator color={Colors.peptide} size="large" />
       </View>
     );
-  }
-
-  if (error) {
-    Alert.alert('Error', error);
   }
 
   return (
@@ -72,10 +73,7 @@ export default function HalfLifeTimelineScreen() {
       <LogSideEffectModal
         visible={showLogSideEffect}
         onClose={() => setShowLogSideEffect(false)}
-        onSaved={() => {
-          // useHalfLifeTimeline refreshes on next focus; force a range toggle to re-trigger
-          // when the modal closes and we're still on this screen
-        }}
+        onSaved={() => setRefreshKey((k) => k + 1)}
       />
     </View>
   );

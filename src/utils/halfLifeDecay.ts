@@ -3,7 +3,7 @@
  * No React dependencies. Safe to call in useMemo or workers.
  */
 
-import type { TimelineRange } from '../hooks/useHalfLifeTimeline';
+export type TimelineRange = '7d' | '14d' | '30d';
 
 export type DecayPoint = { x: number; y: number }; // x = ms epoch, y = % of peak (0-100)
 

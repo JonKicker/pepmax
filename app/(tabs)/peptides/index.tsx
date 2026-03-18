@@ -10,6 +10,7 @@ import {
   PanResponder,
   ActivityIndicator,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -256,47 +257,64 @@ export default function PeptidesScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Quick-action row */}
-      <View style={[styles.actionRow, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity
-          style={[styles.actionBtn, { borderColor: Colors.peptide }]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setPresetModalVisible(true);
-          }}
+      <View style={[styles.actionRowWrapper, { borderBottomColor: colors.border }]}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.actionRow}
         >
-          <Ionicons name="flask-outline" size={16} color={Colors.peptide} />
-          <Text style={[styles.actionBtnText, { color: Colors.peptide }]}>Browse Presets</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionBtn, { borderColor: Colors.peptide }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setPresetModalVisible(true);
+            }}
+          >
+            <Ionicons name="flask-outline" size={16} color={Colors.peptide} />
+            <Text style={[styles.actionBtnText, { color: Colors.peptide }]}>Browse Presets</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.actionBtn, { borderColor: Colors.peptide }]}
-          onPress={() => router.push('/(tabs)/peptides/history')}
-        >
-          <Ionicons name="time-outline" size={16} color={Colors.peptide} />
-          <Text style={[styles.actionBtnText, { color: Colors.peptide }]}>Dose History</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionBtn, { borderColor: Colors.peptide }]}
+            onPress={() => router.push('/(tabs)/peptides/history')}
+          >
+            <Ionicons name="time-outline" size={16} color={Colors.peptide} />
+            <Text style={[styles.actionBtnText, { color: Colors.peptide }]}>Dose History</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.actionBtn, { borderColor: Colors.peptide }]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push('/(tabs)/peptides/recon-calculator');
-          }}
-        >
-          <Ionicons name="calculator-outline" size={16} color={Colors.peptide} />
-          <Text style={[styles.actionBtnText, { color: Colors.peptide }]}>Calculator</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionBtn, { borderColor: Colors.peptide }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/(tabs)/peptides/half-life-timeline');
+            }}
+          >
+            <Ionicons name="pulse-outline" size={16} color={Colors.peptide} />
+            <Text style={[styles.actionBtnText, { color: Colors.peptide }]}>Blood Levels</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.actionBtn, styles.logDoseBtn]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push('/(tabs)/peptides/log-dose');
-          }}
-        >
-          <Ionicons name="add-circle" size={16} color="white" />
-          <Text style={styles.logDoseBtnText}>Log Dose</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionBtn, { borderColor: Colors.peptide }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/(tabs)/peptides/recon-calculator');
+            }}
+          >
+            <Ionicons name="calculator-outline" size={16} color={Colors.peptide} />
+            <Text style={[styles.actionBtnText, { color: Colors.peptide }]}>Calculator</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.logDoseBtn]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/(tabs)/peptides/log-dose');
+            }}
+          >
+            <Ionicons name="add-circle" size={16} color="white" />
+            <Text style={styles.logDoseBtnText}>Log Dose</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
 
       <FlatList
@@ -336,12 +354,14 @@ const styles = StyleSheet.create({
   retryBtn: { paddingHorizontal: 28, paddingVertical: 12, borderRadius: 10 },
   retryBtnText: { color: 'white', fontWeight: '700', fontSize: 15 },
 
+  actionRowWrapper: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
     gap: 10,
   },
   actionBtn: {

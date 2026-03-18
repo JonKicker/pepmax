@@ -7,11 +7,11 @@ import {
   stepMsForRange,
   lookbackMs,
 } from '../utils/halfLifeDecay';
-import type { DecayPoint } from '../utils/halfLifeDecay';
+import type { DecayPoint, TimelineRange } from '../utils/halfLifeDecay';
 import type { Peptide, Dose } from '../types/peptide';
 import type { SideEffectSeverity } from '../types/sideEffect';
 
-export type TimelineRange = '7d' | '14d' | '30d';
+export type { TimelineRange };
 
 export type CompoundSeries = {
   peptideId: string;
@@ -55,7 +55,7 @@ function colorForPeptide(peptideId: string): string {
   return COMPOUND_COLORS[peptideId.charCodeAt(0) % COMPOUND_COLORS.length];
 }
 
-export function useHalfLifeTimeline(range: TimelineRange): {
+export function useHalfLifeTimeline(range: TimelineRange, refreshKey = 0): {
   series: CompoundSeries[];
   sideEffects: SideEffectMarker[];
   loading: boolean;
@@ -112,7 +112,7 @@ export function useHalfLifeTimeline(range: TimelineRange): {
 
       load();
       return () => { cancelled = true; };
-    }, [range]),
+    }, [range, refreshKey]),
   );
 
   const { series, yMax } = useMemo(() => {
