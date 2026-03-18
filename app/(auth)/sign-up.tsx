@@ -97,7 +97,7 @@ export default function SignUpScreen() {
 
     if (profileResult.error) {
       setLoading(false);
-      setSubmitError('Account created but profile could not be saved. Please try again.');
+      setSubmitError('Account created — please log in to continue.');
       return;
     }
 

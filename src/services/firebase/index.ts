@@ -36,7 +36,8 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0
 export const auth = (() => {
   try {
     return initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) });
-  } catch {
+  } catch (e) {
+    console.warn('[firebase/auth] initializeAuth failed, falling back to getAuth:', e);
     return getAuth(app);
   }
 })();

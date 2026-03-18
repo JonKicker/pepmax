@@ -31,7 +31,7 @@ function AuthGuard() {
     const inTabs = segments[0] === '(tabs)';
 
     console.log('[AuthGuard]', {
-      uid: currentUser?.uid ?? null,
+      authenticated: currentUser !== null,
       onboardingComplete: userProfile?.onboardingComplete ?? false,
       segment: segments[0] ?? '/',
     });
