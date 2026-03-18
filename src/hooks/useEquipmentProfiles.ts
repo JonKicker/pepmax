@@ -67,14 +67,13 @@ export function useEquipmentProfiles(): UseEquipmentProfilesResult {
       setError(result.error.message);
       return;
     }
-    setProfiles((prev) =>
-      prev.map((p) => ({ ...p, isActive: p.id === id }))
-    );
-    setActiveProfileState((prev) => {
-      const target = profiles.find((p) => p.id === id);
-      return target ? { ...target, isActive: true } : prev;
+    // Fix: derive active profile from the same functional update to avoid stale closure
+    setProfiles((prev) => {
+      const updated = prev.map((p) => ({ ...p, isActive: p.id === id }));
+      setActiveProfileState(updated.find((p) => p.id === id) ?? null);
+      return updated;
     });
-  }, [profiles]);
+  }, []);
 
   const createCustomProfile = useCallback(
     async (name: string, equipment: ProfileEquipment[]) => {
@@ -108,8 +107,20 @@ export function useEquipmentProfiles(): UseEquipmentProfilesResult {
       setError(result.error.message);
       return;
     }
-    setProfiles((prev) => prev.filter((p) => p.id !== id));
-    setActiveProfileState((prev) => (prev?.id === id ? null : prev));
+    // If the deleted profile was active, activate the first remaining profile
+    setProfiles((prev) => {
+      const remaining = prev.filter((p) => p.id !== id);
+      const wasActive = prev.find((p) => p.id === id)?.isActive ?? false;
+      if (wasActive && remaining.length > 0) {
+        remaining[0] = { ...remaining[0], isActive: true };
+        setActiveProfileState(remaining[0]);
+        // Fire-and-forget — best effort to persist new active state
+        setActiveProfile(remaining[0].id).catch(() => {});
+      } else if (wasActive) {
+        setActiveProfileState(null);
+      }
+      return remaining;
+    });
   }, []);
 
   return {

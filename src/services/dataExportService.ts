@@ -13,7 +13,8 @@
  *   Excludes: profile (contains PII — user can view in Settings), subscription,
  *   and template/library collections that contain no personal health logs.
  */
-import * as FileSystem from 'expo-file-system';
+// expo-file-system v19 moved documentDirectory/writeAsStringAsync/EncodingType to the legacy path.
+import { documentDirectory, writeAsStringAsync, EncodingType } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { queryDocuments, COLLECTIONS } from './firebase/firestore';
 import type { ServiceResult } from '../types/service';
@@ -40,10 +41,10 @@ export async function exportUserData(): Promise<ServiceResult<string>> {
 
     const json = JSON.stringify(exportPayload, null, 2);
     const filename = `pepmax-export-${Date.now()}.json`;
-    const fileUri = `${FileSystem.documentDirectory}${filename}`;
+    const fileUri = `${documentDirectory}${filename}`;
 
-    await FileSystem.writeAsStringAsync(fileUri, json, {
-      encoding: FileSystem.EncodingType.UTF8,
+    await writeAsStringAsync(fileUri, json, {
+      encoding: EncodingType.UTF8,
     });
 
     const sharingAvailable = await Sharing.isAvailableAsync();

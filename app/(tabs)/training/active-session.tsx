@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useRouter, useLocalSearchParams, useNavigation } from 'expo-router';
+import { useRouter, useLocalSearchParams, useNavigation, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../src/hooks/useTheme';
@@ -483,14 +483,20 @@ export default function ActiveSessionScreen() {
     if (initializedRef.current) return;
     initializedRef.current = true;
 
-    loadProfiles();
-
     if (params.sessionId) {
       workout.resumeSession(params.sessionId);
     } else {
       workout.startSession(params.templateId ?? null);
     }
   }, []);
+
+  // ─── Reload equipment profile on focus (e.g. user switched profile elsewhere) ──
+
+  useFocusEffect(
+    useCallback(() => {
+      loadProfiles();
+    }, [loadProfiles])
+  );
 
   // ─── Fetch previous bests when exercises change ──────────────────────────
 
@@ -622,6 +628,28 @@ export default function ActiveSessionScreen() {
     setSwapModal(null);
   }, [swapModal, workout]);
 
+  // ─── Swap modal content ──────────────────────────────────────────────────
+
+  const swapModalContent = useMemo(() => {
+    if (!swapModal || !workout.session) return null;
+    const exercise = workout.session.exercises[swapModal.exerciseIndex];
+    if (!exercise) return null;
+    const libExercise = exerciseLibrary.find((e) => e.id === exercise.exerciseId);
+    const alternatives = libExercise && activeProfile
+      ? findAlternatives(libExercise, exerciseLibrary, activeProfile.equipment)
+      : [];
+    return {
+      exerciseName: exercise.exerciseName,
+      missingEquipment: libExercise?.equipment ?? '',
+      alternatives: alternatives.map((a) => ({
+        id: a.id,
+        name: a.name,
+        equipment: a.equipment,
+        primaryMuscles: a.primaryMuscles,
+      })),
+    };
+  }, [swapModal, workout.session, activeProfile]);
+
   // ─── Finish ──────────────────────────────────────────────────────────────
 
   const handleFinish = useCallback(() => {
@@ -731,29 +759,17 @@ export default function ActiveSessionScreen() {
       />
 
       {/* Equipment swap modal */}
-      {swapModal && (() => {
-        const exercise = workout.session!.exercises[swapModal.exerciseIndex];
-        const libExercise = exerciseLibrary.find((e) => e.id === exercise.exerciseId);
-        const alternatives = libExercise && activeProfile
-          ? findAlternatives(libExercise, exerciseLibrary, activeProfile.equipment)
-          : [];
-        return (
-          <ExerciseSwapModal
-            visible={swapModal.visible}
-            onClose={() => setSwapModal(null)}
-            exerciseName={exercise.exerciseName}
-            missingEquipment={libExercise?.equipment ?? ''}
-            alternatives={alternatives.map((a) => ({
-              id: a.id,
-              name: a.name,
-              equipment: a.equipment,
-              primaryMuscles: a.primaryMuscles,
-            }))}
-            onSwap={handleSwapConfirm}
-            colors={colors}
-          />
-        );
-      })()}
+      {swapModal && swapModalContent && (
+        <ExerciseSwapModal
+          visible={swapModal.visible}
+          onClose={() => setSwapModal(null)}
+          exerciseName={swapModalContent.exerciseName}
+          missingEquipment={swapModalContent.missingEquipment}
+          alternatives={swapModalContent.alternatives}
+          onSwap={handleSwapConfirm}
+          colors={colors}
+        />
+      )}
     </View>
   );
 }

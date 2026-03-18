@@ -157,8 +157,9 @@ export function useWorkoutSession(): WorkoutSessionHook {
         const tpl = tplResult.data;
         templateName = tpl.name;
 
-        // Check for pending bare minimum override
-        const pending = consumePendingBareMinimum();
+        // Check for pending bare minimum override, validating it belongs to this template
+        const rawPending = consumePendingBareMinimum();
+        const pending = rawPending?.templateId === templateId ? rawPending : null;
         const sourceExercises = pending ? pending.exercises : tpl.exercises;
 
         exercises = sourceExercises.map((te) => {

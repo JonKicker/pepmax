@@ -1,6 +1,7 @@
 import type { TemplateExercise } from '../types/template';
 
 type PendingBareMinimum = {
+  templateId: string;
   exercises: TemplateExercise[];
   timeCap: number;
   originalTotalSets: number;

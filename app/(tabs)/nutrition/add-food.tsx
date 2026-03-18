@@ -6,7 +6,9 @@ import {
   TextInput,
   TouchableOpacity,
   FlatList,
+  SectionList,
   ActivityIndicator,
+  Switch,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -87,8 +89,32 @@ function foodNavPayload(
     servingSizeG: s.servingSizeG,
     barcode: s.barcode,
     source,
+    foodSource: s.foodSource,
+    micronutrients100g: s.micronutrients100g,
+    portions: s.portions,
   };
   return JSON.stringify(payload);
+}
+
+// ─── Source Badge ─────────────────────────────────────────────────────────────
+
+function SourceBadge({ source }: { source: 'usda' | 'off' | undefined }) {
+  if (source === 'usda') {
+    return (
+      <View style={[styles.badge, styles.badgeUSDA]}>
+        <Ionicons name="checkmark-circle" size={10} color="white" />
+        <Text style={styles.badgeTextUSDA}>USDA</Text>
+      </View>
+    );
+  }
+  if (source === 'off') {
+    return (
+      <View style={[styles.badge, styles.badgeOFF]}>
+        <Text style={styles.badgeTextOFF}>Community</Text>
+      </View>
+    );
+  }
+  return null;
 }
 
 // ─── Search Result Row ────────────────────────────────────────────────────────
@@ -109,9 +135,12 @@ function SearchResultRow({
       activeOpacity={0.7}
     >
       <View style={styles.resultBody}>
-        <Text style={[styles.resultName, { color: colors.textPrimary }]} numberOfLines={1}>
-          {item.name}
-        </Text>
+        <View style={styles.resultNameRow}>
+          <Text style={[styles.resultName, { color: colors.textPrimary }]} numberOfLines={1}>
+            {item.name}
+          </Text>
+          <SourceBadge source={item.foodSource} />
+        </View>
         {!!item.brand && (
           <Text style={[styles.resultBrand, { color: colors.textSecondary }]} numberOfLines={1}>
             {item.brand}
@@ -126,6 +155,16 @@ function SearchResultRow({
         <Text style={[styles.resultCalUnit, { color: colors.textSecondary }]}>kcal/100g</Text>
       </View>
     </TouchableOpacity>
+  );
+}
+
+// ─── Section Header ───────────────────────────────────────────────────────────
+
+function SectionHeader({ title, colors }: { title: string; colors: Theme['colors'] }) {
+  return (
+    <View style={[styles.sectionHeader, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+      <Text style={[styles.sectionHeaderText, { color: colors.textSecondary }]}>{title}</Text>
+    </View>
   );
 }
 
@@ -197,6 +236,7 @@ export default function AddFoodScreen() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchDone, setSearchDone] = useState(false);
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchAbortRef = useRef<AbortController | null>(null);
 
@@ -280,6 +320,23 @@ export default function AddFoodScreen() {
     if (!result.error) setFavorites((prev) => prev.filter((f) => f.id !== id));
   };
 
+  // ─── Build sections for SectionList ──────────────────────────────────────
+  const filteredResults = verifiedOnly
+    ? searchResults.filter((r) => r.foodSource === 'usda')
+    : searchResults;
+
+  const usdaResults = filteredResults.filter((r) => r.foodSource === 'usda');
+  const offResults = filteredResults.filter((r) => r.foodSource === 'off');
+
+  const sections = [
+    ...(usdaResults.length > 0
+      ? [{ title: 'Verified Database', data: usdaResults }]
+      : []),
+    ...(offResults.length > 0 && !verifiedOnly
+      ? [{ title: 'Community Database', data: offResults }]
+      : []),
+  ];
+
   // ─── Render search tab content ────────────────────────────────────────────
   const renderSearch = () => (
     <View style={{ flex: 1 }}>
@@ -302,6 +359,20 @@ export default function AddFoodScreen() {
           <Ionicons name="barcode-outline" size={22} color={Colors.nutrition} />
         </TouchableOpacity>
       </View>
+
+      {/* Verified Only toggle */}
+      {searchResults.length > 0 && (
+        <View style={[styles.toggleRow, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.toggleLabel, { color: colors.textSecondary }]}>Verified only</Text>
+          <Switch
+            value={verifiedOnly}
+            onValueChange={setVerifiedOnly}
+            trackColor={{ true: Colors.nutrition }}
+            thumbColor="white"
+          />
+        </View>
+      )}
+
       {searchLoading && (
         <View style={styles.searchFeedback}>
           <ActivityIndicator color={Colors.nutrition} />
@@ -315,10 +386,12 @@ export default function AddFoodScreen() {
           </TouchableOpacity>
         </View>
       )}
-      {!searchLoading && !searchError && searchDone && searchResults.length === 0 && (
+      {!searchLoading && !searchError && searchDone && filteredResults.length === 0 && (
         <View style={styles.searchFeedback}>
           <Text style={[styles.feedbackText, { color: colors.textSecondary }]}>
-            No results for "{query}".
+            {verifiedOnly
+              ? 'No verified results. Try turning off "Verified only".'
+              : `No results for "${query}".`}
           </Text>
           <TouchableOpacity onPress={() => router.push('/(tabs)/nutrition/manual-entry')}>
             <Text style={[styles.manualLink, { color: Colors.nutrition }]}>Enter manually →</Text>
@@ -341,18 +414,24 @@ export default function AddFoodScreen() {
           </TouchableOpacity>
         </View>
       )}
-      <FlatList
-        data={searchResults}
-        keyExtractor={(item, i) => `${item.barcode || item.name}-${i}`}
-        keyboardShouldPersistTaps="handled"
-        renderItem={({ item }) => (
-          <SearchResultRow
-            item={item}
-            colors={colors}
-            onPress={() => navigateToDetail(item, 'search')}
-          />
-        )}
-      />
+      {sections.length > 0 && (
+        <SectionList
+          sections={sections}
+          keyExtractor={(item, i) => `${item.barcode || item.name}-${i}`}
+          keyboardShouldPersistTaps="handled"
+          renderSectionHeader={({ section }) => (
+            <SectionHeader title={section.title} colors={colors} />
+          )}
+          renderItem={({ item }) => (
+            <SearchResultRow
+              item={item}
+              colors={colors}
+              onPress={() => navigateToDetail(item, 'search')}
+            />
+          )}
+          stickySectionHeadersEnabled={false}
+        />
+      )}
     </View>
   );
 
@@ -540,6 +619,23 @@ const styles = StyleSheet.create({
   manualLink: { fontSize: 14, fontWeight: '600' },
   manualEntryRow: { marginTop: 8 },
 
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  toggleLabel: { fontSize: 13, fontWeight: '500' },
+
+  sectionHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  sectionHeaderText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+
   resultRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -548,6 +644,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   resultBody: { flex: 1 },
+  resultNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   resultName: { fontSize: 14, fontWeight: '600' },
   resultBrand: { fontSize: 12, marginTop: 1 },
   resultMacros: { fontSize: 12, marginTop: 3 },
@@ -556,4 +653,17 @@ const styles = StyleSheet.create({
   resultCalUnit: { fontSize: 11 },
   removeFavBtn: { padding: 8, marginLeft: 4 },
   barcodeBtn: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
+
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    gap: 3,
+  },
+  badgeUSDA: { backgroundColor: Colors.nutrition },
+  badgeOFF: { backgroundColor: '#888' },
+  badgeTextUSDA: { fontSize: 10, fontWeight: '700', color: 'white' },
+  badgeTextOFF: { fontSize: 10, fontWeight: '600', color: 'white' },
 });

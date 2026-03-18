@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Colors } from '../../constants/theme';
+import { ALL_EQUIPMENT } from '../../types/equipmentProfile';
 import type { EquipmentProfile } from '../../types/equipmentProfile';
 
 // ─── Quick-switch modal ───────────────────────────────────────────────────────
@@ -83,7 +84,7 @@ export function EquipmentQuickSwitch({
                   <Text style={[styles.rowSub, { color: colors.textSecondary }]}>
                     {profile.equipment.length === 0
                       ? 'No equipment'
-                      : profile.equipment.length === 19
+                      : profile.equipment.length === ALL_EQUIPMENT.length
                       ? 'All equipment'
                       : `${profile.equipment.length} items`}
                   </Text>

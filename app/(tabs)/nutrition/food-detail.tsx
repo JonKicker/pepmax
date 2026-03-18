@@ -12,15 +12,17 @@ import {
   Platform,
   Animated,
 } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors, Theme } from '../../../src/constants/theme';
 import { logFood, addFavorite, removeFavorite, getFavorites } from '../../../src/services/nutritionService';
-import { toLocalDateKey, recalculateMacros } from '../../../src/utils/nutrition';
+import { toLocalDateKey, recalculateMacros, recalculateMicronutrients, getRDAPercent, getTrafficLight } from '../../../src/utils/nutrition';
 import { MEAL_SLOTS, MEAL_SLOT_LABELS } from '../../../src/types/nutrition';
-import type { FoodNavPayload, MealSlot } from '../../../src/types/nutrition';
+import { MICRONUTRIENT_LABELS, MICRONUTRIENT_UNITS, RDA_VALUES } from '../../../src/constants/nutrition';
+import type { FoodNavPayload, MealSlot, Micronutrients } from '../../../src/types/nutrition';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
@@ -66,6 +68,76 @@ function NutrientRow({
   );
 }
 
+// ─── Micronutrient Row ────────────────────────────────────────────────────────
+
+function MicronutrientRow({
+  nutrientKey,
+  value,
+  colors,
+}: {
+  nutrientKey: string;
+  value: number | null;
+  colors: Theme['colors'];
+}) {
+  const label = MICRONUTRIENT_LABELS[nutrientKey] ?? nutrientKey;
+  const unit = MICRONUTRIENT_UNITS[nutrientKey] ?? '';
+
+  if (value === null) {
+    return (
+      <View style={[styles.nutrientRow, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.nutrientLabel, { color: colors.textSecondary }]}>{label}</Text>
+        <Text style={[styles.nutrientValue, { color: colors.textSecondary, opacity: 0.5 }]}>—</Text>
+      </View>
+    );
+  }
+
+  const rdaPct = getRDAPercent(nutrientKey, value);
+  const tier = rdaPct != null ? getTrafficLight(rdaPct) : 'dim';
+  const badgeColor =
+    tier === 'green' ? Colors.nutrition :
+    tier === 'yellow' ? Colors.warning :
+    colors.textSecondary;
+
+  return (
+    <View style={[styles.nutrientRow, { borderBottomColor: colors.border }]}>
+      <Text style={[styles.nutrientLabel, { color: colors.textPrimary }]}>{label}</Text>
+      <View style={styles.microRight}>
+        <Text style={[styles.nutrientValue, { color: colors.textPrimary }]}>
+          {Math.round(value * 10) / 10} {unit}
+        </Text>
+        {rdaPct != null && (
+          <View style={[styles.rdaBadge, { backgroundColor: badgeColor + '22', borderColor: badgeColor + '55' }]}>
+            <Text style={[styles.rdaText, { color: badgeColor }]}>
+              {Math.round(rdaPct)}% DV
+            </Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// ─── Source Badge ─────────────────────────────────────────────────────────────
+
+function SourceBadge({ source }: { source: 'usda' | 'off' | undefined }) {
+  if (source === 'usda') {
+    return (
+      <View style={[styles.sourceBadge, { backgroundColor: Colors.nutrition + '22', borderColor: Colors.nutrition + '55' }]}>
+        <Ionicons name="checkmark-circle" size={11} color={Colors.nutrition} />
+        <Text style={[styles.sourceBadgeText, { color: Colors.nutrition }]}>USDA Verified</Text>
+      </View>
+    );
+  }
+  if (source === 'off') {
+    return (
+      <View style={[styles.sourceBadge, { backgroundColor: '#88888822', borderColor: '#88888855' }]}>
+        <Text style={[styles.sourceBadgeText, { color: '#888' }]}>Community</Text>
+      </View>
+    );
+  }
+  return null;
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function FoodDetailScreen() {
@@ -86,11 +158,29 @@ export default function FoodDetailScreen() {
     (MEAL_SLOTS.includes(paramSlot as MealSlot) ? paramSlot : 'breakfast') as MealSlot
   );
   const [showSlotPicker, setShowSlotPicker] = useState(false);
+  const [microExpanded, setMicroExpanded] = useState(false);
 
-  // Serving size — default to the product's serving size in grams
+  // Serving size — default to the product's serving size in grams (clamped 10-500)
   const baseServingSizeG = food?.servingSizeG ?? 100;
-  const [servingInput, setServingInput] = useState(String(baseServingSizeG));
+  const defaultServing = Math.min(500, Math.max(10, baseServingSizeG));
+  const [sliderValue, setSliderValue] = useState(defaultServing);
+  const [servingInput, setServingInput] = useState(String(defaultServing));
   const [servingUnit, setServingUnit] = useState(food?.servingUnit ?? 'g');
+
+  // Keep slider and text input in sync
+  const handleSliderChange = (val: number) => {
+    const rounded = Math.round(val / 5) * 5;
+    setSliderValue(rounded);
+    setServingInput(String(rounded));
+  };
+
+  const handleInputChange = (text: string) => {
+    setServingInput(text);
+    const parsed = parseFloat(text);
+    if (isFinite(parsed) && parsed >= 10 && parsed <= 500) {
+      setSliderValue(parsed);
+    }
+  };
 
   // Computed macros (recalculated on serving change using pure utility)
   const baseMacros = {
@@ -104,6 +194,12 @@ export default function FoodDetailScreen() {
   const scaled = validServing
     ? recalculateMacros(baseMacros, 100, servingG)
     : baseMacros;
+
+  // Scaled micronutrients
+  const scaledMicro: Micronutrients | null =
+    food?.micronutrients100g && validServing
+      ? recalculateMicronutrients(food.micronutrients100g, 100, servingG)
+      : food?.micronutrients100g ?? null;
 
   // Favorite state
   const [isFavorite, setIsFavorite] = useState(false);
@@ -210,6 +306,12 @@ export default function FoodDetailScreen() {
     }, 1200);
   };
 
+  const hasMicronutrients =
+    food.micronutrients100g != null &&
+    Object.values(food.micronutrients100g).some((v) => v !== null);
+
+  const microKeys = Object.keys(MICRONUTRIENT_LABELS);
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -217,13 +319,14 @@ export default function FoodDetailScreen() {
 
           {/* Header */}
           <View style={styles.headerRow}>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, gap: 6 }}>
               <Text style={[styles.foodName, { color: colors.textPrimary }]} numberOfLines={2}>
                 {food.name}
               </Text>
               {!!food.brand && (
                 <Text style={[styles.foodBrand, { color: colors.textSecondary }]}>{food.brand}</Text>
               )}
+              <SourceBadge source={food.foodSource} />
             </View>
             <TouchableOpacity onPress={toggleFavorite} style={styles.starBtn}>
               <Ionicons
@@ -236,31 +339,83 @@ export default function FoodDetailScreen() {
 
           {/* Serving size */}
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>SERVING SIZE</Text>
-          <View style={styles.servingRow}>
-            <TextInput
-              style={[
-                styles.servingInput,
-                { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.border },
-              ]}
-              value={servingInput}
-              onChangeText={setServingInput}
-              keyboardType="decimal-pad"
-              returnKeyType="done"
-              maxLength={8}
+
+          {/* Slider */}
+          <View style={[styles.sliderCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Slider
+              style={{ width: '100%', height: 40 }}
+              minimumValue={10}
+              maximumValue={500}
+              step={5}
+              value={sliderValue}
+              onValueChange={handleSliderChange}
+              minimumTrackTintColor={Colors.nutrition}
+              maximumTrackTintColor={colors.border}
+              thumbTintColor={Colors.nutrition}
             />
-            <TextInput
-              style={[
-                styles.servingUnitInput,
-                { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.border },
-              ]}
-              value={servingUnit}
-              onChangeText={setServingUnit}
-              placeholder="g"
-              placeholderTextColor={colors.textSecondary}
-              maxLength={16}
-              returnKeyType="done"
-            />
+            <View style={styles.servingRow}>
+              <TextInput
+                style={[
+                  styles.servingInput,
+                  { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border },
+                ]}
+                value={servingInput}
+                onChangeText={handleInputChange}
+                keyboardType="decimal-pad"
+                returnKeyType="done"
+                maxLength={8}
+              />
+              <TextInput
+                style={[
+                  styles.servingUnitInput,
+                  { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border },
+                ]}
+                value={servingUnit}
+                onChangeText={setServingUnit}
+                placeholder="g"
+                placeholderTextColor={colors.textSecondary}
+                maxLength={16}
+                returnKeyType="done"
+              />
+            </View>
+
+            {/* Quick presets */}
+            <View style={styles.presetsRow}>
+              {[100, 150, 200].map((g) => (
+                <TouchableOpacity
+                  key={g}
+                  style={[
+                    styles.presetBtn,
+                    { borderColor: sliderValue === g ? Colors.nutrition : colors.border },
+                    sliderValue === g && { backgroundColor: Colors.nutrition + '15' },
+                  ]}
+                  onPress={() => handleSliderChange(g)}
+                >
+                  <Text style={[styles.presetText, { color: sliderValue === g ? Colors.nutrition : colors.textSecondary }]}>
+                    {g}g
+                  </Text>
+                </TouchableOpacity>
+              ))}
+              {/* USDA descriptive portions */}
+              {food.portions?.map((portion) => (
+                <TouchableOpacity
+                  key={portion.description}
+                  style={[
+                    styles.presetBtn,
+                    styles.presetBtnWide,
+                    { borderColor: sliderValue === portion.gramWeight ? Colors.nutrition : colors.border },
+                    sliderValue === portion.gramWeight && { backgroundColor: Colors.nutrition + '15' },
+                  ]}
+                  onPress={() => handleSliderChange(portion.gramWeight)}
+                >
+                  <Text style={[styles.presetText, { color: sliderValue === portion.gramWeight ? Colors.nutrition : colors.textSecondary }]} numberOfLines={1}>
+                    {portion.description} ({portion.gramWeight}g)
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
+
           {!validServing && servingInput.length > 0 && (
             <Text style={[styles.inputError, { color: Colors.error }]}>
               Enter a valid amount greater than 0
@@ -284,6 +439,38 @@ export default function FoodDetailScreen() {
               <NutrientRow label="Sodium" value={recalculateMacros({ calories: 0, protein: 0, carbs: 0, fat: food.sodium100g * 1000 }, 100, validServing ? servingG : baseServingSizeG).fat} unit="mg" colors={colors} />
             )}
           </View>
+
+          {/* Micronutrients collapsible */}
+          {hasMicronutrients && (
+            <>
+              <TouchableOpacity
+                style={[styles.microHeader, { borderColor: colors.border, backgroundColor: colors.surface }]}
+                onPress={() => setMicroExpanded((v) => !v)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginBottom: 0, marginTop: 0 }]}>
+                  MICRONUTRIENTS
+                </Text>
+                <Ionicons
+                  name={microExpanded ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={colors.textSecondary}
+                />
+              </TouchableOpacity>
+              {microExpanded && scaledMicro && (
+                <View style={[styles.nutritionCard, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 }]}>
+                  {microKeys.map((key) => (
+                    <MicronutrientRow
+                      key={key}
+                      nutrientKey={key}
+                      value={(scaledMicro as Record<string, number | null>)[key] ?? null}
+                      colors={colors}
+                    />
+                  ))}
+                </View>
+              )}
+            </>
+          )}
 
           {/* Meal slot */}
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>MEAL</Text>
@@ -335,21 +522,72 @@ const styles = StyleSheet.create({
 
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 20, gap: 12 },
   foodName: { fontSize: 22, fontWeight: '800', lineHeight: 28 },
-  foodBrand: { fontSize: 14, marginTop: 4 },
+  foodBrand: { fontSize: 14, marginTop: 2 },
   starBtn: { padding: 4 },
+
+  sourceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 5,
+    borderWidth: 1,
+    marginTop: 2,
+  },
+  sourceBadgeText: { fontSize: 11, fontWeight: '600' },
 
   sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 8, marginTop: 20 },
 
+  sliderCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+    gap: 8,
+  },
   servingRow: { flexDirection: 'row', gap: 10 },
   servingInput: { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 18, fontWeight: '700' },
   servingUnitInput: { width: 80, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, fontSize: 15 },
   inputError: { fontSize: 12, marginTop: 4 },
 
+  presetsRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  presetBtn: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  presetBtnWide: { maxWidth: '100%' },
+  presetText: { fontSize: 12, fontWeight: '600' },
+
   nutritionCard: { borderRadius: 12, borderWidth: 1, overflow: 'hidden' },
-  nutrientRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth },
+  nutrientRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth },
   nutrientLabel: { fontSize: 14 },
   nutrientValue: { fontSize: 14 },
   nutrientBold: { fontWeight: '700', fontSize: 16 },
+
+  microHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 20,
+    borderRadius: 12,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    borderWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  microRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  rdaBadge: {
+    borderRadius: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+  },
+  rdaText: { fontSize: 11, fontWeight: '700' },
 
   slotBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 13 },
   slotBtnText: { fontSize: 15, fontWeight: '600' },

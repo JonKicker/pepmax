@@ -45,6 +45,7 @@ export function useSmartInsights(
   useEffect(() => {
     if (!dashboardData) return;
 
+    const snapshot = dashboardData;
     let cancelled = false;
     setLoading(true);
 
@@ -79,9 +80,9 @@ export function useSmartInsights(
           proteinTargetG,
           peptides,
           doses,
-          sessions: dashboardData.recentSessions ?? [],
-          cardioSessions: dashboardData.recentCardio ?? [],
-          weights: dashboardData.recentWeights ?? [],
+          sessions: snapshot.recentSessions ?? [],
+          cardioSessions: snapshot.recentCardio ?? [],
+          weights: snapshot.recentWeights ?? [],
         });
 
         // Expire dismissed entries older than 7 days

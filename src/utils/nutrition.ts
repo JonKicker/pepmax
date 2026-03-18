@@ -13,6 +13,9 @@
  *                      Pure function — no component state, fully testable.
  */
 
+import type { Micronutrients } from '../types/nutrition';
+import { RDA_VALUES } from '../constants/nutrition';
+
 // ─── Date key ─────────────────────────────────────────────────────────────────
 
 /**
@@ -137,9 +140,6 @@ export function sanitizeOFFProduct(raw: any): SanitizedOFFProduct {
 }
 
 // ─── Micronutrient utilities ──────────────────────────────────────────────────
-
-import type { Micronutrients } from '../types/nutrition';
-import { RDA_VALUES } from '../constants/nutrition';
 
 /**
  * Proportionally scale micronutrients when serving size changes.

@@ -32,6 +32,12 @@ import { Colors } from '../../../src/constants/theme';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { usePremium } from '../../../src/contexts/PremiumContext';
 import { signOut } from '../../../src/services/firebase/auth';
+import { exportUserData } from '../../../src/services/dataExportService';
+import { deleteAllUserData, deleteAccount } from '../../../src/services/accountService';
+import * as Application from 'expo-application';
+import * as StoreReview from 'expo-store-review';
+import * as MailComposer from 'expo-mail-composer';
+import * as WebBrowser from 'expo-web-browser';
 import { updateDocument, COLLECTIONS } from '../../../src/services/firebase/firestore';
 import { calculateTDEE, calculateMacros, ACTIVITY_LEVELS, feetInchesToCm, cmToFeetInches, kgToLbs, lbsToKg } from '../../../src/utils/tdee';
 import type { Units, Sex } from '../../../src/types/profile';
@@ -83,6 +89,9 @@ export default function SettingsScreen() {
   // ── Other ──────────────────────────────────────────────────────────────────
   const [restoringPurchases, setRestoringPurchases] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [exportingData, setExportingData] = useState(false);
+  const [deletingData, setDeletingData] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   // Guard: profile not yet loaded
   if (!userProfile) {
@@ -233,6 +242,63 @@ export default function SettingsScreen() {
       ],
     );
   }
+
+  // -- Data & Privacy handlers
+
+  async function handleExportData() {
+    if (!isPremium) { router.push('/paywall'); return; }
+    setExportingData(true);
+    const result = await exportUserData();
+    setExportingData(false);
+    if (result.error) Alert.alert('Export Failed', result.error.message ?? 'Could not export data. Please try again.');
+  }
+
+  function handleDeleteData() {
+    Alert.alert('Delete All Data', 'This permanently deletes ALL your PepMax data. This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete All Data', style: 'destructive', onPress: () => {
+        Alert.alert('Are you absolutely sure?', 'Your data cannot be recovered.', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Yes, Delete Everything', style: 'destructive', onPress: async () => {
+            setDeletingData(true);
+            const result = await deleteAllUserData();
+            setDeletingData(false);
+            if (result.error) Alert.alert('Error', 'Could not delete your data. Please try again.');
+            else Alert.alert('Done', 'All your data has been deleted.');
+          }},
+        ]);
+      }},
+    ]);
+  }
+
+  function handleDeleteAccount() {
+    Alert.alert('Delete Account', 'Your account and all data will be permanently deleted. This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete Account', style: 'destructive', onPress: () => {
+        Alert.alert('Final Confirmation', 'This action is irreversible.', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Yes, Delete My Account', style: 'destructive', onPress: async () => {
+            setDeletingAccount(true);
+            const result = await deleteAccount();
+            setDeletingAccount(false);
+            if (result.error) Alert.alert('Error', result.error.message ?? 'Could not delete your account.');
+            // On success: onAuthStateChanged fires null -> AuthGuard redirects automatically.
+          }},
+        ]);
+      }},
+    ]);
+  }
+
+  async function handleRateApp() {
+    if (await StoreReview.hasAction()) StoreReview.requestReview();
+  }
+
+  async function handleContactSupport() {
+    const available = await MailComposer.isAvailableAsync();
+    if (!available) { Alert.alert('Email not available', 'Please email us at support@pepmax.app'); return; }
+    await MailComposer.composeAsync({ recipients: ['support@pepmax.app'], subject: 'PepMax Support Request' });
+  }
+
 
   // ── Derived display values ────────────────────────────────────────────────
 
@@ -563,7 +629,57 @@ export default function SettingsScreen() {
         />
       </SettingsSection>
 
-      {/* ── 6. Sign Out ─────────────────────────────────────────────────── */}
+      {/* -- 7. Data & Privacy */}
+      <SettingsSection title="Data & Privacy">
+        <SettingsRow
+          icon={isPremium ? 'download-outline' : 'lock-closed-outline'}
+          label="Export My Data"
+          value={isPremium ? undefined : 'Premium'}
+          rightElement={exportingData ? <ActivityIndicator size="small" color={colors.textSecondary} /> : undefined}
+          onPress={handleExportData}
+          separator
+        />
+        <SettingsRow
+          icon="trash-outline"
+          label="Delete All Data"
+          rightElement={deletingData ? <ActivityIndicator size="small" color={Colors.error} /> : undefined}
+          onPress={handleDeleteData}
+          dangerous
+          separator
+        />
+        <SettingsRow
+          icon="person-remove-outline"
+          label="Delete Account"
+          rightElement={deletingAccount ? <ActivityIndicator size="small" color={Colors.error} /> : undefined}
+          onPress={handleDeleteAccount}
+          dangerous
+        />
+      </SettingsSection>
+
+      {/* -- 8. About & Support */}
+      <SettingsSection title="About & Support">
+        <SettingsRow
+          icon="information-circle-outline"
+          label="Version"
+          value={Application.nativeApplicationVersion ?? '—'}
+          separator
+        />
+        <SettingsRow icon="star-outline" label="Rate PepMax" onPress={handleRateApp} separator />
+        <SettingsRow icon="mail-outline" label="Contact Support" onPress={handleContactSupport} separator />
+        <SettingsRow
+          icon="shield-checkmark-outline"
+          label="Privacy Policy"
+          onPress={() => WebBrowser.openBrowserAsync('https://pepmax.app/privacy')}
+          separator
+        />
+        <SettingsRow
+          icon="document-text-outline"
+          label="Terms of Service"
+          onPress={() => WebBrowser.openBrowserAsync('https://pepmax.app/terms')}
+        />
+      </SettingsSection>
+
+            {/* ── 6. Sign Out ─────────────────────────────────────────────────── */}
       <TouchableOpacity
         style={[styles.signOutBtn, signingOut && styles.disabled]}
         onPress={handleSignOut}

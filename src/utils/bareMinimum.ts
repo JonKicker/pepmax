@@ -42,12 +42,12 @@ export function generateBareMinimum(
   const originalSets = countSets(templateExercises);
   const originalEstimatedMinutes = estimateMinutes(templateExercises);
 
-  // Step 1: classify
+  // Step 1: classify — keep Compound and compound-equivalent Bodyweight exercises
   const kept: TemplateExercise[] = [];
-  const removed: TemplateExercise[] = [];
 
   for (const te of templateExercises) {
     const libExercise = findExerciseById(exerciseLibrary, te.exerciseId);
+    // Custom exercises not in the library default to Compound (safe: keep them)
     const category = libExercise?.category ?? 'Compound';
 
     const isCompound = category === 'Compound';
@@ -56,8 +56,6 @@ export function generateBareMinimum(
 
     if (isCompound || isCompoundBodyweight) {
       kept.push(te);
-    } else {
-      removed.push(te);
     }
   }
 

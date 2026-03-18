@@ -15,7 +15,7 @@ import { Colors } from '../../../src/constants/theme';
 import { getTemplateById } from '../../../src/services/templateService';
 import { generateBareMinimum } from '../../../src/utils/bareMinimum';
 import { setPendingBareMinimum } from '../../../src/utils/sessionPreviewStore';
-import type { WorkoutTemplate, TemplateExercise } from '../../../src/types/template';
+import type { WorkoutTemplate } from '../../../src/types/template';
 
 type Mode = 'full' | 'bareMinimum';
 const TIME_CAPS = [15, 20, 30, 45] as const;
@@ -64,6 +64,7 @@ export default function SessionPreviewScreen() {
 
     if (mode === 'bareMinimum') {
       setPendingBareMinimum({
+        templateId,
         exercises: bareResult.exercises,
         timeCap,
         originalTotalSets: originalSets,
@@ -72,7 +73,7 @@ export default function SessionPreviewScreen() {
 
     router.push({
       pathname: '/(tabs)/training/active-session',
-      params: { templateId, isBareMinimum: mode === 'bareMinimum' ? '1' : '0' },
+      params: { templateId },
     });
   };
 
@@ -93,7 +94,7 @@ export default function SessionPreviewScreen() {
           onPress={() => { setMode('full'); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
           style={[
             styles.modeBtn,
-            mode === 'full' && { backgroundColor: Colors.light.success },
+            mode === 'full' && { backgroundColor: colors.success },
           ]}
         >
           <Ionicons
