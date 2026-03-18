@@ -8,7 +8,7 @@ import {
   COLLECTIONS,
 } from './firebase/firestore';
 import type { ServiceResult } from '../types/service';
-import type { CardioSession, CardioSessionInput, ActivityType, HistoryFilter, DateRange } from '../types/cardio';
+import type { CardioSession, CardioSessionInput, ActivityType, HistoryFilter, DateRange, CardioPR, CardioPRMetric } from '../types/cardio';
 
 export async function createCardioSession(
   data: CardioSessionInput
@@ -110,4 +110,77 @@ export async function getFilteredSessions(
 
 export async function deleteCardioSession(id: string): Promise<ServiceResult<void>> {
   return deleteDocument(COLLECTIONS.CARDIO_SESSIONS, id);
+}
+
+// ─── Date-range query for charts ─────────────────────────────────────────────
+
+export async function getSessionsInDateRange(
+  start: Date,
+  end: Date,
+  activityType?: ActivityType
+): Promise<ServiceResult<CardioSession[]>> {
+  const constraints = [
+    where('status', '==', 'completed'),
+    where('createdAt', '>=', Timestamp.fromDate(start)),
+    where('createdAt', '<=', Timestamp.fromDate(end)),
+    orderBy('createdAt', 'asc'),
+  ];
+  if (activityType) {
+    constraints.unshift(where('activityType', '==', activityType));
+  }
+  return queryDocuments<CardioSession>(COLLECTIONS.CARDIO_SESSIONS, constraints);
+}
+
+// ─── PR detection (pure function — client-side computation) ──────────────────
+
+export function detectNewPRs(
+  session: CardioSession,
+  priorSessions: CardioSession[]
+): CardioPR[] {
+  const prs: CardioPR[] = [];
+  const same = priorSessions.filter(
+    (s) => s.activityType === session.activityType && s.id !== session.id
+  );
+
+  const check = (metric: CardioPRMetric, current: number, prior: number[], better: (a: number, b: number) => boolean) => {
+    if (current <= 0) return;
+    const best = prior.length > 0 ? prior.reduce((a, b) => better(a, b) ? a : b) : null;
+    if (best === null || better(current, best)) {
+      prs.push({
+        metric,
+        activityType: session.activityType,
+        value: current,
+        sessionId: session.id,
+        achievedAt: session.startedAt,
+        previousValue: best ?? undefined,
+      });
+    }
+  };
+
+  // Fastest avg pace (lower is better)
+  const paces = same.filter((s) => s.averagePace > 0).map((s) => s.averagePace);
+  if (session.averagePace > 0) {
+    check('fastestPace', session.averagePace, paces, (a, b) => a < b);
+  }
+
+  // Fastest single split (lower is better)
+  const allSplitPaces = same.flatMap((s) => s.splits.filter((sp) => sp.pace > 0).map((sp) => sp.pace));
+  const sessionBestSplit = session.splits.filter((sp) => sp.pace > 0).reduce((best, sp) => sp.pace < best ? sp.pace : best, Infinity);
+  if (isFinite(sessionBestSplit)) {
+    check('fastestSplit', sessionBestSplit, allSplitPaces, (a, b) => a < b);
+  }
+
+  // Longest distance (higher is better)
+  check('longestDistance', session.distance, same.map((s) => s.distance), (a, b) => a > b);
+
+  // Longest duration (higher is better)
+  check('longestDuration', session.duration, same.map((s) => s.duration), (a, b) => a > b);
+
+  // Most calories (higher is better)
+  check('mostCalories', session.calories, same.map((s) => s.calories), (a, b) => a > b);
+
+  // Most elevation gain (higher is better)
+  check('mostElevation', session.elevationGain, same.map((s) => s.elevationGain), (a, b) => a > b);
+
+  return prs;
 }

@@ -161,6 +161,13 @@ export default function CardioScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.footerBtn}
+          onPress={() => router.push('/(tabs)/cardio/progress')}
+        >
+          <Ionicons name="analytics" size={18} color={Colors.cardio} />
+          <Text style={[styles.footerBtnText, { color: Colors.cardio }]}>Progress</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.footerBtn}
           onPress={() => router.push('/(tabs)/cardio/settings')}
         >
           <Ionicons name="settings-outline" size={18} color={colors.textSecondary} />

@@ -11,7 +11,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors } from '../../../src/constants/theme';
-import { getSessionById } from '../../../src/services/cardioService';
+import { getSessionById, getRecentSessions, detectNewPRs } from '../../../src/services/cardioService';
 import { useCardioSettings } from '../../../src/hooks/useCardioSettings';
 import {
   formatDuration,
@@ -19,7 +19,8 @@ import {
   formatPace,
 } from '../../../src/utils/cardio';
 import RouteMap from '../../../src/components/cardio/RouteMap';
-import type { CardioSession } from '../../../src/types/cardio';
+import PRCelebration from '../../../src/components/cardio/PRCelebration';
+import type { CardioSession, CardioPR } from '../../../src/types/cardio';
 
 // ─── Stat row ─────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,8 @@ export default function SessionSummaryScreen() {
   const [session, setSession] = useState<CardioSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [prs, setPrs] = useState<CardioPR[]>([]);
+  const [currentPRIdx, setCurrentPRIdx] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -59,6 +62,15 @@ export default function SessionSummaryScreen() {
         setLoadError(true);
       } else {
         setSession(result.data);
+        // Check for new PRs
+        const allResult = await getRecentSessions(100);
+        if (allResult.data && allResult.data.length > 0) {
+          const detected = detectNewPRs(result.data, allResult.data);
+          if (detected.length > 0) {
+            setPrs(detected);
+            setCurrentPRIdx(0);
+          }
+        }
       }
       setLoading(false);
     })();
@@ -93,11 +105,20 @@ export default function SessionSummaryScreen() {
     weekday: 'short', month: 'short', day: 'numeric',
   });
 
+  const activePR = prs.length > 0 && currentPRIdx < prs.length ? prs[currentPRIdx] : null;
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
     >
+      {/* PR celebration */}
+      <PRCelebration
+        pr={activePR}
+        distanceUnit={unit}
+        onDismiss={() => setCurrentPRIdx((i) => i + 1)}
+      />
+
       {/* Header */}
       <View style={styles.header}>
         <View style={[styles.activityBadge, { backgroundColor: Colors.cardio + '1A' }]}>

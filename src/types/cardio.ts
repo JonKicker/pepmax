@@ -74,6 +74,17 @@ export type CardioSession = {
 
 export type CardioSessionInput = Omit<CardioSession, 'id' | 'createdAt' | 'updatedAt'>;
 
+export type CardioPRMetric = 'fastestPace' | 'fastestSplit' | 'longestDistance' | 'longestDuration' | 'mostCalories' | 'mostElevation';
+
+export type CardioPR = {
+  metric: CardioPRMetric;
+  activityType: ActivityType;
+  value: number;
+  sessionId: string;
+  achievedAt: Timestamp;
+  previousValue?: number;
+};
+
 export type DateRange = 'week' | 'month' | '3months' | 'all';
 
 export type HistoryFilter = {

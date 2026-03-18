@@ -16,6 +16,7 @@ export default function CardioLayout() {
       <Stack.Screen name="active-session" options={{ headerShown: false }} />
       <Stack.Screen name="session-summary" options={{ title: 'Session Summary' }} />
       <Stack.Screen name="session-detail" options={{ title: 'Session Detail' }} />
+      <Stack.Screen name="progress" options={{ title: 'Progress' }} />
       <Stack.Screen name="history" options={{ title: 'History' }} />
       <Stack.Screen name="settings" options={{ title: 'Cardio Settings' }} />
     </Stack>
