@@ -19,6 +19,11 @@ export type MacroTargets = {
 };
 
 export type UserProfile = {
+  // Identity — set at sign-up, preserved through quiz
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+
   // Quiz answers
   goals: Goal[];
   experienceLevel: ExperienceLevel;

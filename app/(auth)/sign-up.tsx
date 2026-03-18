@@ -9,41 +9,94 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/hooks/useTheme';
 import { Colors } from '../../src/constants/theme';
 import { signUp } from '../../src/services/firebase/auth';
+import { mergeDocument, COLLECTIONS } from '../../src/services/firebase/firestore';
 import { getAuthErrorMessage } from '../../src/constants/authErrors';
 
-function validate(email: string, password: string): string | null {
-  if (!email.trim()) return 'Email is required.';
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Enter a valid email address.';
-  if (!password) return 'Password is required.';
-  if (password.length < 8) return 'Password must be at least 8 characters.';
-  return null;
+type FormErrors = {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  password?: string;
+  confirmPassword?: string;
+};
+
+function validate(
+  firstName: string,
+  lastName: string,
+  email: string,
+  password: string,
+  confirmPassword: string
+): FormErrors {
+  const errors: FormErrors = {};
+  if (!firstName.trim()) errors.firstName = 'First name is required.';
+  if (!lastName.trim()) errors.lastName = 'Last name is required.';
+  if (!email.trim()) {
+    errors.email = 'Please enter your email.';
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    errors.email = 'Enter a valid email address.';
+  }
+  if (!password) {
+    errors.password = 'Password is required.';
+  } else if (password.length < 8) {
+    errors.password = 'Password must be at least 8 characters.';
+  }
+  if (!confirmPassword) {
+    errors.confirmPassword = 'Please confirm your password.';
+  } else if (password !== confirmPassword) {
+    errors.confirmPassword = "Passwords don't match.";
+  }
+  return errors;
 }
 
 export default function SignUpScreen() {
   const { colors } = useTheme();
   const router = useRouter();
 
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FormErrors>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  function clearFieldError(field: keyof FormErrors) {
+    setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+    setSubmitError(null);
+  }
 
   async function handleSignUp() {
-    const validationError = validate(email.trim(), password);
-    if (validationError) { setError(validationError); return; }
+    const errors = validate(firstName, lastName, email.trim(), password, confirmPassword);
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLoading(true);
-    setError(null);
+    setFieldErrors({});
+    setSubmitError(null);
 
     const result = await signUp(email.trim(), password);
-    setLoading(false);
 
     if (result.error) {
-      setError(getAuthErrorMessage(result.error));
+      setLoading(false);
+      setSubmitError(getAuthErrorMessage(result.error));
+      return;
     }
-    // On success: AuthGuard in _layout.tsx redirects to /(onboarding)/quiz automatically
+
+    // Account created — persist name + email to profile doc before quiz writes it
+    await mergeDocument(COLLECTIONS.PROFILE, 'data', {
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      email: email.trim().toLowerCase(),
+    });
+
+    setLoading(false);
+    // AuthGuard in _layout.tsx detects no quizCompletedAt → redirects to /(onboarding)/quiz
   }
 
   const googleEnabled = !!process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
@@ -58,19 +111,57 @@ export default function SignUpScreen() {
             Start your PepMax journey
           </Text>
 
+          {/* Name row */}
+          <View style={styles.nameRow}>
+            <View style={[styles.fieldGroup, { flex: 1 }]}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>First Name</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.surface, borderColor: fieldErrors.firstName ? Colors.error : colors.border, color: colors.textPrimary }]}
+                placeholder="Jane"
+                placeholderTextColor={colors.textSecondary}
+                value={firstName}
+                onChangeText={(t) => { setFirstName(t); clearFieldError('firstName'); }}
+                autoCapitalize="words"
+                autoCorrect={false}
+              />
+              {fieldErrors.firstName && (
+                <Text style={[styles.fieldError, { color: Colors.error }]}>{fieldErrors.firstName}</Text>
+              )}
+            </View>
+
+            <View style={[styles.fieldGroup, { flex: 1 }]}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Last Name</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.surface, borderColor: fieldErrors.lastName ? Colors.error : colors.border, color: colors.textPrimary }]}
+                placeholder="Doe"
+                placeholderTextColor={colors.textSecondary}
+                value={lastName}
+                onChangeText={(t) => { setLastName(t); clearFieldError('lastName'); }}
+                autoCapitalize="words"
+                autoCorrect={false}
+              />
+              {fieldErrors.lastName && (
+                <Text style={[styles.fieldError, { color: Colors.error }]}>{fieldErrors.lastName}</Text>
+              )}
+            </View>
+          </View>
+
           {/* Email */}
           <View style={styles.fieldGroup}>
             <Text style={[styles.label, { color: colors.textSecondary }]}>Email</Text>
             <TextInput
-              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+              style={[styles.input, { backgroundColor: colors.surface, borderColor: fieldErrors.email ? Colors.error : colors.border, color: colors.textPrimary }]}
               placeholder="you@example.com"
               placeholderTextColor={colors.textSecondary}
               value={email}
-              onChangeText={(t) => { setEmail(t); setError(null); }}
+              onChangeText={(t) => { setEmail(t); clearFieldError('email'); }}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
             />
+            {fieldErrors.email && (
+              <Text style={[styles.fieldError, { color: Colors.error }]}>{fieldErrors.email}</Text>
+            )}
           </View>
 
           {/* Password */}
@@ -78,11 +169,11 @@ export default function SignUpScreen() {
             <Text style={[styles.label, { color: colors.textSecondary }]}>Password</Text>
             <View style={styles.passwordRow}>
               <TextInput
-                style={[styles.input, styles.passwordInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+                style={[styles.input, styles.passwordInput, { backgroundColor: colors.surface, borderColor: fieldErrors.password ? Colors.error : colors.border, color: colors.textPrimary }]}
                 placeholder="Min. 8 characters"
                 placeholderTextColor={colors.textSecondary}
                 value={password}
-                onChangeText={(t) => { setPassword(t); setError(null); }}
+                onChangeText={(t) => { setPassword(t); clearFieldError('password'); }}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
               />
@@ -95,12 +186,42 @@ export default function SignUpScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+            {fieldErrors.password && (
+              <Text style={[styles.fieldError, { color: Colors.error }]}>{fieldErrors.password}</Text>
+            )}
           </View>
 
-          {/* Error */}
-          {error && (
+          {/* Confirm Password */}
+          <View style={styles.fieldGroup}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Confirm Password</Text>
+            <View style={styles.passwordRow}>
+              <TextInput
+                style={[styles.input, styles.passwordInput, { backgroundColor: colors.surface, borderColor: fieldErrors.confirmPassword ? Colors.error : colors.border, color: colors.textPrimary }]}
+                placeholder="Re-enter your password"
+                placeholderTextColor={colors.textSecondary}
+                value={confirmPassword}
+                onChangeText={(t) => { setConfirmPassword(t); clearFieldError('confirmPassword'); }}
+                secureTextEntry={!showConfirm}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                style={[styles.eyeBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+                onPress={() => setShowConfirm((v) => !v)}
+              >
+                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                  {showConfirm ? 'Hide' : 'Show'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {fieldErrors.confirmPassword && (
+              <Text style={[styles.fieldError, { color: Colors.error }]}>{fieldErrors.confirmPassword}</Text>
+            )}
+          </View>
+
+          {/* Submit error (Firebase errors) */}
+          {submitError && (
             <View style={[styles.errorBox, { backgroundColor: Colors.error + '18', borderColor: Colors.error + '40' }]}>
-              <Text style={[styles.errorText, { color: Colors.error }]}>{error}</Text>
+              <Text style={[styles.errorText, { color: Colors.error }]}>{submitError}</Text>
             </View>
           )}
 
@@ -162,8 +283,10 @@ const styles = StyleSheet.create({
   scroll: { padding: 24, paddingTop: 48, gap: 16 },
   title: { fontSize: 28, fontWeight: '700' },
   subtitle: { fontSize: 15, marginBottom: 8 },
-  fieldGroup: { gap: 6 },
+  nameRow: { flexDirection: 'row', gap: 12 },
+  fieldGroup: { gap: 4 },
   label: { fontSize: 13, fontWeight: '600' },
+  fieldError: { fontSize: 12, marginTop: 2 },
   input: { height: 50, borderRadius: 12, borderWidth: 1, paddingHorizontal: 16, fontSize: 15, flex: 1 },
   passwordRow: { flexDirection: 'row', gap: 8 },
   passwordInput: { flex: 1 },

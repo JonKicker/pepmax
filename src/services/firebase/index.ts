@@ -3,7 +3,8 @@
  * No helper logic lives here. See auth.ts and firestore.ts.
  */
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   initializeFirestore,
   persistentLocalCache,
@@ -23,7 +24,9 @@ const firebaseConfig = {
 // Guard against duplicate initialization during hot reload
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
-export const auth = getAuth(app);
+export const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(AsyncStorage),
+});
 
 // Offline-capable Firestore with persistent local cache (JS SDK best-effort caching)
 export const db = initializeFirestore(app, {

@@ -8,7 +8,7 @@ import { serverTimestamp } from 'firebase/firestore';
 import { useTheme } from '../../src/hooks/useTheme';
 import { Colors, Theme } from '../../src/constants/theme';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { setDocument, COLLECTIONS } from '../../src/services/firebase/firestore';
+import { mergeDocument, COLLECTIONS } from '../../src/services/firebase/firestore';
 import { calculateTDEE, calculateMacros, lbsToKg, feetInchesToCm } from '../../src/utils/tdee';
 import type { Goal, ExperienceLevel, Units, Sex } from '../../src/types/profile';
 
@@ -118,7 +118,7 @@ export default function QuizScreen() {
     const tdee = calculateTDEE(weightKg, heightCm, age, sex);
     const macros = calculateMacros(tdee);
 
-    const result = await setDocument(COLLECTIONS.PROFILE, 'data', {
+    const result = await mergeDocument(COLLECTIONS.PROFILE, 'data', {
       goals: data.goals,
       experienceLevel: data.experienceLevel!,
       units: data.units!,

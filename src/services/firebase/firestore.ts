@@ -100,6 +100,26 @@ export async function setDocument<T extends DocumentData>(
 }
 
 /**
+ * Merge data into a document — creates it if it doesn't exist,
+ * preserves existing fields not present in `data`.
+ */
+export async function mergeDocument<T extends DocumentData>(
+  collectionName: CollectionName,
+  docId: string,
+  data: WithFieldValue<T>
+): Promise<ServiceResult<void>> {
+  try {
+    await setDoc(userDoc(collectionName, docId), {
+      ...data,
+      updatedAt: serverTimestamp(),
+    } as WithFieldValue<T>, { merge: true });
+    return { data: undefined, error: null };
+  } catch (e) {
+    return { data: null, error: e as Error };
+  }
+}
+
+/**
  * Partially update an existing document.
  */
 export async function updateDocument<T extends DocumentData>(

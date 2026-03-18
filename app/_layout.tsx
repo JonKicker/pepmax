@@ -38,8 +38,8 @@ function AuthGuard() {
       // Signed in but quiz not done
       if (!inOnboarding) router.replace('/(onboarding)/quiz');
     } else {
-      // Fully onboarded — send to app
-      if (inAuth || inOnboarding) router.replace('/(tabs)');
+      // Fully onboarded — send to app (also covers the bare index "/" route)
+      if (!inTabs) router.replace('/(tabs)');
     }
   }, [currentUser, userProfile, isLoading, profileLoading, segments]);
 
@@ -54,6 +54,7 @@ export default function RootLayout() {
       <AuthGuard />
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(onboarding)" />
         <Stack.Screen name="(tabs)" />
