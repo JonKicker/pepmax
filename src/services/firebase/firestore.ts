@@ -25,6 +25,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from './index';
 import type { ServiceResult } from '../../types/service';
+import { addBreadcrumb } from '../errorReporting';
 
 // ─── Typed collection constants ────────────────────────────────────────────
 // Use these everywhere — never pass raw strings to avoid typos.
@@ -83,6 +84,7 @@ export async function addDocument<T extends DocumentData>(
   data: WithFieldValue<T>
 ): Promise<ServiceResult<string>> {
   try {
+    addBreadcrumb('firestore', 'addDocument', { collection: collectionName });
     const ref = await addDoc(userCollection(collectionName), {
       ...data,
       createdAt: serverTimestamp(),
@@ -103,6 +105,7 @@ export async function setDocument<T extends DocumentData>(
   data: WithFieldValue<T>
 ): Promise<ServiceResult<void>> {
   try {
+    addBreadcrumb('firestore', 'setDocument', { collection: collectionName, docId });
     await setDoc(userDoc(collectionName, docId), {
       ...data,
       updatedAt: serverTimestamp(),
@@ -123,6 +126,7 @@ export async function mergeDocument<T extends DocumentData>(
   data: WithFieldValue<T>
 ): Promise<ServiceResult<void>> {
   try {
+    addBreadcrumb('firestore', 'mergeDocument', { collection: collectionName, docId });
     await setDoc(userDoc(collectionName, docId) as unknown as DocumentReference<T>, {
       ...data,
       updatedAt: serverTimestamp(),
@@ -142,6 +146,7 @@ export async function updateDocument<T extends DocumentData>(
   data: UpdateData<T>
 ): Promise<ServiceResult<void>> {
   try {
+    addBreadcrumb('firestore', 'updateDocument', { collection: collectionName, docId });
     await updateDoc(userDoc(collectionName, docId) as unknown as DocumentReference<T>, {
       ...data,
       updatedAt: serverTimestamp(),
@@ -160,6 +165,7 @@ export async function deleteDocument(
   docId: string
 ): Promise<ServiceResult<void>> {
   try {
+    addBreadcrumb('firestore', 'deleteDocument', { collection: collectionName, docId });
     await deleteDoc(userDoc(collectionName, docId));
     return { data: undefined, error: null };
   } catch (e) {
@@ -175,6 +181,7 @@ export async function getDocument<T>(
   docId: string
 ): Promise<ServiceResult<T | null>> {
   try {
+    addBreadcrumb('firestore', 'getDocument', { collection: collectionName, docId });
     const snap = await getDoc(userDoc(collectionName, docId));
     return { data: snap.exists() ? (snap.data() as T) : null, error: null };
   } catch (e) {
@@ -196,6 +203,7 @@ export async function queryDocuments<T>(
   constraints: QueryConstraint[] = []
 ): Promise<ServiceResult<T[]>> {
   try {
+    addBreadcrumb('firestore', 'queryDocuments', { collection: collectionName });
     const q = query(userCollection(collectionName), ...constraints);
     const snap = await getDocs(q);
     const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T);
