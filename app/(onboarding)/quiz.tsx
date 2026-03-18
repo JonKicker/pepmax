@@ -103,7 +103,6 @@ export default function QuizScreen() {
       return;
     }
     setSaving(true);
-    console.log('[quiz] saveProfile: starting for uid', currentUser.uid);
 
     // Convert body stats to metric
     let heightCm: number;
@@ -121,8 +120,6 @@ export default function QuizScreen() {
     const sex = data.sex!;
     const tdee = calculateTDEE(weightKg, heightCm, age, sex);
     const macros = calculateMacros(tdee);
-
-    console.log('[quiz] writing profile to Firestore:', { heightCm, weightKg, age, sex, tdee });
 
     const result = await mergeDocument(COLLECTIONS.PROFILE, 'data', {
       goals: data.goals,

@@ -3,7 +3,7 @@
  * No helper logic lives here. See auth.ts and firestore.ts.
  */
 import { initializeApp, getApps } from 'firebase/app';
-import { initializeAuth, type Persistence } from 'firebase/auth';
+import { initializeAuth, getAuth, type Persistence } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 // getReactNativePersistence is present in the React Native Metro bundle but absent
 // from firebase's default TS types (no "react-native" condition in package exports).
@@ -31,9 +31,15 @@ const firebaseConfig = {
 // Guard against duplicate initialization during hot reload
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
-export const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage),
-});
+// initializeAuth throws auth/already-initialized on hot reload when the module
+// re-executes but the Firebase app instance already exists. Fall back to getAuth().
+export const auth = (() => {
+  try {
+    return initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) });
+  } catch {
+    return getAuth(app);
+  }
+})();
 
 // Offline-capable Firestore with persistent local cache (JS SDK best-effort caching)
 export const db = initializeFirestore(app, {

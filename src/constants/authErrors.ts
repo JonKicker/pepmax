@@ -23,5 +23,5 @@ export function getAuthErrorMessage(error: unknown): string {
   // Debug fallback — shows raw code + message so unmapped errors are visible
   const rawMessage = err?.message ?? 'Unknown error';
   console.error('[getAuthErrorMessage] Unmapped Firebase error:', code, rawMessage);
-  return code ? `[${code}] ${rawMessage}` : rawMessage;
+  return 'Something went wrong. Please try again.';
 }

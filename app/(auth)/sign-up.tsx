@@ -62,7 +62,6 @@ export default function SignUpScreen() {
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [rawError, setRawError] = useState<string | null>(null);
 
   function clearFieldError(field: keyof FormErrors) {
     setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
@@ -80,27 +79,30 @@ export default function SignUpScreen() {
     setLoading(true);
     setFieldErrors({});
     setSubmitError(null);
-    setRawError(null);
 
     const result = await signUp(email.trim(), password);
 
     if (result.error) {
       setLoading(false);
-      const err = result.error as { code?: string; message?: string };
       setSubmitError(getAuthErrorMessage(result.error));
-      setRawError(`code: ${err?.code ?? 'none'} | ${err?.message ?? String(result.error)}`);
       return;
     }
 
     // Account created — persist name + email to profile doc before quiz writes it
-    await mergeDocument(COLLECTIONS.PROFILE, 'data', {
+    const profileResult = await mergeDocument(COLLECTIONS.PROFILE, 'data', {
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       email: email.trim().toLowerCase(),
     });
 
+    if (profileResult.error) {
+      setLoading(false);
+      setSubmitError('Account created but profile could not be saved. Please try again.');
+      return;
+    }
+
     setLoading(false);
-    // AuthGuard in _layout.tsx detects no quizCompletedAt → redirects to /(onboarding)/quiz
+    // AuthGuard detects no onboardingComplete → redirects to /(onboarding)/quiz
   }
 
   const googleEnabled = !!process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
@@ -226,11 +228,6 @@ export default function SignUpScreen() {
           {submitError && (
             <View style={[styles.errorBox, { backgroundColor: Colors.error + '18', borderColor: Colors.error + '40' }]}>
               <Text style={[styles.errorText, { color: Colors.error }]}>{submitError}</Text>
-              {rawError && (
-                <Text style={[styles.errorText, { color: Colors.error, opacity: 0.7, marginTop: 4, fontSize: 11 }]}>
-                  DEBUG: {rawError}
-                </Text>
-              )}
             </View>
           )}
 
