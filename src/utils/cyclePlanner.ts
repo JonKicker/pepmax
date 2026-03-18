@@ -192,6 +192,12 @@ export function generateCyclePlan(input: CyclePlannerInput): CyclePlannerResult 
     taperConfig,
   } = input;
 
+  if (taperEnabled && taperConfig && durationWeeks !== null) {
+    if (taperConfig.taperWeeks >= durationWeeks) {
+      throw new Error('Taper duration cannot equal or exceed cycle duration');
+    }
+  }
+
   const start = parseLocalDate(startDate);
   const totalWeeks = durationWeeks ?? 52; // cap open-ended at 52 weeks
   const end = addDays(start, totalWeeks * 7 - 1);

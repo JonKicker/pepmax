@@ -46,7 +46,6 @@ type InsightPayload = {
   weeklyCardioSessions: number;
   weeklyCardioDistanceKm: number;
   peptideNames: string[]; // sanitized, max 8 entries, max 64 chars each
-  weeklyDoseCount: number;
   weightTrendKg: number | null;
 };
 
@@ -94,16 +93,11 @@ async function gatherPayload(): Promise<InsightPayload> {
     weightTrendKg = Math.round((last - first) * 100) / 100;
   }
 
-  // Total doses from peptide dose history in the last 7 days is not trivially
-  // available without a separate query — use peptide count as a proxy signal.
-  const weeklyDoseCount = peptideNames.length;
-
   return {
     weeklyWorkouts,
     weeklyCardioSessions,
     weeklyCardioDistanceKm,
     peptideNames,
-    weeklyDoseCount,
     weightTrendKg,
   };
 }
