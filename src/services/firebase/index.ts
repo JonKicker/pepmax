@@ -3,8 +3,15 @@
  * No helper logic lives here. See auth.ts and firestore.ts.
  */
 import { initializeApp, getApps } from 'firebase/app';
-import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import { initializeAuth, type Persistence } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+// getReactNativePersistence is present in the React Native Metro bundle but absent
+// from firebase's default TS types (no "react-native" condition in package exports).
+// require() bypasses the type lookup; Metro resolves it correctly at bundle time.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { getReactNativePersistence } = require('firebase/auth') as {
+  getReactNativePersistence: (storage: typeof AsyncStorage) => Persistence;
+};
 import {
   initializeFirestore,
   persistentLocalCache,

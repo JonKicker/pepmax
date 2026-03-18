@@ -18,6 +18,7 @@ import {
   query,
   QueryConstraint,
   DocumentData,
+  DocumentReference,
   WithFieldValue,
   UpdateData,
   serverTimestamp,
@@ -109,7 +110,7 @@ export async function mergeDocument<T extends DocumentData>(
   data: WithFieldValue<T>
 ): Promise<ServiceResult<void>> {
   try {
-    await setDoc(userDoc(collectionName, docId), {
+    await setDoc(userDoc(collectionName, docId) as unknown as DocumentReference<T>, {
       ...data,
       updatedAt: serverTimestamp(),
     } as WithFieldValue<T>, { merge: true });
@@ -128,7 +129,7 @@ export async function updateDocument<T extends DocumentData>(
   data: UpdateData<T>
 ): Promise<ServiceResult<void>> {
   try {
-    await updateDoc(userDoc(collectionName, docId), {
+    await updateDoc(userDoc(collectionName, docId) as unknown as DocumentReference<T>, {
       ...data,
       updatedAt: serverTimestamp(),
     } as UpdateData<T>);
