@@ -169,7 +169,6 @@ export function computeConsistency(params: {
       peptideLogged,
       isRestDay,
       restDayOverride: saved?.restDayOverride,
-      updatedAt: saved?.updatedAt ?? 0,
     });
   }
 
@@ -216,7 +215,7 @@ export async function getConsistencyDocs(
 }
 
 export async function persistConsistencyDay(day: DayConsistency): Promise<void> {
-  await setDocument(COLLECTIONS.CONSISTENCY, day.date, { ...day, updatedAt: Date.now() } as DayConsistency);
+  await setDocument(COLLECTIONS.CONSISTENCY, day.date, day as DayConsistency);
 }
 
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -232,7 +231,6 @@ export async function markRestDayOverride(dateKey: string): Promise<void> {
     status: 'rest' as DayStatus,
     isRestDay: false,
     restDayOverride: true,
-    updatedAt: Date.now(),
   } as unknown as DayConsistency);
 }
 
@@ -245,6 +243,5 @@ export async function toggleRestDay(dateKey: string, isRestDay: boolean): Promis
   await mergeDocument(COLLECTIONS.CONSISTENCY, dateKey, {
     date: dateKey,
     restDayOverride: isRestDay,
-    updatedAt: Date.now(),
   } as unknown as DayConsistency);
 }

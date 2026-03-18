@@ -15,6 +15,7 @@ import { User } from 'firebase/auth';
 import { doc, getDoc, FirestoreError } from 'firebase/firestore';
 import { onAuthStateChanged } from '../services/firebase/auth';
 import { db } from '../services/firebase/index';
+import { invalidateCache } from '../services/dashboardService';
 import type { UserProfile } from '../types/profile';
 
 type AuthState = {
@@ -122,6 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const updateProfile = (partial: Partial<UserProfile>) => {
     if (currentUidRef.current === null) return;
     setUserProfile((prev) => (prev ? { ...prev, ...partial } as UserProfile : null));
+    invalidateCache();
   };
 
   return (

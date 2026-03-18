@@ -12,7 +12,6 @@ export type DayConsistency = {
   peptideLogged: boolean;
   isRestDay: boolean;       // true = configured rest day (from trainingDays)
   restDayOverride?: boolean; // true = manually marked rest via calendar
-  updatedAt: number;        // epoch ms
 };
 
 export type ConsistencyData = {

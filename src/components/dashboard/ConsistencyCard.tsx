@@ -204,14 +204,20 @@ export function ConsistencyCard({ consistency, colors, onToggleRestDay }: Props)
                 Peptides {tooltip.day.peptideLogged ? '✓' : '✗'}
               </Text>
             </View>
-            <TouchableOpacity
-              style={[styles.restBtn, { borderColor: colors.border }]}
-              onPress={handleToggleRest}
-            >
-              <Text style={[styles.restBtnText, { color: colors.textSecondary }]}>
-                {tooltip.day.isRestDay ? 'Unmark rest day' : 'Mark as rest day'}
+            {tooltip.day.isRestDay && !tooltip.day.restDayOverride ? (
+              <Text style={[styles.restLabel, { color: colors.textSecondary }]}>
+                Configured rest day
               </Text>
-            </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.restBtn, { borderColor: colors.border }]}
+                onPress={handleToggleRest}
+              >
+                <Text style={[styles.restBtnText, { color: colors.textSecondary }]}>
+                  {tooltip.day.restDayOverride ? 'Unmark rest day' : 'Mark as rest day'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>
@@ -304,6 +310,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   restBtnText: { fontSize: 12 },
+  restLabel: { fontSize: 12, marginTop: 8, fontStyle: 'italic' },
   // Encouragement
   encouragement: { fontSize: 12, marginTop: 10, fontStyle: 'italic' },
 });
