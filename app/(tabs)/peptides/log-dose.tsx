@@ -26,6 +26,10 @@ import {
   UNITS,
 } from '../../../src/types/peptide';
 import type { Peptide, Unit, InjectionSite } from '../../../src/types/peptide';
+import {
+  scheduleDoseReminder,
+  FREQUENCY_TO_HOURS,
+} from '../../../src/services/notificationService';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -164,6 +168,14 @@ export default function LogDoseScreen() {
     if (result.error) {
       Alert.alert('Error', result.error.message);
       return;
+    }
+
+    // Schedule next-dose reminder — fire-and-forget, never blocks the save flow
+    const intervalHours = FREQUENCY_TO_HOURS[selectedPeptide.frequency];
+    if (intervalHours !== undefined) {
+      scheduleDoseReminder(selectedPeptide.id, selectedPeptide.name, intervalHours).catch(
+        () => {},
+      );
     }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);

@@ -39,6 +39,10 @@ import * as StoreReview from 'expo-store-review';
 import * as MailComposer from 'expo-mail-composer';
 import * as WebBrowser from 'expo-web-browser';
 import { updateDocument, COLLECTIONS } from '../../../src/services/firebase/firestore';
+import {
+  requestPermissions,
+  cancelAllDoseReminders,
+} from '../../../src/services/notificationService';
 import { calculateTDEE, calculateMacros, ACTIVITY_LEVELS, feetInchesToCm, cmToFeetInches, kgToLbs, lbsToKg } from '../../../src/utils/tdee';
 import type { Units, Sex } from '../../../src/types/profile';
 import { SettingsSection } from '../../../src/components/settings/SettingsSection';
@@ -198,7 +202,17 @@ export default function SettingsScreen() {
   async function handleNotifToggle(key: 'doseReminders' | 'workoutReminders', value: boolean) {
     const newPrefs = { ...notifPrefs, [key]: value };
     const result = await updateDocument(COLLECTIONS.PROFILE, 'data', { notificationPrefs: newPrefs });
-    if (!result.error) updateProfile({ notificationPrefs: newPrefs });
+    if (!result.error) {
+      updateProfile({ notificationPrefs: newPrefs });
+      // Wire system notification permissions / cancellation additively (does not affect Firestore save)
+      if (key === 'doseReminders') {
+        if (value) {
+          requestPermissions().catch(() => {}); // prompt if not yet granted
+        } else {
+          cancelAllDoseReminders().catch(() => {}); // cancel all scheduled dose reminders
+        }
+      }
+    }
   }
 
   // ── Activity level picker ────────────────────────────────────────────────

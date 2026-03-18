@@ -9,8 +9,10 @@ import {
   getCacheAge,
   saveDashboardPreferences,
 } from '../services/dashboardService';
+import { markRestDayOverride } from '../services/consistencyService';
 import type { DashboardCardId, DashboardData } from '../types/dashboard';
 import { DEFAULT_CARD_ORDER as DEFAULT_ORDER } from '../types/dashboard';
+import type { UserProfile } from '../types/profile';
 
 type DashboardState = {
   data: DashboardData | null;
@@ -22,7 +24,7 @@ type DashboardState = {
   onboardingDismissed: boolean;
 };
 
-export function useDashboard() {
+export function useDashboard(userProfile?: UserProfile | null) {
   const [state, setState] = useState<DashboardState>({
     data: null,
     loading: true,
@@ -35,7 +37,7 @@ export function useDashboard() {
 
   const load = useCallback(async (forceRefresh = false) => {
     try {
-      const data = await fetchDashboardData({ forceRefresh });
+      const data = await fetchDashboardData({ forceRefresh, userProfile });
 
       const prefs = data.preferences;
       setState((prev) => ({
@@ -52,18 +54,26 @@ export function useDashboard() {
         },
         cardOrder: (() => {
           const order = prefs?.cardOrder ?? DEFAULT_ORDER;
-          // Migration: ensure existing users see smartInsights before aiInsight
-          if (!order.includes('smartInsights')) {
-            const aiIdx = order.indexOf('aiInsight');
-            const spliced = [...order];
+          let result = [...order];
+          // Migration: ensure smartInsights is before aiInsight
+          if (!result.includes('smartInsights')) {
+            const aiIdx = result.indexOf('aiInsight');
             if (aiIdx >= 0) {
-              spliced.splice(aiIdx, 0, 'smartInsights');
+              result.splice(aiIdx, 0, 'smartInsights');
             } else {
-              spliced.push('smartInsights');
+              result.push('smartInsights');
             }
-            return spliced;
           }
-          return order;
+          // Migration: ensure consistency is after greeting
+          if (!result.includes('consistency')) {
+            const greetingIdx = result.indexOf('greeting');
+            if (greetingIdx >= 0) {
+              result.splice(greetingIdx + 1, 0, 'consistency');
+            } else {
+              result.unshift('consistency');
+            }
+          }
+          return result;
         })(),
         hiddenCards: prefs?.hiddenCards ?? [],
         onboardingDismissed: prefs?.onboardingDismissed ?? false,
@@ -72,7 +82,7 @@ export function useDashboard() {
       console.error('[useDashboard] load error:', e);
       setState((prev) => ({ ...prev, loading: false, refreshing: false }));
     }
-  }, []);
+  }, [userProfile]);
 
   useFocusEffect(
     useCallback(() => {
@@ -117,10 +127,31 @@ export function useDashboard() {
     saveDashboardPreferences({ onboardingDismissed: true }).catch(console.error);
   }, []);
 
+  const reorderCards = useCallback((cardId: DashboardCardId, direction: 'up' | 'down') => {
+    setState((prev) => {
+      const order = [...prev.cardOrder];
+      const idx = order.indexOf(cardId);
+      if (idx === -1) return prev;
+      const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (targetIdx < 0 || targetIdx >= order.length) return prev;
+      [order[idx], order[targetIdx]] = [order[targetIdx], order[idx]];
+      saveDashboardPreferences({ cardOrder: order }).catch(console.error);
+      return { ...prev, cardOrder: order };
+    });
+  }, []);
+
+  const toggleRestDay = useCallback(async (dateKey: string) => {
+    await markRestDayOverride(dateKey);
+    invalidateCache();
+    await load(true);
+  }, [load]);
+
   return {
     ...state,
     refresh,
     toggleCardVisibility,
     dismissOnboarding,
+    reorderCards,
+    toggleRestDay,
   };
 }
