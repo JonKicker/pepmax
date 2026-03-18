@@ -255,6 +255,7 @@ export default function LogSideEffectModal({ visible, onClose, onSaved }: Props)
               multiline
               numberOfLines={3}
               textAlignVertical="top"
+              maxLength={500}
             />
 
             {/* Save */}

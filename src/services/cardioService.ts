@@ -74,15 +74,13 @@ export async function getFilteredSessions(
   filters: HistoryFilter,
   pageSize = 20
 ): Promise<ServiceResult<CardioSession[]>> {
+  // Single-field range on createdAt only — adding activityType equality alongside
+  // a range filter requires a composite index. activityType filtered client-side instead.
   const constraints = [
     where('status', '==', 'completed'),
     orderBy('createdAt', 'desc'),
     limit(pageSize),
   ];
-
-  if (filters.activityType) {
-    constraints.unshift(where('activityType', '==', filters.activityType));
-  }
 
   if (filters.dateRange && filters.dateRange !== 'all') {
     const start = dateRangeStart(filters.dateRange);
@@ -94,8 +92,11 @@ export async function getFilteredSessions(
   const result = await queryDocuments<CardioSession>(COLLECTIONS.CARDIO_SESSIONS, constraints);
   if (result.error) return result;
 
-  // Client-side distance filtering (Firestore can't do range + inequality on different fields)
+  // All non-createdAt filters applied client-side to avoid composite index requirements
   let sessions = result.data ?? [];
+  if (filters.activityType) {
+    sessions = sessions.filter((s) => s.activityType === filters.activityType);
+  }
   if (filters.minDistanceM != null) {
     sessions = sessions.filter((s) => s.distance >= filters.minDistanceM!);
   }

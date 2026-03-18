@@ -52,7 +52,11 @@ function rangeMs(range: TimelineRange): number {
 }
 
 function colorForPeptide(peptideId: string): string {
-  return COMPOUND_COLORS[peptideId.charCodeAt(0) % COMPOUND_COLORS.length];
+  let h = 0;
+  for (let i = 0; i < peptideId.length; i++) {
+    h = (h * 31 + peptideId.charCodeAt(i)) >>> 0;
+  }
+  return COMPOUND_COLORS[h % COMPOUND_COLORS.length];
 }
 
 export function useHalfLifeTimeline(range: TimelineRange, refreshKey = 0): {
@@ -80,16 +84,19 @@ export function useHalfLifeTimeline(range: TimelineRange, refreshKey = 0): {
         const startMs = endMs - rangeMs(range);
         const startDate = new Date(startMs);
         const endDate = new Date(endMs);
+        // Bound dose fetch: max real peptide half-life ~7 days → 10× lookback = 70 days.
+        // 90-day window from startMs safely covers all compounds.
+        const doseLookbackDate = new Date(startMs - 90 * 86400000);
 
         const [pepResult, doseResult, seResult] = await Promise.all([
           getPeptides(),
-          getDoses(),
+          getDoses({ startDate: doseLookbackDate }),
           getSideEffects(startDate, endDate),
         ]);
 
         if (cancelled) return;
 
-        if (pepResult.error || doseResult.error) {
+        if (pepResult.error || doseResult.error || seResult.error) {
           setError('Failed to load data. Pull to refresh.');
           setLoading(false);
           return;

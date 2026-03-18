@@ -6,7 +6,7 @@
 
 ## Milestone 11 — Cardio Sharing, Peptide Side Effects, USDA Nutrition, Training Enhancements
 
-**Status:** Committing
+**Status:** ✅ Committed (8f1e670)
 **Date:** 2026-03-18
 
 ### Features included
@@ -66,4 +66,4 @@
 | 4–8 | Core modules (Peptides, Nutrition, Training, Cardio, Profile) | ✅ Committed |
 | 9 | Peptides v2, HR monitoring, Theme, Equipment profiles | ✅ Committed |
 | 10 | Smart Insights, USDA food data, Data export, Session preview | ✅ Committed |
-| 11 | Cardio sharing, Peptide side effects + half-life, USDA integration, Training enhancements | 🔄 Committing |
+| 11 | Cardio sharing, Peptide side effects + half-life, USDA integration, Analytics, Weekly summary | ✅ Committed |

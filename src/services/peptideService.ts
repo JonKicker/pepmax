@@ -130,10 +130,16 @@ export async function deleteDose(id: string): Promise<ServiceResult<void>> {
  */
 export async function getDoses(filters?: {
   peptideId?: string;
+  startDate?: Date;
 }): Promise<ServiceResult<Dose[]>> {
-  const result = await queryDocuments<Dose>(COLLECTIONS.DOSES, [
-    orderBy('timestamp', 'desc'),
-  ]);
+  const constraints = filters?.startDate
+    ? [
+        where('timestamp', '>=', Timestamp.fromDate(filters.startDate)),
+        orderBy('timestamp', 'desc'),
+      ]
+    : [orderBy('timestamp', 'desc')];
+
+  const result = await queryDocuments<Dose>(COLLECTIONS.DOSES, constraints);
 
   if (result.error || !filters?.peptideId) return result;
 
