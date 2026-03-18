@@ -79,6 +79,32 @@
 
 ---
 
+---
+
+## Milestone 12 — Flexible Consistency System
+
+**Status:** ✅ Implemented (pending commit)
+**Date:** 2026-03-18
+
+### Features included
+
+- `src/types/consistency.ts` — `DayStatus`, `DayConsistency`, `ConsistencyData` types
+- `src/types/profile.ts` — `trainingDays?: number[]` added (0=Sun..6=Sat)
+- `src/services/firebase/firestore.ts` — `CONSISTENCY: 'consistency'` collection
+- `src/services/consistencyService.ts` — pure `computeConsistency()` + Firestore helpers (`getConsistencyDocs`, `persistConsistencyDay`, `markRestDayOverride`, `toggleRestDay`)
+- `src/services/dashboardService.ts` — parallel-fetches 30-day nutrition logs + all doses + saved consistency docs; accepts `userProfile`
+- `src/hooks/useDashboard.ts` — accepts `UserProfile`, card migration adds `consistency` after `greeting`, `toggleRestDay` action
+- `src/components/dashboard/ConsistencyCard.tsx` — hero stat, monthly %, weekly ring chart, 30-day dot calendar, tap-to-tooltip + rest day toggle
+- `src/components/dashboard/GreetingSection.tsx` — streak badge removed
+- `app/(tabs)/dashboard/index.tsx` — ConsistencyCard wired, `useDashboard(userProfile)`
+
+#### Classification: full / partial / rest / missed
+- Based on user goals (training, nutrition, peptides)
+- Bare-minimum workout + partial nutrition = yellow (partial)
+- trainingDays config or manual override = gray (rest, neutral)
+
+---
+
 ## Previous Milestones
 
 | Milestone | Description | Status |
@@ -90,3 +116,4 @@
 | 9 | Peptides v2, HR monitoring, Theme, Equipment profiles | ✅ Committed |
 | 10 | Smart Insights, USDA food data, Data export, Session preview | ✅ Committed |
 | 11 | Cardio sharing, Peptide side effects + half-life, USDA integration, Analytics, Weekly summary | ✅ Committed |
+| 12 | Flexible Consistency System (replaces streak counter) | ✅ Implemented |

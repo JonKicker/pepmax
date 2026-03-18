@@ -53,7 +53,6 @@ export const COLLECTIONS = {
   SIDE_EFFECTS: 'sideEffects',
   AI_INSIGHTS: 'aiInsights',
   CONSISTENCY: 'consistency',
-  DAILY_CONSISTENCY: 'dailyConsistency',
   CYCLES: 'cycles',
 } as const;
 

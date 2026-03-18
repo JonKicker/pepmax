@@ -9,7 +9,7 @@ import {
   getCacheAge,
   saveDashboardPreferences,
 } from '../services/dashboardService';
-import { markRestDayOverride } from '../services/consistencyService';
+import { toggleRestDay as toggleRestDayService } from '../services/consistencyService';
 import type { DashboardCardId, DashboardData } from '../types/dashboard';
 import { DEFAULT_CARD_ORDER as DEFAULT_ORDER } from '../types/dashboard';
 import type { UserProfile } from '../types/profile';
@@ -141,7 +141,8 @@ export function useDashboard(userProfile?: UserProfile | null) {
   }, []);
 
   const toggleRestDay = useCallback(async (dateKey: string) => {
-    await markRestDayOverride(dateKey);
+    // Always marks as rest (true). Unmarking requires separate UI — not implemented yet.
+    await toggleRestDayService(dateKey, true);
     invalidateCache();
     await load(true);
   }, [load]);
