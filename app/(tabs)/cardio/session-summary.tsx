@@ -22,6 +22,7 @@ import RouteMap from '../../../src/components/cardio/RouteMap';
 import PRCelebration from '../../../src/components/cardio/PRCelebration';
 import ManualHREntry from '../../../src/components/cardio/ManualHREntry';
 import TimeInZones from '../../../src/components/cardio/TimeInZones';
+import ShareModal from '../../../src/components/cardio/ShareModal';
 import type { CardioSession, CardioPR } from '../../../src/types/cardio';
 
 // ─── Stat row ─────────────────────────────────────────────────────────────────
@@ -57,6 +58,7 @@ export default function SessionSummaryScreen() {
   const [prs, setPrs] = useState<CardioPR[]>([]);
   const [currentPRIdx, setCurrentPRIdx] = useState(0);
   const [hrDismissed, setHrDismissed] = useState(false);
+  const [shareModalVisible, setShareModalVisible] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -223,12 +225,26 @@ export default function SessionSummaryScreen() {
           <Text style={[styles.detailBtnText, { color: Colors.cardio }]}>View Details</Text>
         </TouchableOpacity>
         <TouchableOpacity
+          style={[styles.shareBtn, { borderColor: colors.border }]}
+          onPress={() => setShareModalVisible(true)}
+        >
+          <Ionicons name="share-outline" size={16} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[styles.doneBtn, { backgroundColor: Colors.cardio }]}
           onPress={() => router.replace('/(tabs)/cardio')}
         >
           <Text style={styles.doneBtnText}>Done</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Share modal */}
+      <ShareModal
+        visible={shareModalVisible}
+        session={session}
+        unit={unit}
+        onClose={() => setShareModalVisible(false)}
+      />
     </ScrollView>
   );
 }
@@ -276,7 +292,7 @@ const styles = StyleSheet.create({
 
   routeMap: { width: '100%', height: 160, borderRadius: 14 },
 
-  buttonRow: { flexDirection: 'row', gap: 12 },
+  buttonRow: { flexDirection: 'row', gap: 10 },
   detailBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -288,6 +304,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   detailBtnText: { fontWeight: '700', fontSize: 15 },
+  shareBtn: {
+    width: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
   doneBtn: {
     flex: 1,
     paddingVertical: 14,

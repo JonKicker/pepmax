@@ -5,7 +5,7 @@ import type { RefObject } from 'react';
 import type { View } from 'react-native';
 
 /** Capture a View ref to a temp PNG file. Returns the file URI. */
-export async function captureShareCard(ref: RefObject<View>): Promise<string> {
+export async function captureShareCard(ref: RefObject<View | null>): Promise<string> {
   const uri = await captureRef(ref, {
     format: 'png',
     quality: 1,

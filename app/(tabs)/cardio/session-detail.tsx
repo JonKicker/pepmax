@@ -24,6 +24,7 @@ import {
 import RouteMap from '../../../src/components/cardio/RouteMap';
 import HeartRateChart from '../../../src/components/cardio/HeartRateChart';
 import TimeInZones from '../../../src/components/cardio/TimeInZones';
+import ShareModal from '../../../src/components/cardio/ShareModal';
 import { useHeartRateZones } from '../../../src/hooks/useHeartRateZones';
 import { getTrainingEffect } from '../../../src/utils/cardio';
 import type { CardioSession, Split } from '../../../src/types/cardio';
@@ -92,6 +93,7 @@ export default function SessionDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [shareModalVisible, setShareModalVisible] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -316,12 +318,20 @@ export default function SessionDetailScreen() {
 
         <TouchableOpacity
           style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}
-          onPress={() => {/* Wired in Milestone 4 */}}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShareModalVisible(true); }}
         >
           <Ionicons name="share-outline" size={16} color={colors.textPrimary} />
           <Text style={[styles.actionBtnText, { color: colors.textPrimary }]}>Share</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Share modal */}
+      <ShareModal
+        visible={shareModalVisible}
+        session={session}
+        unit={unit}
+        onClose={() => setShareModalVisible(false)}
+      />
 
       <TouchableOpacity
         style={[styles.deleteBtn, { borderColor: Colors.error }]}
