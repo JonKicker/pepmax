@@ -333,7 +333,13 @@ export default function ProgressScreen() {
       const date = tsToDate(s.startedAt);
       const key = toLocalDateKey(date);
       workoutDates.add(key);
-      marks[key] = { selected: true, selectedColor: Colors.gym };
+      // Full workout takes visual precedence over adapted; only set orange if not already purple
+      if (!marks[key] || marks[key].selectedColor === Colors.warning) {
+        marks[key] = {
+          selected: true,
+          selectedColor: s.isBareMinimum ? Colors.warning : Colors.gym,
+        };
+      }
     }
 
     // Calculate streaks

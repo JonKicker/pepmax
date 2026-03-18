@@ -136,6 +136,54 @@ export function sanitizeOFFProduct(raw: any): SanitizedOFFProduct {
   };
 }
 
+// ─── Micronutrient utilities ──────────────────────────────────────────────────
+
+import type { Micronutrients } from '../types/nutrition';
+import { RDA_VALUES } from '../constants/nutrition';
+
+/**
+ * Proportionally scale micronutrients when serving size changes.
+ * Preserves null for nutrients that were not reported.
+ */
+export function recalculateMicronutrients(
+  base: Micronutrients,
+  baseG: number,
+  targetG: number,
+): Micronutrients {
+  if (baseG <= 0 || targetG < 0) {
+    return Object.fromEntries(
+      Object.keys(base).map((k) => [k, null]),
+    ) as Micronutrients;
+  }
+  const ratio = targetG / baseG;
+  return Object.fromEntries(
+    Object.entries(base).map(([k, v]) => [
+      k,
+      v === null ? null : Math.round(v * ratio * 100) / 100,
+    ]),
+  ) as Micronutrients;
+}
+
+/**
+ * Returns the percentage of RDA for the given nutrient key.
+ * Returns null if the RDA is unknown for this nutrient.
+ */
+export function getRDAPercent(nutrientKey: string, amountPerServing: number): number | null {
+  const rda = RDA_VALUES[nutrientKey];
+  if (rda == null || rda <= 0) return null;
+  return (amountPerServing / rda) * 100;
+}
+
+/**
+ * Traffic light color tier based on % RDA.
+ * >=20% → green, >=5% → yellow, <5% → dim
+ */
+export function getTrafficLight(rdaPercent: number): 'green' | 'yellow' | 'dim' {
+  if (rdaPercent >= 20) return 'green';
+  if (rdaPercent >= 5) return 'yellow';
+  return 'dim';
+}
+
 // ─── Macro recalculator ───────────────────────────────────────────────────────
 
 export type MacroSet = {

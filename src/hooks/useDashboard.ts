@@ -50,7 +50,21 @@ export function useDashboard() {
           cardio: data.recentCardio === null,
           bodyWeight: data.recentWeights === null,
         },
-        cardOrder: prefs?.cardOrder ?? DEFAULT_ORDER,
+        cardOrder: (() => {
+          const order = prefs?.cardOrder ?? DEFAULT_ORDER;
+          // Migration: ensure existing users see smartInsights before aiInsight
+          if (!order.includes('smartInsights')) {
+            const aiIdx = order.indexOf('aiInsight');
+            const spliced = [...order];
+            if (aiIdx >= 0) {
+              spliced.splice(aiIdx, 0, 'smartInsights');
+            } else {
+              spliced.push('smartInsights');
+            }
+            return spliced;
+          }
+          return order;
+        })(),
         hiddenCards: prefs?.hiddenCards ?? [],
         onboardingDismissed: prefs?.onboardingDismissed ?? false,
       }));

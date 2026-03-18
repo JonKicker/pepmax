@@ -20,6 +20,7 @@ export default function TrainingLayout() {
         <Stack.Screen name="exercise-form" options={{ title: 'Custom Exercise' }} />
         <Stack.Screen name="templates" options={{ title: 'Templates' }} />
         <Stack.Screen name="template-builder" options={{ title: 'Template Builder' }} />
+        <Stack.Screen name="session-preview" options={{ title: 'Session Preview' }} />
         <Stack.Screen name="active-session" options={{ headerShown: false }} />
         <Stack.Screen name="session-summary" options={{ title: 'Workout Summary' }} />
         <Stack.Screen name="history" options={{ title: 'Training History' }} />

@@ -14,6 +14,7 @@ export type DashboardCardId =
   | 'training'
   | 'cardio'
   | 'bodyWeight'
+  | 'smartInsights'
   | 'aiInsight';
 
 export type DashboardPreferences = {
@@ -45,5 +46,6 @@ export const DEFAULT_CARD_ORDER: DashboardCardId[] = [
   'training',
   'cardio',
   'bodyWeight',
+  'smartInsights',
   'aiInsight',
 ];

@@ -21,6 +21,7 @@ import { getTemplateById } from '../services/templateService';
 import { findExerciseById } from '../services/exerciseService';
 import { exerciseLibrary } from '../data/exerciseLibrary';
 import { setLastWeight } from '../utils/weightMemory';
+import { consumePendingBareMinimum } from '../utils/sessionPreviewStore';
 import type { Exercise } from '../types/exercise';
 import type {
   WorkoutSession,
@@ -48,6 +49,7 @@ export type WorkoutSessionHook = {
   removeSet: (exerciseIndex: number, setIndex: number) => void;
   addExercise: (exercise: Exercise) => void;
   removeExercise: (exerciseIndex: number) => void;
+  swapExercise: (exerciseIndex: number, newExercise: Exercise) => void;
   updateExerciseNotes: (exerciseIndex: number, notes: string) => void;
   finishWorkout: (notes: string, rating: number | null) => Promise<void>;
   abandonWorkout: () => Promise<void>;
@@ -143,6 +145,7 @@ export function useWorkoutSession(): WorkoutSessionHook {
 
       let exercises: SessionExercise[] = [];
       let templateName = 'Quick Workout';
+      let bareMinimumData: { timeCap: number; originalTotalSets: number } | null = null;
 
       if (templateId) {
         const tplResult = await getTemplateById(templateId);
@@ -153,7 +156,12 @@ export function useWorkoutSession(): WorkoutSessionHook {
         }
         const tpl = tplResult.data;
         templateName = tpl.name;
-        exercises = tpl.exercises.map((te) => {
+
+        // Check for pending bare minimum override
+        const pending = consumePendingBareMinimum();
+        const sourceExercises = pending ? pending.exercises : tpl.exercises;
+
+        exercises = sourceExercises.map((te) => {
           const libExercise = findExerciseById(exerciseLibrary, te.exerciseId);
           return {
             exerciseId: te.exerciseId,
@@ -174,6 +182,10 @@ export function useWorkoutSession(): WorkoutSessionHook {
             notes: '',
           };
         });
+
+        if (pending) {
+          bareMinimumData = { timeCap: pending.timeCap, originalTotalSets: pending.originalTotalSets };
+        }
       }
 
       const input = {
@@ -188,6 +200,11 @@ export function useWorkoutSession(): WorkoutSessionHook {
         duration: 0,
         notes: '',
         rating: null,
+        isBareMinimum: bareMinimumData != null,
+        ...(bareMinimumData && {
+          bareMinimumTimeCap: bareMinimumData.timeCap,
+          originalTotalSets: bareMinimumData.originalTotalSets,
+        }),
       };
 
       const result = await createSession(input);
@@ -445,6 +462,43 @@ export function useWorkoutSession(): WorkoutSessionHook {
     [syncSession, saveExercises],
   );
 
+  const swapExercise = useCallback(
+    (exerciseIndex: number, newExercise: Exercise) => {
+      const s = sessionRef.current;
+      if (!s) return;
+
+      const original = s.exercises[exerciseIndex];
+      if (!original) return;
+
+      // Session-only replacement — template is not modified
+      const replacement: SessionExercise = {
+        exerciseId: newExercise.id,
+        exerciseName: newExercise.name,
+        primaryMuscle: newExercise.primaryMuscles[0] ?? 'Chest',
+        order: original.order,
+        supersetGroup: original.supersetGroup,
+        notes: '',
+        sets: original.sets.map((set, i) => ({
+          setNumber: i + 1,
+          weight: 0,
+          weightUnit: set.weightUnit,
+          reps: 0,
+          rpe: null,
+          completed: false,
+          completedAt: null,
+          isPersonalRecord: false,
+        })),
+      };
+
+      const updatedExercises = [...s.exercises];
+      updatedExercises[exerciseIndex] = replacement;
+      syncSession({ ...s, exercises: updatedExercises });
+      saveExercises();
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    },
+    [syncSession, saveExercises],
+  );
+
   const updateExerciseNotes = useCallback(
     (exerciseIndex: number, notes: string) => {
       const s = sessionRef.current;
@@ -554,6 +608,7 @@ export function useWorkoutSession(): WorkoutSessionHook {
     removeSet,
     addExercise,
     removeExercise,
+    swapExercise,
     updateExerciseNotes,
     finishWorkout,
     abandonWorkout,

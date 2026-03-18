@@ -20,9 +20,11 @@ import { TrainingCard } from '../../../src/components/dashboard/TrainingCard';
 import { CardioCard } from '../../../src/components/dashboard/CardioCard';
 import { BodyWeightCard } from '../../../src/components/dashboard/BodyWeightCard';
 import { AIInsightCard } from '../../../src/components/dashboard/AIInsightCard';
+import { SmartInsightsCard } from '../../../src/components/dashboard/SmartInsightsCard';
 import { LogWeightModal } from '../../../src/components/dashboard/LogWeightModal';
 import { OnboardingChecklist } from '../../../src/components/dashboard/OnboardingChecklist';
 import PremiumGate from '../../../src/components/premium/PremiumGate';
+import { useSmartInsights } from '../../../src/hooks/useSmartInsights';
 import type { DashboardCardId } from '../../../src/types/dashboard';
 
 function getGreeting(): string {
@@ -37,6 +39,7 @@ export default function DashboardScreen() {
   const { userProfile, updateProfile } = useAuth();
   const router = useRouter();
   const dashboard = useDashboard();
+  const smartInsights = useSmartInsights(dashboard.data, userProfile);
   const [showWeightModal, setShowWeightModal] = useState(false);
 
   const name = userProfile?.firstName ?? '';
@@ -95,7 +98,7 @@ export default function DashboardScreen() {
             onPress={() => router.push('/(tabs)/training')}
             onStartWorkout={(templateId) => {
               if (templateId) {
-                router.push({ pathname: '/(tabs)/training/active-session', params: { templateId } });
+                router.push({ pathname: '/(tabs)/training/session-preview', params: { templateId } });
               } else {
                 router.push('/(tabs)/training');
               }
@@ -123,6 +126,17 @@ export default function DashboardScreen() {
             units={units}
             onLogPress={() => setShowWeightModal(true)}
             onPress={() => router.push('/(tabs)/dashboard/body-tracking')}
+          />
+        );
+      case 'smartInsights':
+        if (smartInsights.insights.length === 0 && !smartInsights.loading) return null;
+        return (
+          <SmartInsightsCard
+            key={cardId}
+            insights={smartInsights.insights}
+            loading={smartInsights.loading}
+            onDismiss={smartInsights.dismiss}
+            colors={colors}
           />
         );
       case 'aiInsight':

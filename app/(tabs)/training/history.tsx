@@ -110,12 +110,19 @@ function SessionCard({
       <View style={cardStyles.body}>
         <View style={cardStyles.topRow}>
           <Text style={[cardStyles.date, { color: colors.textSecondary }]}>{date}</Text>
-          {prCount > 0 && (
-            <View style={cardStyles.prBadge}>
-              <Ionicons name="trophy" size={12} color="#333" />
-              <Text style={cardStyles.prBadgeText}>x{prCount}</Text>
-            </View>
-          )}
+          <View style={cardStyles.badgeRow}>
+            {session.isBareMinimum && (
+              <View style={cardStyles.adaptedBadge}>
+                <Text style={cardStyles.adaptedBadgeText}>Adapted</Text>
+              </View>
+            )}
+            {prCount > 0 && (
+              <View style={cardStyles.prBadge}>
+                <Ionicons name="trophy" size={12} color="#333" />
+                <Text style={cardStyles.prBadgeText}>x{prCount}</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         <Text style={[cardStyles.templateName, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -156,6 +163,11 @@ const cardStyles = StyleSheet.create({
   body: { flex: 1, padding: 14 },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   date: { fontSize: 12, fontWeight: '600' },
+  badgeRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  adaptedBadge: {
+    backgroundColor: Colors.warning, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2,
+  },
+  adaptedBadgeText: { fontSize: 10, fontWeight: '800', color: 'white' },
   prBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
     backgroundColor: Colors.gold, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2,

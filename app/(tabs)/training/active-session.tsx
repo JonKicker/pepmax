@@ -21,9 +21,13 @@ import { Colors } from '../../../src/constants/theme';
 import { useWorkoutSession } from '../../../src/hooks/useWorkoutSession';
 import { useRestTimer } from '../../../src/hooks/useRestTimer';
 import { useExercisePicker } from '../../../src/contexts/ExercisePickerContext';
+import { useEquipmentProfiles } from '../../../src/hooks/useEquipmentProfiles';
 import { getLastWeight } from '../../../src/utils/weightMemory';
 import { getLastSessionWithExercise } from '../../../src/services/workoutSessionService';
+import { exerciseLibrary } from '../../../src/data/exerciseLibrary';
+import { isExerciseAvailable, findAlternatives } from '../../../src/utils/equipmentMapping';
 import PRCelebration from '../../../src/components/PRCelebration';
+import { ExerciseSwapModal } from '../../../src/components/training/EquipmentQuickSwitch';
 import type { SessionExercise, SessionSet } from '../../../src/types/workout';
 import type { Exercise } from '../../../src/types/exercise';
 import type { PRDetectionResult } from '../../../src/types/personalRecord';
@@ -265,6 +269,8 @@ function ExerciseSection({
   onCompleteSet,
   onAddSet,
   onRemoveSet,
+  onSwapPress,
+  needsSwap,
   colors,
   weightUnit,
 }: {
@@ -275,6 +281,8 @@ function ExerciseSection({
   onCompleteSet: (ei: number, si: number, data: any) => void;
   onAddSet: (ei: number) => void;
   onRemoveSet: (ei: number, si: number) => void;
+  onSwapPress?: (exerciseIndex: number) => void;
+  needsSwap?: boolean;
   colors: any;
   weightUnit: 'lbs' | 'kg';
 }) {
@@ -289,6 +297,16 @@ function ExerciseSection({
             {exercise.primaryMuscle}
           </Text>
         </View>
+        {needsSwap && (
+          <TouchableOpacity
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSwapPress?.(exerciseIndex); }}
+            style={[sectionStyles.swapBtn, { backgroundColor: Colors.warning + '20', borderColor: Colors.warning + '40' }]}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="swap-horizontal" size={14} color={Colors.warning} />
+            <Text style={[sectionStyles.swapTxt, { color: Colors.warning }]}>Swap</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {templateTarget && (
@@ -344,6 +362,8 @@ const sectionStyles = StyleSheet.create({
   muscleText: { fontSize: 11, fontWeight: '700' },
   target: { fontSize: 13, marginBottom: 2, fontStyle: 'italic' },
   prevBest: { fontSize: 13, marginBottom: 8 },
+  swapBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, borderWidth: 1 },
+  swapTxt: { fontSize: 12, fontWeight: '700' },
   setHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, marginBottom: 4, gap: 8 },
   setHeaderText: { fontSize: 11, fontWeight: '600' },
   addSetBtn: {
@@ -446,6 +466,7 @@ export default function ActiveSessionScreen() {
 
   const workout = useWorkoutSession();
   const restTimer = useRestTimer();
+  const { activeProfile, loadProfiles } = useEquipmentProfiles();
 
   const [previousBests, setPreviousBests] = useState<Record<string, string>>({});
   const [weightUnit, setWeightUnit] = useState<'lbs' | 'kg'>('lbs');
@@ -453,6 +474,7 @@ export default function ActiveSessionScreen() {
     visible: false,
     details: [],
   });
+  const [swapModal, setSwapModal] = useState<{ visible: boolean; exerciseIndex: number } | null>(null);
   const initializedRef = useRef(false);
 
   // ─── Initialize session ──────────────────────────────────────────────────
@@ -460,6 +482,8 @@ export default function ActiveSessionScreen() {
   useEffect(() => {
     if (initializedRef.current) return;
     initializedRef.current = true;
+
+    loadProfiles();
 
     if (params.sessionId) {
       workout.resumeSession(params.sessionId);
@@ -584,6 +608,20 @@ export default function ActiveSessionScreen() {
     });
   }, [workout, picker, router]);
 
+  // ─── Equipment swap ──────────────────────────────────────────────────────
+
+  const handleSwapPress = useCallback((exerciseIndex: number) => {
+    setSwapModal({ visible: true, exerciseIndex });
+  }, []);
+
+  const handleSwapConfirm = useCallback((newExerciseId: string, _newExerciseName: string) => {
+    if (!swapModal) return;
+    const newExercise = exerciseLibrary.find((e) => e.id === newExerciseId);
+    if (!newExercise) return;
+    workout.swapExercise(swapModal.exerciseIndex, newExercise);
+    setSwapModal(null);
+  }, [swapModal, workout]);
+
   // ─── Finish ──────────────────────────────────────────────────────────────
 
   const handleFinish = useCallback(() => {
@@ -652,19 +690,26 @@ export default function ActiveSessionScreen() {
             restTimer.state.isRunning && { paddingBottom: 140 },
           ]}
         >
-          {workout.session.exercises.map((exercise, ei) => (
-            <ExerciseSection
-              key={`${exercise.exerciseId}-${ei}`}
-              exercise={exercise}
-              exerciseIndex={ei}
-              previousBest={previousBests[exercise.exerciseId]}
-              onCompleteSet={handleCompleteSet}
-              onAddSet={workout.addSet}
-              onRemoveSet={workout.removeSet}
-              colors={colors}
-              weightUnit={weightUnit}
-            />
-          ))}
+          {workout.session.exercises.map((exercise, ei) => {
+            const libExercise = exerciseLibrary.find((e) => e.id === exercise.exerciseId);
+            const needsSwap = !!activeProfile && !!libExercise &&
+              !isExerciseAvailable(libExercise, activeProfile.equipment);
+            return (
+              <ExerciseSection
+                key={`${exercise.exerciseId}-${ei}`}
+                exercise={exercise}
+                exerciseIndex={ei}
+                previousBest={previousBests[exercise.exerciseId]}
+                onCompleteSet={handleCompleteSet}
+                onAddSet={workout.addSet}
+                onRemoveSet={workout.removeSet}
+                onSwapPress={handleSwapPress}
+                needsSwap={needsSwap}
+                colors={colors}
+                weightUnit={weightUnit}
+              />
+            );
+          })}
 
           {/* Add exercise button */}
           <TouchableOpacity
@@ -684,6 +729,31 @@ export default function ActiveSessionScreen() {
         onAdjust={restTimer.adjustTime}
         colors={colors}
       />
+
+      {/* Equipment swap modal */}
+      {swapModal && (() => {
+        const exercise = workout.session!.exercises[swapModal.exerciseIndex];
+        const libExercise = exerciseLibrary.find((e) => e.id === exercise.exerciseId);
+        const alternatives = libExercise && activeProfile
+          ? findAlternatives(libExercise, exerciseLibrary, activeProfile.equipment)
+          : [];
+        return (
+          <ExerciseSwapModal
+            visible={swapModal.visible}
+            onClose={() => setSwapModal(null)}
+            exerciseName={exercise.exerciseName}
+            missingEquipment={libExercise?.equipment ?? ''}
+            alternatives={alternatives.map((a) => ({
+              id: a.id,
+              name: a.name,
+              equipment: a.equipment,
+              primaryMuscles: a.primaryMuscles,
+            }))}
+            onSwap={handleSwapConfirm}
+            colors={colors}
+          />
+        );
+      })()}
     </View>
   );
 }

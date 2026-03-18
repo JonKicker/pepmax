@@ -87,12 +87,11 @@ export default function SessionDetailScreen() {
           text: 'Start',
           onPress: () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            router.push({
-              pathname: '/(tabs)/training/active-session',
-              params: session.templateId
-                ? { templateId: session.templateId }
-                : { mode: 'quick' },
-            });
+            router.push(
+              session.templateId
+                ? { pathname: '/(tabs)/training/session-preview', params: { templateId: session.templateId } }
+                : { pathname: '/(tabs)/training/active-session', params: { mode: 'quick' } },
+            );
           },
         },
       ],

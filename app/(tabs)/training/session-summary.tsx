@@ -163,13 +163,22 @@ export default function SessionSummaryScreen() {
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.titleSection}>
-        <View style={[styles.iconCircle, { backgroundColor: Colors.gym + '1A' }]}>
-          <Ionicons name="trophy-outline" size={36} color={Colors.gym} />
+        <View style={[styles.iconCircle, { backgroundColor: (session.isBareMinimum ? Colors.warning : Colors.gym) + '1A' }]}>
+          <Ionicons name="trophy-outline" size={36} color={session.isBareMinimum ? Colors.warning : Colors.gym} />
         </View>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Workout Complete!</Text>
-        <Text style={[styles.templateName, { color: colors.textSecondary }]}>
-          {session.templateName}
+        <Text style={[styles.title, { color: colors.textPrimary }]}>
+          {session.isBareMinimum ? 'Solid Effort!' : 'Workout Complete!'}
         </Text>
+        <View style={styles.templateNameRow}>
+          <Text style={[styles.templateName, { color: colors.textSecondary }]}>
+            {session.templateName}
+          </Text>
+          {session.isBareMinimum && (
+            <View style={styles.adaptedBadge}>
+              <Text style={styles.adaptedBadgeText}>Adapted</Text>
+            </View>
+          )}
+        </View>
       </View>
 
       {/* Stats grid */}
@@ -203,6 +212,16 @@ export default function SessionSummaryScreen() {
           <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Sets</Text>
         </View>
       </View>
+
+      {/* Bare minimum encouraging banner */}
+      {session.isBareMinimum && session.originalTotalSets && session.originalTotalSets > 0 && (
+        <View style={[styles.adaptedBanner, { backgroundColor: Colors.warning + '15', borderColor: Colors.warning + '40' }]}>
+          <Ionicons name="flash-outline" size={18} color={Colors.warning} />
+          <Text style={[styles.adaptedBannerText, { color: colors.textPrimary }]}>
+            You completed {Math.round((stats.sets / session.originalTotalSets) * 100)}% of planned volume — solid effort on a tough day
+          </Text>
+        </View>
+      )}
 
       {/* PR callout */}
       {stats.prs > 0 && (
@@ -295,7 +314,19 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', marginBottom: 12,
   },
   title: { fontSize: 22, fontWeight: '700', marginBottom: 4 },
+  templateNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   templateName: { fontSize: 15 },
+  adaptedBadge: {
+    backgroundColor: Colors.warning, borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 3,
+  },
+  adaptedBadgeText: { fontSize: 11, fontWeight: '800', color: 'white' },
+  adaptedBanner: {
+    flexDirection: 'row', alignItems: 'center',
+    marginHorizontal: 16, marginBottom: 16,
+    padding: 12, borderRadius: 12, borderWidth: 1, gap: 8,
+  },
+  adaptedBannerText: { fontSize: 14, flex: 1, lineHeight: 20 },
 
   statsGrid: {
     flexDirection: 'row', flexWrap: 'wrap',

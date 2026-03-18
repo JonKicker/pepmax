@@ -17,6 +17,7 @@ import {
   COLLECTIONS,
 } from './firebase/firestore';
 import { toLocalDateKey, sanitizeOFFProduct } from '../utils/nutrition';
+import { searchUSDA, getUSDAFoodByBarcode } from './usdaService';
 import type {
   FoodLogEntry,
   FavoriteFood,
@@ -208,28 +209,12 @@ function relevanceScore(name: string, query: string): number {
   return 0;
 }
 
-/**
- * Search Open Food Facts. Returns sanitized results — callers never see raw API data.
- * Throws on network failure so the UI can distinguish "no results" from "API down".
- *
- * @param signal — optional AbortSignal from the caller (e.g. to cancel stale requests).
- *                 Aborting via this signal resolves to { data: null, error: AbortError }.
- */
-export async function searchFood(
+async function searchOFF(
   query: string,
   signal?: AbortSignal,
 ): Promise<ServiceResult<FoodSearchResult[]>> {
-  if (!query.trim()) return { data: [], error: null };
-
-  const cacheKey = query.trim().toLowerCase();
-  const cached = searchCache.get(cacheKey);
-  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
-    return { data: cached.data, error: null };
-  }
-
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10_000);
-  // Propagate caller abort into our internal controller
   signal?.addEventListener('abort', () => controller.abort(), { once: true });
   try {
     const url = `${OFF_BASE}&search_terms=${encodeURIComponent(query.trim())}`;
@@ -237,7 +222,7 @@ export async function searchFood(
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      return { data: null, error: new Error(`Search API returned ${response.status}`) };
+      return { data: null, error: new Error(`OFF API returned ${response.status}`) };
     }
 
     const json = await response.json();
@@ -258,6 +243,7 @@ export async function searchFood(
           sodium100g: s.per100g.sodium,
           servingSizeG: s.servingSizeG,
           barcode: s.barcode,
+          foodSource: 'off' as const,
         } satisfies FoodSearchResult;
       })
       .filter((r: FoodSearchResult) => r.name !== 'Unknown Food')
@@ -270,11 +256,6 @@ export async function searchFood(
           relevanceScore(b.name, query) - relevanceScore(a.name, query),
       );
 
-    if (searchCache.size >= 100) {
-      // Evict the oldest entry (Map preserves insertion order)
-      searchCache.delete(searchCache.keys().next().value!);
-    }
-    searchCache.set(cacheKey, { data: products, ts: Date.now() });
     return { data: products, error: null };
   } catch (e) {
     clearTimeout(timeoutId);
@@ -282,10 +263,72 @@ export async function searchFood(
   }
 }
 
+/**
+ * Search USDA + Open Food Facts in parallel. USDA results appear first.
+ * If one source fails, the other is still returned. Only errors if both fail.
+ *
+ * @param signal — optional AbortSignal from the caller.
+ */
+export async function searchFood(
+  query: string,
+  signal?: AbortSignal,
+): Promise<ServiceResult<FoodSearchResult[]>> {
+  if (!query.trim()) return { data: [], error: null };
+
+  const cacheKey = query.trim().toLowerCase();
+  const cached = searchCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+    return { data: cached.data, error: null };
+  }
+
+  const [usdaResult, offResult] = await Promise.allSettled([
+    searchUSDA(query, signal),
+    searchOFF(query, signal),
+  ]);
+
+  const usdaData =
+    usdaResult.status === 'fulfilled' && !usdaResult.value.error
+      ? usdaResult.value.data ?? []
+      : [];
+
+  const offData =
+    offResult.status === 'fulfilled' && !offResult.value.error
+      ? offResult.value.data ?? []
+      : [];
+
+  // Both failed
+  const usdaErr =
+    usdaResult.status === 'rejected'
+      ? usdaResult.reason
+      : usdaResult.value.error;
+  const offErr =
+    offResult.status === 'rejected'
+      ? offResult.reason
+      : offResult.value.error;
+
+  if (usdaErr && offErr) {
+    // Return the OFF error as it's more likely to be meaningful to the user
+    return { data: null, error: offErr as Error };
+  }
+
+  // Check for abort — if signal was aborted, propagate it
+  if (signal?.aborted) {
+    return { data: null, error: new DOMException('Aborted', 'AbortError') };
+  }
+
+  const merged = [...usdaData, ...offData];
+
+  if (searchCache.size >= 100) {
+    searchCache.delete(searchCache.keys().next().value!);
+  }
+  searchCache.set(cacheKey, { data: merged, ts: Date.now() });
+  return { data: merged, error: null };
+}
+
 const BARCODE_RE = /^[a-zA-Z0-9]+$/;
 
 /**
- * Look up a single product by barcode on Open Food Facts.
+ * Look up a single product by barcode. Tries USDA first, falls back to OFF.
  * Returns { data: null, error: null } for invalid barcodes or not-found products.
  */
 export async function getFoodByBarcode(
@@ -294,6 +337,13 @@ export async function getFoodByBarcode(
 ): Promise<ServiceResult<FoodSearchResult | null>> {
   if (!BARCODE_RE.test(barcode)) return { data: null, error: null };
 
+  // Try USDA first
+  const usdaResult = await getUSDAFoodByBarcode(barcode, signal);
+  if (!usdaResult.error && usdaResult.data) {
+    return usdaResult;
+  }
+
+  // Fall back to OFF
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10_000);
   signal?.addEventListener('abort', () => controller.abort(), { once: true });
@@ -320,6 +370,7 @@ export async function getFoodByBarcode(
         sodium100g: s.per100g.sodium,
         servingSizeG: s.servingSizeG,
         barcode: s.barcode,
+        foodSource: 'off' as const,
       } satisfies FoodSearchResult,
       error: null,
     };

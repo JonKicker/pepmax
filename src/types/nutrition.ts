@@ -88,6 +88,28 @@ export type FoodNavPayload = {
   source: 'search' | 'recent' | 'favorites' | 'manual';
   // For favorites/recent: also carry the logged servingUnit so it pre-fills correctly
   servingUnit?: string;
+  foodSource?: FoodSource;
+  micronutrients100g?: Micronutrients;
+  portions?: FoodPortion[];
+};
+
+export type FoodSource = 'usda' | 'off';
+
+export type Micronutrients = {
+  vitaminA: number | null;   // mcg
+  vitaminC: number | null;   // mg
+  vitaminD: number | null;   // mcg
+  calcium: number | null;    // mg
+  iron: number | null;       // mg
+  potassium: number | null;  // mg
+  sodium: number | null;     // mg
+  magnesium: number | null;  // mg
+  zinc: number | null;       // mg
+};
+
+export type FoodPortion = {
+  description: string;
+  gramWeight: number;
 };
 
 /**
@@ -106,4 +128,7 @@ export type FoodSearchResult = {
   sodium100g: number | null;
   servingSizeG: number;
   barcode: string;
+  foodSource?: FoodSource;
+  micronutrients100g?: Micronutrients;
+  portions?: FoodPortion[];
 };
