@@ -14,7 +14,7 @@
  */
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments, useRootNavigationState } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 
@@ -22,8 +22,10 @@ function AuthGuard() {
   const { currentUser, userProfile, isLoading, profileLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const navigationState = useRootNavigationState();
 
   useEffect(() => {
+    if (!navigationState?.key) return; // Navigation container not mounted yet — router.replace would be dropped
     if (isLoading || profileLoading) return;
 
     const inAuth = segments[0] === '(auth)';
@@ -42,10 +44,10 @@ function AuthGuard() {
       // Signed in but onboarding not complete
       if (!inOnboarding) router.replace('/(onboarding)/quiz');
     } else {
-      // Fully onboarded
-      if (!inTabs) router.replace('/(tabs)');
+      // Fully onboarded — land on dashboard (tabs have no root index, only named sub-routes)
+      if (!inTabs) router.replace('/(tabs)/dashboard');
     }
-  }, [currentUser, userProfile, isLoading, profileLoading, segments]);
+  }, [currentUser, userProfile, isLoading, profileLoading, segments, navigationState?.key]);
 
   return null;
 }
