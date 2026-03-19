@@ -24,6 +24,7 @@ import type {
   DailyTotals,
   FoodSearchResult,
   MealSlot,
+  Micronutrients,
 } from '../types/nutrition';
 import type { ServiceResult } from '../types/service';
 
@@ -41,6 +42,7 @@ type FoodLogInput = {
   servingSize: number;
   servingUnit: string;
   barcode?: string;
+  micronutrients?: Micronutrients;
 };
 
 type FavoriteFoodInput = {

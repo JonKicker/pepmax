@@ -46,6 +46,7 @@ export type FoodLogEntry = {
   servingSize: number;    // the amount the user actually ate
   servingUnit: string;    // e.g. "g", "serving", "cup"
   barcode?: string;
+  micronutrients?: Micronutrients;
   createdAt: Timestamp;
 };
 
@@ -107,6 +108,15 @@ export type Micronutrients = {
   sodium: number | null;
   magnesium: number | null;  // mg per 100g
   zinc: number | null;       // mg per 100g
+  vitaminB1: number | null;  // mg per 100g (Thiamin)
+  vitaminB2: number | null;  // mg per 100g (Riboflavin)
+  vitaminB3: number | null;  // mg per 100g (Niacin)
+  vitaminB6: number | null;  // mg per 100g
+  vitaminB12: number | null; // mcg per 100g
+  vitaminE: number | null;   // mg per 100g
+  vitaminK: number | null;   // mcg per 100g
+  folate: number | null;     // mcg per 100g
+  phosphorus: number | null; // mg per 100g
 };
 
 export type FoodPortion = {

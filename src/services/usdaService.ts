@@ -72,6 +72,15 @@ function parseFoodItem(food: any): FoodSearchResult {
     sodium: sodiumMg,
     magnesium: getOptionalNutrient(nutrients, 'magnesium'),
     zinc: getOptionalNutrient(nutrients, 'zinc'),
+    vitaminB1: getOptionalNutrient(nutrients, 'vitaminB1'),
+    vitaminB2: getOptionalNutrient(nutrients, 'vitaminB2'),
+    vitaminB3: getOptionalNutrient(nutrients, 'vitaminB3'),
+    vitaminB6: getOptionalNutrient(nutrients, 'vitaminB6'),
+    vitaminB12: getOptionalNutrient(nutrients, 'vitaminB12'),
+    vitaminE: getOptionalNutrient(nutrients, 'vitaminE'),
+    vitaminK: getOptionalNutrient(nutrients, 'vitaminK'),
+    folate: getOptionalNutrient(nutrients, 'folate'),
+    phosphorus: getOptionalNutrient(nutrients, 'phosphorus'),
   };
 
   const portions = parsePortions(food?.foodPortions ?? []);
