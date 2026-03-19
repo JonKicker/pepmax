@@ -4,9 +4,72 @@
 
 ---
 
+## Milestone 13 — Recovery Card + Daily Check-In
+
+**Status:** ✅ Implemented + Ray fixes applied (pending commit)
+**Date:** 2026-03-19
+
+### Features included
+
+- `src/types/recovery.ts` — `RecoveryEntry` type (sleepQuality, sleepHours, energyLevel, effortScore, timestamp)
+- `src/utils/recovery.ts` — `effortColor(score)` shared presentation utility
+- `src/services/recoveryService.ts` — `calculateEffortScore`, `saveRecovery`, `getTodayRecovery`, `getRecoveryByDate`
+- `src/services/firebase/firestore.ts` — `RECOVERY: 'recovery'` collection constant
+- `src/types/dashboard.ts` — `'recovery'` added to `DashboardCardId`, `recovery` field on `DashboardData`, default card order updated
+- `src/services/dashboardService.ts` — `getTodayRecovery()` added to parallel fetch
+- `src/hooks/useDashboard.ts` — card order migration for `'recovery'`
+- `src/components/dashboard/RecoveryCheckInModal.tsx` — bottom sheet with sleep quality (5 buttons), sleep hours (stepper 3–12, step 0.5), energy level (5 buttons), live score preview, skip-with-nag + AsyncStorage dismiss
+- `src/components/dashboard/RecoveryCard.tsx` — effort score (green/yellow/red) with sleep/energy emojis, or "Check In" prompt
+- `app/(tabs)/dashboard/index.tsx` — card wired, modal wired, auto-trigger useEffect
+- `app/(tabs)/cardio/session-summary.tsx` — effort score `StatRow` with color coding
+
+### Ray Review Notes
+
+**Status:** CONDITIONAL APPROVAL → fixes applied
+
+**Fixes applied:**
+1. ✅ `skipCount` resets to 0 on modal open (`useEffect([visible])`)
+2. ✅ `handleSkip` AsyncStorage.setItem wrapped in try/catch/finally
+3. ✅ Dead ternary in sleep hours display removed (`${sleepHours}h`)
+4. ✅ `RecoveryEntry.timestamp` typed as `Timestamp` (from firebase/firestore)
+5. ✅ `effortColor` extracted to `src/utils/recovery.ts` (not service layer — Ray's architecture note applied)
+6. ✅ `useEffect` dep tightened from `[data]` to `[data?.recovery]`
+
+---
+
+## Milestone 14 — Peptide Inventory Tracker
+
+**Status:** ✅ Committed
+**Date:** 2026-03-19
+
+### Features included
+
+- `src/types/inventory.ts` — `InventoryItem`, `InventoryItemType`, `CompoundSubType`, `SupplyCategory`, `StockStatus`, `SUPPLY_CATEGORIES`, `SUPPLY_CATEGORY_LABELS`, `AUTO_DECREMENT_SUPPLY_TYPES`
+- `src/services/firebase/firestore.ts` — `INVENTORY: 'inventory'` collection constant
+- `src/services/inventoryService.ts` — CRUD (`addInventoryItem`, `updateInventoryItem`, `deleteInventoryItem`, `getInventoryItems`) + FIFO decrement (`decrementCompoundInventory`, `decrementSupplyItems`, `decrementInventoryOnDose`)
+- `src/services/notificationService.ts` — `scheduleLowStockNotification`, `cancelLowStockNotification`, `cancelAllLowStockNotifications`
+- `src/hooks/useInventory.ts` — `useInventory()` hook with `computeDailyConsumption`, `computeDaysUntilEmpty`, `computeStockStatus` pure functions; auto-schedules low-stock notifications on focus
+- `src/components/peptides/AddInventoryItemModal.tsx` — Add/edit modal for compound (vial/pen) and supply items with full validation
+- `app/(tabs)/peptides/inventory.tsx` — Inventory screen: color-coded cards (green/yellow/red), progress bars, swipe-to-delete, FAB + ActionSheet/Alert for compound vs supply add
+- `app/(tabs)/peptides/_layout.tsx` — `inventory` Stack.Screen added
+- `app/(tabs)/peptides/index.tsx` — "Inventory" quick-action button (`cube-outline`)
+- `app/(tabs)/peptides/log-dose.tsx` — fire-and-forget `decrementInventoryOnDose()` after dose save; Toast gains optional inventory sub-line
+
+### Ray Review Notes (Milestone 14 — Inventory Tracker)
+
+**Status:** APPROVED (after conditional approval round)
+
+**Fixes applied before full approval:**
+1. ✅ FIFO cascade bug: `remainingToSubtract` now carries overflow to the next item when an item is fully exhausted; was unconditionally zeroed out before
+2. ✅ Toast totals: replaced `lastUpdatedItem` with `finalStates[]` array accumulating all items (updated + untouched); reduce sums across all for accurate total
+3. ✅ Android FAB: `Alert.alert()` now offers both "Compound" and "Supply" choices on Android (was hardcoded to compound)
+4. ✅ `remainingAmount > totalAmount` validation added in `AddInventoryItemModal.handleSave()` before Firestore write
+
+---
+
 ## Milestone 13 — Recipe Builder
 
-**Status:** ✅ Implemented (pending commit)
+**Status:** ✅ Committed
 **Date:** 2026-03-19
 
 ### Features included

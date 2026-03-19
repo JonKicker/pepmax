@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Frequency } from '../types/peptide';
 
 const DOSE_IDS_KEY = 'pepmax:notif:doses';
+const INVENTORY_IDS_KEY = 'pepmax:notif:inventory';
 
 /** Maps Frequency enum values to approximate interval hours. 'custom' excluded — no reliable interval. */
 export const FREQUENCY_TO_HOURS: Partial<Record<Frequency, number>> = {
@@ -89,6 +90,88 @@ export async function cancelDoseReminder(peptideId: string): Promise<void> {
       delete ids[peptideId];
       await writeDoseIds(ids);
     }
+  } catch {
+    // Non-fatal
+  }
+}
+
+// ─── Inventory low-stock notifications ────────────────────────────────────────
+
+async function readInventoryIds(): Promise<Record<string, string>> {
+  try {
+    const raw = await AsyncStorage.getItem(INVENTORY_IDS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+async function writeInventoryIds(ids: Record<string, string>): Promise<void> {
+  try {
+    await AsyncStorage.setItem(INVENTORY_IDS_KEY, JSON.stringify(ids));
+  } catch {
+    // Non-fatal
+  }
+}
+
+/**
+ * Schedule a low-stock notification for an inventory item.
+ * Cancels any existing notification for the same item before scheduling.
+ */
+export async function scheduleLowStockNotification(
+  itemId: string,
+  itemName: string,
+  daysRemaining: number,
+): Promise<void> {
+  try {
+    const ids = await readInventoryIds();
+    if (ids[itemId]) {
+      await Notifications.cancelScheduledNotificationAsync(ids[itemId]).catch(() => {});
+    }
+
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'PepMax — Low Stock Alert',
+        body: `Your ${itemName.slice(0, 64)} supply will run out in approximately ${Math.round(daysRemaining)} days`,
+        sound: true,
+      },
+      trigger: {
+        seconds: 24 * 3600,
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      },
+    });
+
+    ids[itemId] = id;
+    await writeInventoryIds(ids);
+  } catch {
+    // Silently swallow — low-stock alerts are best-effort
+  }
+}
+
+/** Cancel a single item's low-stock notification. */
+export async function cancelLowStockNotification(itemId: string): Promise<void> {
+  try {
+    const ids = await readInventoryIds();
+    if (ids[itemId]) {
+      await Notifications.cancelScheduledNotificationAsync(ids[itemId]).catch(() => {});
+      delete ids[itemId];
+      await writeInventoryIds(ids);
+    }
+  } catch {
+    // Non-fatal
+  }
+}
+
+/** Cancel ALL low-stock notifications. */
+export async function cancelAllLowStockNotifications(): Promise<void> {
+  try {
+    const ids = await readInventoryIds();
+    await Promise.all(
+      Object.values(ids).map((id) =>
+        Notifications.cancelScheduledNotificationAsync(id).catch(() => {}),
+      ),
+    );
+    await AsyncStorage.removeItem(INVENTORY_IDS_KEY);
   } catch {
     // Non-fatal
   }

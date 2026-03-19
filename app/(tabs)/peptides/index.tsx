@@ -396,6 +396,17 @@ export default function PeptidesScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
+            style={[styles.actionBtn, { borderColor: Colors.peptide }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/(tabs)/peptides/inventory');
+            }}
+          >
+            <Ionicons name="cube-outline" size={16} color={Colors.peptide} />
+            <Text style={[styles.actionBtnText, { color: Colors.peptide }]}>Inventory</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.actionBtn, styles.logDoseBtn]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

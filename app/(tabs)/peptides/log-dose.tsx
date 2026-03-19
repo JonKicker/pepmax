@@ -30,6 +30,7 @@ import {
   scheduleDoseReminder,
   FREQUENCY_TO_HOURS,
 } from '../../../src/services/notificationService';
+import { decrementInventoryOnDose } from '../../../src/services/inventoryService';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -61,7 +62,7 @@ function isToday(d: Date): boolean {
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
-function Toast({ visible }: { visible: boolean }) {
+function Toast({ visible, inventoryLine }: { visible: boolean; inventoryLine?: string | null }) {
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -75,7 +76,12 @@ function Toast({ visible }: { visible: boolean }) {
   return (
     <Animated.View style={[styles.toast, { opacity }]} pointerEvents="none">
       <Ionicons name="checkmark-circle" size={20} color="white" />
-      <Text style={styles.toastText}>Dose logged! ✓</Text>
+      <View>
+        <Text style={styles.toastText}>Dose logged! ✓</Text>
+        {inventoryLine ? (
+          <Text style={styles.toastSubText}>{inventoryLine}</Text>
+        ) : null}
+      </View>
     </Animated.View>
   );
 }
@@ -90,6 +96,7 @@ export default function LogDoseScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
+  const [inventoryToast, setInventoryToast] = useState<string | null>(null);
 
   // Form state
   const [selectedPeptide, setSelectedPeptide] = useState<Peptide | null>(null);
@@ -177,6 +184,17 @@ export default function LogDoseScreen() {
         () => {},
       );
     }
+
+    // Fire-and-forget inventory decrement
+    decrementInventoryOnDose(selectedPeptide.id, doseAmount, unit)
+      .then((result) => {
+        if (result?.compoundResult) {
+          setInventoryToast(
+            `${result.compoundResult.itemName} — ${result.compoundResult.remaining} ${unit} remaining`,
+          );
+        }
+      })
+      .catch(() => {});
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setToastVisible(true);
@@ -397,7 +415,7 @@ export default function LogDoseScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <Toast visible={toastVisible} />
+      <Toast visible={toastVisible} inventoryLine={inventoryToast} />
     </View>
   );
 }
@@ -500,4 +518,5 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   toastText: { color: 'white', fontWeight: '600', fontSize: 14 },
+  toastSubText: { color: 'rgba(255,255,255,0.8)', fontSize: 11, marginTop: 2 },
 });

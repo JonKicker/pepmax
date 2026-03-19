@@ -22,6 +22,7 @@ export default function PeptidesLayout() {
       <Stack.Screen name="recon-calculator" options={{ title: 'Recon Calculator' }} />
       <Stack.Screen name="half-life-timeline" options={{ title: 'Activity Timeline' }} />
       <Stack.Screen name="cycle-planner" options={{ title: 'Plan Cycle' }} />
+      <Stack.Screen name="inventory" options={{ title: 'Inventory' }} />
     </Stack>
   );
 }
