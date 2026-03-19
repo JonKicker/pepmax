@@ -15,6 +15,7 @@
 
 import type { Micronutrients } from '../types/nutrition';
 import { RDA_VALUES } from '../constants/nutrition';
+import type { RecipeIngredient, MacroTotals } from '../types/recipe';
 
 // ─── Date key ─────────────────────────────────────────────────────────────────
 
@@ -182,6 +183,37 @@ export function getTrafficLight(rdaPercent: number): 'green' | 'yellow' | 'dim' 
   if (rdaPercent >= 20) return 'green';
   if (rdaPercent >= 5) return 'yellow';
   return 'dim';
+}
+
+// ─── Recipe utilities ────────────────────────────────────────────────────────
+
+/**
+ * Reduce a list of ingredients to total macro sums.
+ * Each ingredient already has calories/protein/carbs/fat scaled to amountG.
+ */
+export function computeRecipeTotals(ingredients: RecipeIngredient[]): MacroTotals {
+  return ingredients.reduce(
+    (acc, ing) => ({
+      calories: Math.round(acc.calories + ing.calories),
+      protein: Math.round((acc.protein + ing.protein) * 10) / 10,
+      carbs: Math.round((acc.carbs + ing.carbs) * 10) / 10,
+      fat: Math.round((acc.fat + ing.fat) * 10) / 10,
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  );
+}
+
+/**
+ * Divide total macros by servings to get per-serving nutrition.
+ */
+export function computePerServing(total: MacroTotals, servings: number): MacroTotals {
+  const s = servings > 0 ? servings : 1;
+  return {
+    calories: Math.round(total.calories / s),
+    protein: Math.round((total.protein / s) * 10) / 10,
+    carbs: Math.round((total.carbs / s) * 10) / 10,
+    fat: Math.round((total.fat / s) * 10) / 10,
+  };
 }
 
 // ─── Macro recalculator ───────────────────────────────────────────────────────

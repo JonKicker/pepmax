@@ -4,6 +4,37 @@
 
 ---
 
+## Milestone 13 — Recipe Builder
+
+**Status:** ✅ Implemented (pending commit)
+**Date:** 2026-03-19
+
+### Features included
+
+- `src/types/recipe.ts` — `RecipeIngredient`, `MacroTotals`, `Recipe`, `RecipeInput`, `SERVING_FRACTIONS`
+- `src/services/recipeService.ts` — `saveRecipe`, `updateRecipe`, `deleteRecipe`, `getRecipes`, `getRecipe`, `logRecipeAsFood`
+- `src/utils/nutrition.ts` — `computeRecipeTotals()`, `computePerServing()` pure functions
+- `src/services/firebase/firestore.ts` — `RECIPES: 'recipes'` collection constant
+- `app/(tabs)/nutrition/_layout.tsx` — `my-recipes` and `create-recipe` routes
+- `app/(tabs)/nutrition/create-recipe.tsx` — Create/edit screen with ingredient list, up/down reorder, inline amount editing, sticky macro footer, ingredient round-trip via params
+- `app/(tabs)/nutrition/my-recipes.tsx` — Recipe list with search, Log Recipe modal (meal slot + fraction picker for batch cook), FAB, error/retry state
+- `app/(tabs)/nutrition/index.tsx` — `book-outline` header icon → My Recipes
+- `app/(tabs)/nutrition/add-food.tsx` — Recipes tab (hidden in ingredient mode), batch cook → navigates to My Recipes, non-batch logs inline
+- `app/(tabs)/nutrition/food-detail.tsx` — ingredient mode hides meal picker, "Add Ingredient" button returns ingredient JSON param to create-recipe
+
+### Ray Review Notes (Milestone 13 — Recipe Builder)
+
+**Status:** CONDITIONAL APPROVAL → Fixes applied
+
+**Fixes applied before full approval:**
+1. ✅ Silent delete failure: `deleteRecipe` error checked before filtering local state; Alert shown on failure
+2. ✅ Error state added: `getRecipes()` failure shows retry screen; `hasLoaded` ref prevents spinner on every focus re-visit
+3. ✅ JSON param validation: all required numeric fields checked with `isFinite()` + `foodName` string check before accepting ingredient from params
+4. ✅ `as never` replaced with `as WithFieldValue<RecipeInput>` in both `saveRecipe` and `updateRecipe`
+5. ✅ Batch cook recipes in Add Food Recipes tab redirect to My Recipes (fraction picker); non-batch log inline immediately
+
+---
+
 ## Milestone 12 — Peptide Cycle Planner, Consistency Tracking, AI Insight, Notifications
 
 **Status:** ✅ Committed (3185fe3)

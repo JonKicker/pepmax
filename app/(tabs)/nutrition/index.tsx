@@ -434,6 +434,13 @@ export default function NutritionScreen() {
                 <Ionicons name="calendar-outline" size={22} color={Colors.nutrition} />
               </TouchableOpacity>
               <TouchableOpacity
+                onPress={() => router.push('/(tabs)/nutrition/my-recipes')}
+                style={{ marginLeft: 14 }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="book-outline" size={22} color={Colors.nutrition} />
+              </TouchableOpacity>
+              <TouchableOpacity
                 onPress={() => router.push('/(tabs)/nutrition/settings')}
                 style={{ marginLeft: 14 }}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -465,6 +472,17 @@ export default function NutritionScreen() {
           <MacroBar label="Carbs" consumed={totals.carbs} target={targets.carbs} color={Colors.warning} colors={colors} />
           <MacroBar label="Fat" consumed={totals.fat} target={targets.fat} color={Colors.error} colors={colors} />
         </View>
+
+        {/* Micronutrients shortcut */}
+        <TouchableOpacity
+          style={[styles.microsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          onPress={() => router.push('/(tabs)/nutrition/micros')}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="flask-outline" size={20} color={Colors.nutrition} />
+          <Text style={[styles.microsLabel, { color: colors.textPrimary }]}>Micronutrients</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} style={{ marginLeft: 'auto' }} />
+        </TouchableOpacity>
 
         {/* Meal sections — dynamic slots from profile, with orphaned entry fallback */}
         <View style={styles.mealsContainer}>
@@ -547,8 +565,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 16,
     gap: 14,
+    marginBottom: 12,
+  },
+  microsCard: {
+    marginHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     marginBottom: 20,
   },
+  microsLabel: { fontSize: 14, fontWeight: '600' },
   macroRow: { gap: 6 },
   macroLabelRow: { flexDirection: 'row', alignItems: 'center' },
   macroLabel: { fontSize: 13, fontWeight: '600', flex: 1 },

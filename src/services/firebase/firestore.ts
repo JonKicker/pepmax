@@ -54,6 +54,10 @@ export const COLLECTIONS = {
   AI_INSIGHTS: 'aiInsights',
   CONSISTENCY: 'consistency',
   CYCLES: 'cycles',
+  RECIPES: 'recipes',
+  BODY_MEASUREMENTS: 'bodyMeasurements',
+  INVENTORY: 'inventory',
+  RECOVERY: 'recovery',
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];

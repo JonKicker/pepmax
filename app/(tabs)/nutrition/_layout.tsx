@@ -19,6 +19,9 @@ export default function NutritionLayout() {
       <Stack.Screen name="barcode-scan" options={{ title: 'Scan Barcode', presentation: 'modal' }} />
       <Stack.Screen name="history" options={{ title: 'Nutrition History' }} />
       <Stack.Screen name="settings" options={{ title: 'Nutrition Settings' }} />
+      <Stack.Screen name="my-recipes" options={{ title: 'My Recipes' }} />
+      <Stack.Screen name="create-recipe" options={{ title: 'Create Recipe' }} />
+      <Stack.Screen name="micros" options={{ title: 'Micronutrients' }} />
     </Stack>
   );
 }

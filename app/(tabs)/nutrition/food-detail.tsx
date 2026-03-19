@@ -144,11 +144,14 @@ function SourceBadge({ source }: { source: 'usda' | 'off' | undefined }) {
 export default function FoodDetailScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { foodData: rawFoodData, mealSlot: paramSlot, fromScan } = useLocalSearchParams<{
+  const { foodData: rawFoodData, mealSlot: paramSlot, fromScan, mode } = useLocalSearchParams<{
     foodData: string;
     mealSlot?: MealSlot;
     fromScan?: string;
+    mode?: string;
   }>();
+
+  const isIngredientMode = mode === 'ingredient';
 
   // Parse the stripped nav payload
   const food: FoodNavPayload | null = (() => {
@@ -252,6 +255,32 @@ export default function FoodDetailScreen() {
     }
   };
 
+  const handleAddIngredient = () => {
+    if (!validServing) {
+      Alert.alert('Invalid serving', 'Please enter a valid serving size greater than 0.');
+      return;
+    }
+    const ingredient = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      foodName: food!.name,
+      brand: food!.brand || undefined,
+      amountG: servingG,
+      unit: servingUnit.trim() || 'g',
+      calories: scaled.calories,
+      protein: scaled.protein,
+      carbs: scaled.carbs,
+      fat: scaled.fat,
+      calories100g: food!.calories100g,
+      protein100g: food!.protein100g,
+      carbs100g: food!.carbs100g,
+      fat100g: food!.fat100g,
+    };
+    router.navigate({
+      pathname: '/(tabs)/nutrition/create-recipe',
+      params: { newIngredient: JSON.stringify(ingredient) },
+    });
+  };
+
   const handleLog = async () => {
     if (!validServing) {
       Alert.alert('Invalid serving', 'Please enter a valid serving size greater than 0.');
@@ -275,6 +304,7 @@ export default function FoodDetailScreen() {
       servingSize: servingG,
       servingUnit: servingUnit.trim(),
       barcode: food.barcode || undefined,
+      micronutrients: scaledMicro ?? undefined,
     });
     setSaving(false);
 
@@ -482,40 +512,48 @@ export default function FoodDetailScreen() {
             </>
           )}
 
-          {/* Meal slot */}
-          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>MEAL</Text>
-          <TouchableOpacity
-            style={[styles.slotBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={() => setShowSlotPicker((v) => !v)}
-          >
-            <Text style={[styles.slotBtnText, { color: colors.textPrimary }]}>{MEAL_SLOT_LABELS[mealSlot]}</Text>
-            <Ionicons name={showSlotPicker ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textSecondary} />
-          </TouchableOpacity>
-          {showSlotPicker && (
-            <View style={[styles.slotDropdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              {MEAL_SLOTS.map((s) => (
-                <TouchableOpacity
-                  key={s}
-                  style={[styles.slotItem, { borderBottomColor: colors.border }]}
-                  onPress={() => { setMealSlot(s); setShowSlotPicker(false); }}
-                >
-                  <Text style={[styles.slotItemText, { color: s === mealSlot ? Colors.nutrition : colors.textPrimary }]}>
-                    {MEAL_SLOT_LABELS[s]}
-                  </Text>
-                  {s === mealSlot && <Ionicons name="checkmark" size={16} color={Colors.nutrition} />}
-                </TouchableOpacity>
-              ))}
-            </View>
+          {/* Meal slot — hidden in ingredient mode */}
+          {!isIngredientMode && (
+            <>
+              <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>MEAL</Text>
+              <TouchableOpacity
+                style={[styles.slotBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                onPress={() => setShowSlotPicker((v) => !v)}
+              >
+                <Text style={[styles.slotBtnText, { color: colors.textPrimary }]}>{MEAL_SLOT_LABELS[mealSlot]}</Text>
+                <Ionicons name={showSlotPicker ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textSecondary} />
+              </TouchableOpacity>
+              {showSlotPicker && (
+                <View style={[styles.slotDropdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  {MEAL_SLOTS.map((s) => (
+                    <TouchableOpacity
+                      key={s}
+                      style={[styles.slotItem, { borderBottomColor: colors.border }]}
+                      onPress={() => { setMealSlot(s); setShowSlotPicker(false); }}
+                    >
+                      <Text style={[styles.slotItemText, { color: s === mealSlot ? Colors.nutrition : colors.textPrimary }]}>
+                        {MEAL_SLOT_LABELS[s]}
+                      </Text>
+                      {s === mealSlot && <Ionicons name="checkmark" size={16} color={Colors.nutrition} />}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </>
           )}
 
-          {/* Log button */}
+          {/* Primary action button */}
           <TouchableOpacity
             style={[styles.logBtn, { backgroundColor: Colors.nutrition }]}
-            onPress={handleLog}
+            onPress={isIngredientMode ? handleAddIngredient : handleLog}
             disabled={saving}
             activeOpacity={0.85}
           >
-            {saving ? <ActivityIndicator color="white" /> : <Text style={styles.logBtnText}>Log Food</Text>}
+            {saving ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={styles.logBtnText}>{isIngredientMode ? 'Add Ingredient' : 'Log Food'}</Text>
+            )}
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>

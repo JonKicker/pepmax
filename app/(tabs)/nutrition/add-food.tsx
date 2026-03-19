@@ -9,6 +9,7 @@ import {
   SectionList,
   ActivityIndicator,
   Switch,
+  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { analytics, AnalyticsEvent } from '../../../src/services/analytics';
@@ -22,8 +23,10 @@ import {
   getFavorites,
   removeFavorite,
 } from '../../../src/services/nutritionService';
+import { getRecipes, logRecipeAsFood } from '../../../src/services/recipeService';
 import type { FoodSearchResult, FavoriteFood, FoodLogEntry, MealSlot, FoodNavPayload } from '../../../src/types/nutrition';
 import { MEAL_SLOTS, MEAL_SLOT_LABELS } from '../../../src/types/nutrition';
+import type { Recipe } from '../../../src/types/recipe';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -216,20 +219,26 @@ function FoodRow({
 
 // ─── Tab constants ─────────────────────────────────────────────────────────────
 
-type Tab = 'search' | 'recent' | 'favorites';
+type Tab = 'search' | 'recent' | 'favorites' | 'recipes';
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function AddFoodScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { mealSlot: paramSlot } = useLocalSearchParams<{ mealSlot?: MealSlot }>();
+  const { mealSlot: paramSlot, mode } = useLocalSearchParams<{ mealSlot?: MealSlot; mode?: string }>();
+
+  const isIngredientMode = mode === 'ingredient';
 
   const [activeTab, setActiveTab] = useState<Tab>('search');
   const [mealSlot, setMealSlot] = useState<MealSlot>(
     (MEAL_SLOTS.includes(paramSlot as MealSlot) ? paramSlot : 'breakfast') as MealSlot
   );
   const [showSlotPicker, setShowSlotPicker] = useState(false);
+
+  // Recipes tab state
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [recipesLoading, setRecipesLoading] = useState(false);
 
   // Search tab state
   const [query, setQuery] = useState('');
@@ -291,7 +300,7 @@ export default function AddFoodScreen() {
     };
   }, [query]);
 
-  // ─── Load recent/favorites on tab change ─────────────────────────────────
+  // ─── Load recent/favorites/recipes on tab change ─────────────────────────
   useEffect(() => {
     if (activeTab === 'recent' && recentFoods.length === 0) {
       setRecentLoading(true);
@@ -307,16 +316,27 @@ export default function AddFoodScreen() {
         setFavoritesLoading(false);
       });
     }
+    if (activeTab === 'recipes' && recipes.length === 0) {
+      setRecipesLoading(true);
+      getRecipes().then((r) => {
+        if (r.data) setRecipes(r.data);
+        setRecipesLoading(false);
+      });
+    }
   }, [activeTab]);
 
   const navigateToDetail = useCallback(
     (item: FoodSearchResult | FavoriteFood | FoodLogEntry, source: FoodNavPayload['source']) => {
       router.push({
         pathname: '/(tabs)/nutrition/food-detail',
-        params: { foodData: foodNavPayload(item, source), mealSlot },
+        params: {
+          foodData: foodNavPayload(item, source),
+          mealSlot,
+          ...(isIngredientMode ? { mode: 'ingredient' } : {}),
+        },
       });
     },
-    [mealSlot, router]
+    [mealSlot, router, isIngredientMode]
   );
 
   const handleRemoveFavorite = async (id: string) => {
@@ -505,41 +525,105 @@ export default function AddFoodScreen() {
     </View>
   );
 
+  const renderRecipes = () => (
+    <View style={{ flex: 1 }}>
+      {recipesLoading ? (
+        <View style={styles.searchFeedback}>
+          <ActivityIndicator color={Colors.nutrition} />
+        </View>
+      ) : recipes.length === 0 ? (
+        <View style={styles.searchFeedback}>
+          <Ionicons name="book-outline" size={36} color={colors.textSecondary} style={{ opacity: 0.3 }} />
+          <Text style={[styles.feedbackText, { color: colors.textSecondary }]}>
+            No recipes yet. Create one from My Recipes.
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={recipes}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[styles.resultRow, { borderBottomColor: colors.border }]}
+              onPress={async () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                // Batch cook recipes need fraction selection — send to My Recipes modal
+                if (item.isBatchCook) {
+                  router.push('/(tabs)/nutrition/my-recipes');
+                  return;
+                }
+                // Non-batch: log full serving inline
+                const result = await logRecipeAsFood(item, mealSlot, 1);
+                if (result.error) {
+                  Alert.alert('Error', 'Failed to log recipe.');
+                  return;
+                }
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                router.back();
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.resultBody}>
+                <Text style={[styles.resultName, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {item.name}
+                </Text>
+                <Text style={[styles.resultMacros, { color: colors.textSecondary }]}>
+                  {item.servings} serving{item.servings !== 1 ? 's' : ''} · P {item.perServingNutrition.protein}g · C {item.perServingNutrition.carbs}g · F {item.perServingNutrition.fat}g
+                </Text>
+              </View>
+              <View style={styles.resultRight}>
+                <Text style={[styles.resultCal, { color: Colors.nutrition }]}>{item.perServingNutrition.calories}</Text>
+                <Text style={[styles.resultCalUnit, { color: colors.textSecondary }]}>kcal</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+        />
+      )}
+    </View>
+  );
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Meal slot selector */}
-      <View style={[styles.slotRow, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.slotLabel, { color: colors.textSecondary }]}>Logging to:</Text>
-        <TouchableOpacity
-          style={[styles.slotBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          onPress={() => setShowSlotPicker((v) => !v)}
-        >
-          <Text style={[styles.slotBtnText, { color: colors.textPrimary }]}>
-            {MEAL_SLOT_LABELS[mealSlot]}
-          </Text>
-          <Ionicons name={showSlotPicker ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textSecondary} />
-        </TouchableOpacity>
-      </View>
-      {showSlotPicker && (
-        <View style={[styles.slotDropdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          {MEAL_SLOTS.map((s) => (
+      {/* Meal slot selector — hidden in ingredient mode */}
+      {!isIngredientMode && (
+        <>
+          <View style={[styles.slotRow, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.slotLabel, { color: colors.textSecondary }]}>Logging to:</Text>
             <TouchableOpacity
-              key={s}
-              style={[styles.slotItem, { borderBottomColor: colors.border }]}
-              onPress={() => { setMealSlot(s); setShowSlotPicker(false); }}
+              style={[styles.slotBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              onPress={() => setShowSlotPicker((v) => !v)}
             >
-              <Text style={[styles.slotItemText, { color: s === mealSlot ? Colors.nutrition : colors.textPrimary }]}>
-                {MEAL_SLOT_LABELS[s]}
+              <Text style={[styles.slotBtnText, { color: colors.textPrimary }]}>
+                {MEAL_SLOT_LABELS[mealSlot]}
               </Text>
-              {s === mealSlot && <Ionicons name="checkmark" size={16} color={Colors.nutrition} />}
+              <Ionicons name={showSlotPicker ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textSecondary} />
             </TouchableOpacity>
-          ))}
-        </View>
+          </View>
+          {showSlotPicker && (
+            <View style={[styles.slotDropdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              {MEAL_SLOTS.map((s) => (
+                <TouchableOpacity
+                  key={s}
+                  style={[styles.slotItem, { borderBottomColor: colors.border }]}
+                  onPress={() => { setMealSlot(s); setShowSlotPicker(false); }}
+                >
+                  <Text style={[styles.slotItemText, { color: s === mealSlot ? Colors.nutrition : colors.textPrimary }]}>
+                    {MEAL_SLOT_LABELS[s]}
+                  </Text>
+                  {s === mealSlot && <Ionicons name="checkmark" size={16} color={Colors.nutrition} />}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </>
       )}
 
       {/* Tabs */}
       <View style={[styles.tabRow, { borderBottomColor: colors.border }]}>
-        {(['search', 'recent', 'favorites'] as Tab[]).map((t) => (
+        {(isIngredientMode
+          ? (['search', 'recent', 'favorites'] as Tab[])
+          : (['search', 'recent', 'favorites', 'recipes'] as Tab[])
+        ).map((t) => (
           <TouchableOpacity
             key={t}
             style={[styles.tab, activeTab === t && { borderBottomColor: Colors.nutrition, borderBottomWidth: 2 }]}
@@ -557,6 +641,7 @@ export default function AddFoodScreen() {
         {activeTab === 'search' && renderSearch()}
         {activeTab === 'recent' && renderRecent()}
         {activeTab === 'favorites' && renderFavorites()}
+        {activeTab === 'recipes' && !isIngredientMode && renderRecipes()}
       </View>
     </View>
   );
