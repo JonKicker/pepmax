@@ -4,10 +4,11 @@
  * Modular card system with skeleton loading, pull-to-refresh (5-min cache),
  * consistency tracking, body weight sparkline, and card visibility preferences.
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ScrollView, RefreshControl, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors } from '../../../src/constants/theme';
 import { useAuth } from '../../../src/contexts/AuthContext';
@@ -22,10 +23,13 @@ import { BodyWeightCard } from '../../../src/components/dashboard/BodyWeightCard
 import { AIInsightCard } from '../../../src/components/dashboard/AIInsightCard';
 import { SmartInsightsCard } from '../../../src/components/dashboard/SmartInsightsCard';
 import { ConsistencyCard } from '../../../src/components/dashboard/ConsistencyCard';
+import { RecoveryCard } from '../../../src/components/dashboard/RecoveryCard';
 import { LogWeightModal } from '../../../src/components/dashboard/LogWeightModal';
+import { RecoveryCheckInModal } from '../../../src/components/dashboard/RecoveryCheckInModal';
 import { OnboardingChecklist } from '../../../src/components/dashboard/OnboardingChecklist';
 import PremiumGate from '../../../src/components/premium/PremiumGate';
 import { useSmartInsights } from '../../../src/hooks/useSmartInsights';
+import { toLocalDateKey } from '../../../src/utils/nutrition';
 import type { DashboardCardId } from '../../../src/types/dashboard';
 
 function getGreeting(): string {
@@ -42,12 +46,23 @@ export default function DashboardScreen() {
   const dashboard = useDashboard(userProfile);
   const smartInsights = useSmartInsights(dashboard.data, userProfile);
   const [showWeightModal, setShowWeightModal] = useState(false);
+  const [showRecoveryCheckIn, setShowRecoveryCheckIn] = useState(false);
 
   const name = userProfile?.firstName ?? '';
   const greeting = name ? `${getGreeting()}, ${name}` : getGreeting();
   const units = userProfile?.units ?? 'imperial';
 
   const { data, loading, refreshing, errors, cardOrder, hiddenCards, onboardingDismissed } = dashboard;
+
+  // Auto-trigger check-in modal if no recovery today and not dismissed
+  useEffect(() => {
+    if (!data) return;
+    if (data.recovery !== null) return;
+    const dateKey = toLocalDateKey();
+    AsyncStorage.getItem(`recovery_dismissed_${dateKey}`).then((val) => {
+      if (!val) setShowRecoveryCheckIn(true);
+    });
+  }, [data?.recovery]);
 
   // Show onboarding if user has zero data and hasn't dismissed
   const showOnboarding = data && !onboardingDismissed && (
@@ -67,6 +82,15 @@ export default function DashboardScreen() {
     }
 
     switch (cardId) {
+      case 'recovery':
+        return (
+          <RecoveryCard
+            key={cardId}
+            recovery={data?.recovery ?? null}
+            colors={colors}
+            onCheckIn={() => setShowRecoveryCheckIn(true)}
+          />
+        );
       case 'consistency':
         return (
           <ConsistencyCard
@@ -217,6 +241,13 @@ export default function DashboardScreen() {
         colors={colors}
         units={units}
         updateProfile={updateProfile}
+      />
+
+      <RecoveryCheckInModal
+        visible={showRecoveryCheckIn}
+        onDismiss={() => setShowRecoveryCheckIn(false)}
+        onSaved={dashboard.refresh}
+        colors={colors}
       />
     </>
   );

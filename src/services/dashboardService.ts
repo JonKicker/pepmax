@@ -12,6 +12,7 @@ import {
   getConsistencyDocs,
   persistConsistencyDay,
 } from './consistencyService';
+import { getTodayRecovery } from './recoveryService';
 import { getDocument, mergeDocument, COLLECTIONS } from './firebase/firestore';
 import { auth } from './firebase/index';
 import { toLocalDateKey } from '../utils/nutrition';
@@ -68,6 +69,7 @@ export async function fetchDashboardData(opts?: {
     allDosesResult,
     nutritionLogsResult,
     savedConsistencyResult,
+    recoveryResult,
   ] = await Promise.all([
     getTodaysDoses(),
     getDailyTotals(todayKey),
@@ -80,6 +82,7 @@ export async function fetchDashboardData(opts?: {
     getDoses({ startDate: thirtyDaysAgo }),
     getLogsForDateRange(thirtyDaysAgoKey, todayKey),
     getConsistencyDocs(thirtyDaysAgoKey, todayKey),
+    getTodayRecovery(),
   ]);
 
   const data: DashboardData = {
@@ -93,6 +96,7 @@ export async function fetchDashboardData(opts?: {
     allDoses: allDosesResult.error ? null : (allDosesResult.data ?? null),
     nutritionLogs: nutritionLogsResult.error ? null : (nutritionLogsResult.data ?? null),
     consistency: null,
+    recovery: recoveryResult.error ? null : (recoveryResult.data ?? null),
   };
 
   data.streak = computeStreak(data);

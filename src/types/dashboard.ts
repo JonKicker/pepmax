@@ -8,9 +8,11 @@ import type { CardioSession } from './cardio';
 import type { BodyWeightEntry } from './bodyTracking';
 import type { FoodLogEntry } from './nutrition';
 import type { ConsistencyData } from './consistency';
+import type { RecoveryEntry } from './recovery';
 
 export type DashboardCardId =
   | 'greeting'
+  | 'recovery'
   | 'consistency'
   | 'peptides'
   | 'nutrition'
@@ -43,10 +45,12 @@ export type DashboardData = {
   consistency: ConsistencyData | null;
   allDoses: Dose[] | null;
   nutritionLogs: FoodLogEntry[] | null;
+  recovery: RecoveryEntry | null;
 };
 
 export const DEFAULT_CARD_ORDER: DashboardCardId[] = [
   'greeting',
+  'recovery',
   'consistency',
   'peptides',
   'nutrition',

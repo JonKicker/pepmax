@@ -73,6 +73,15 @@ export function useDashboard(userProfile?: UserProfile | null) {
               result.unshift('consistency');
             }
           }
+          // Migration: ensure recovery is after greeting
+          if (!result.includes('recovery')) {
+            const greetingIdx = result.indexOf('greeting');
+            if (greetingIdx >= 0) {
+              result.splice(greetingIdx + 1, 0, 'recovery');
+            } else {
+              result.unshift('recovery');
+            }
+          }
           return result;
         })(),
         hiddenCards: prefs?.hiddenCards ?? [],
