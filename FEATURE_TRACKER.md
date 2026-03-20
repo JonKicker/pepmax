@@ -4,9 +4,28 @@
 
 ---
 
+## Milestone 19 — Apple HealthKit Integration
+
+**Status:** ✅ Committed (159adaf) — Awaiting Ray review
+**Date:** 2026-03-20
+
+### Features included
+
+- `src/types/healthKit.ts` — `HealthKitRecoveryData`, `HealthKitSleepData` types
+- `src/constants/healthKit.ts` — `HK_READ_PERMISSIONS`, `HK_WRITE_PERMISSIONS` arrays
+- `src/services/healthKitService.ts` — full read/write layer: sleep, HR, HRV, steps, weight, nutrition sync, cardio sync, strength sync. Platform.OS guard + try/catch on every export. Never throws.
+- `src/hooks/useHealthKit.ts` — `enable()` (permission request → Firestore flag), `disable()`, `syncRecoveryData()`, `syncSteps()`, `syncWeight()`. Foreground AppState listener debounced to 5min.
+- `src/components/dashboard/RecoveryCheckInModal.tsx` — HealthKit auto-fill on open (sleep hours, sleep quality, resting HR, HRV refs). Apple Health badge shown when data was pre-filled. `.catch()` on all async HealthKit calls.
+
+### Ray Review Notes
+
+**Status:** ⏳ Awaiting first review
+
+---
+
 ## Milestone 18 — Recovery Logging Data Layer
 
-**Status:** ✅ Ray-approved (pending commit)
+**Status:** ✅ Ray-approved (two conditional rounds resolved)
 **Date:** 2026-03-20
 
 ### Features included
