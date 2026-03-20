@@ -35,6 +35,8 @@ export async function saveRecovery(input: {
   stress: number;
   readiness: number;
   notes: string;
+  restingHR?: number;
+  hrv?: number;
 }): Promise<ServiceResult<void>> {
   try {
     validateRecoveryInput(input);
@@ -54,6 +56,8 @@ export async function saveRecovery(input: {
   // Truncate notes to 500 chars — never throw, never drop the entry (Ray M16a item 2)
   const notes = input.notes.trim().slice(0, 500);
 
+  const healthKitSynced = !!(input.restingHR != null || input.hrv != null);
+
   return setDocument(COLLECTIONS.RECOVERY_LOG, date, {
     sleepHours: input.sleepHours,
     sleepQuality: input.sleepQuality,
@@ -61,7 +65,9 @@ export async function saveRecovery(input: {
     stress: input.stress,
     readiness: input.readiness,
     notes,
-    healthKitSynced: false, // hardcoded until HealthKit milestone (Ray M16a item 3)
+    healthKitSynced,
+    ...(input.restingHR != null ? { restingHR: input.restingHR } : {}),
+    ...(input.hrv != null ? { hrv: input.hrv } : {}),
     recoveryMultiplier,
     timestamp: serverTimestamp(),
     date,
@@ -72,6 +78,12 @@ export async function saveRecovery(input: {
  * Fetch recovery log for a given date.
  * Tries new RECOVERY_LOG collection first; falls back to legacy RECOVERY
  * collection for backward compat with pre-M16a documents.
+ *
+ * MIGRATION NOTE: Documents written before M18 use legacy field names
+ * (muscleSoreness, stressLevel, overallReadiness 0–10). Documents written
+ * from M18 onward use (soreness, stress, readiness 1–5). Only
+ * recoveryMultiplier, sleepHours, and sleepQuality are safe to read across
+ * all document versions without a null/undefined guard.
  */
 export async function getRecovery(
   date: string,

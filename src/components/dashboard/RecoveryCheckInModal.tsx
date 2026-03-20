@@ -3,7 +3,7 @@
  * Captures sleep, soreness, stress, readiness, and optional notes.
  * Scrollable to prevent input clipping on small screens.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Modal,
   View,
@@ -14,12 +14,14 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { saveRecovery } from '../../services/recoveryService';
 import { multiplierColor } from '../../utils/recovery';
 import { calculateRecoveryMultiplier } from '../../utils/recoveryCalc';
 import { toLocalDateKey } from '../../utils/nutrition';
+import { useHealthKit } from '../../hooks/useHealthKit';
 import type { Theme } from '../../constants/theme';
 import { Colors } from '../../constants/theme';
 
@@ -83,8 +85,13 @@ export function RecoveryCheckInModal({ visible, onDismiss, onSaved, colors }: Pr
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [skipCount, setSkipCount] = useState(0);
+  const [hkBadge, setHkBadge] = useState(false);
+  const hkRestingHRRef = useRef<number | undefined>(undefined);
+  const hkHrvRef = useRef<number | undefined>(undefined);
 
-  // Reset all state each time the modal opens
+  const { isEnabled: hkEnabled, syncRecoveryData } = useHealthKit();
+
+  // Reset all state each time the modal opens; auto-fill from HealthKit if enabled
   useEffect(() => {
     if (visible) {
       setSleepQuality(3);
@@ -94,8 +101,24 @@ export function RecoveryCheckInModal({ visible, onDismiss, onSaved, colors }: Pr
       setReadiness(3);
       setNotes('');
       setSkipCount(0);
+      setHkBadge(false);
+      hkRestingHRRef.current = undefined;
+      hkHrvRef.current = undefined;
+
+      if (hkEnabled) {
+        const date = toLocalDateKey();
+        syncRecoveryData(date).then((data) => {
+          if (data.sleep) {
+            setSleepHours(Math.min(12, Math.max(0, data.sleep.totalHours)));
+            setSleepQuality(Math.min(5, Math.max(1, data.sleep.quality)));
+            setHkBadge(true);
+          }
+          if (data.restingHR != null) hkRestingHRRef.current = data.restingHR;
+          if (data.hrv != null) hkHrvRef.current = data.hrv;
+        });
+      }
     }
-  }, [visible]);
+  }, [visible, hkEnabled, syncRecoveryData]);
 
   // Live preview of recovery multiplier
   const liveMultiplier = calculateRecoveryMultiplier(
@@ -116,15 +139,19 @@ export function RecoveryCheckInModal({ visible, onDismiss, onSaved, colors }: Pr
         stress,
         readiness,
         notes,
+        restingHR: hkRestingHRRef.current,
+        hrv: hkHrvRef.current,
       });
       if (result.error) {
         console.error('[RecoveryCheckInModal] save error:', result.error);
+        Alert.alert('Could not save', 'Please try again.');
       } else {
         onSaved();
         onDismiss();
       }
     } catch (e) {
       console.error('[RecoveryCheckInModal] unexpected error:', e);
+      Alert.alert('Could not save', 'Please try again.');
     } finally {
       setSaving(false);
     }
@@ -160,6 +187,12 @@ export function RecoveryCheckInModal({ visible, onDismiss, onSaved, colors }: Pr
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.scrollContent}
           >
+            {hkBadge && (
+              <View style={styles.hkBadge}>
+                <Text style={styles.hkBadgeText}>Apple Health</Text>
+              </View>
+            )}
+
             {/* Sleep Quality */}
             <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
               Sleep Quality
@@ -319,6 +352,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     marginBottom: 12,
+  },
+  hkBadge: {
+    alignSelf: 'center',
+    backgroundColor: '#e8f4fd',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 4,
+  },
+  hkBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#007aff',
   },
   sectionLabel: {
     fontSize: 13,

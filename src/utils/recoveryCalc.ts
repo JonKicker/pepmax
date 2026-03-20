@@ -34,13 +34,13 @@ function mapSleepQuality(quality: number): number {
 // Inverted — higher soreness = lower multiplier
 function mapMuscleSoreness(soreness: number): number {
   const map: Record<number, number> = { 1: 1.5, 2: 1.2, 3: 1.0, 4: 0.7, 5: 0.5 };
-  return map[clampRating(soreness, 'muscleSoreness')];
+  return map[clampRating(soreness, 'soreness')];
 }
 
 // Inverted — higher stress = lower multiplier
 function mapStressLevel(stress: number): number {
   const map: Record<number, number> = { 1: 1.5, 2: 1.2, 3: 1.0, 4: 0.7, 5: 0.5 };
-  return map[clampRating(stress, 'stressLevel')];
+  return map[clampRating(stress, 'stress')];
 }
 
 // 1–5 rating: 1=Very Low → 0.5, 3=Moderate → 1.0, 5=Very High → 1.5
@@ -66,12 +66,4 @@ export function calculateRecoveryMultiplier(
   const avg = scores.reduce((sum, s) => sum + s, 0) / scores.length;
   // parseFloat(toFixed(1)) avoids IEEE 754 drift
   return parseFloat(avg.toFixed(1));
-}
-
-/**
- * Converts a recoveryMultiplier (0.5–1.5) to a 0–100 display score.
- * 0.5 → 0, 1.0 → 50, 1.5 → 100.
- */
-export function multiplierToDisplayScore(multiplier: number): number {
-  return Math.round(Math.min(1, Math.max(0, multiplier - 0.5)) * 100);
 }
