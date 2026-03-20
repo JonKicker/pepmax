@@ -4,6 +4,45 @@
 
 ---
 
+## Milestone 15 — Body Measurements
+
+**Status:** ✅ Committed (17cc508)
+**Date:** 2026-03-20
+
+### Features included
+
+- `src/types/bodyMeasurement.ts` — `BodyMeasurement`, `CircumferenceMeasurements`, `BodyMeasurementInput`, `CIRCUMFERENCE_FIELDS`
+- `src/services/bodyMeasurementService.ts` — CRUD + photo upload/compress (expo-image-manipulator) + weight sync to `bodyWeight` collection on save
+- `src/utils/bodyMeasurementUtils.ts` — `filterByTimeRange`, `computeWeeklyAverages`, `findPersonalBests`, `computeMonthlyChange`
+- `src/components/body/MeasurementTrendChart.tsx` — Victory Native chart: daily faint line + weekly average scatter + area fill + time range tabs
+- `src/components/training/BodyMeasurementSummary.tsx` — Training tab summary card (latest weight + monthly change)
+- `app/(tabs)/training/body-measurements.tsx` — History list, delete with confirmation, error/retry state
+- `app/(tabs)/training/log-measurement.tsx` — Log form: weight, body fat %, 9 circumference fields, photo (stubbed, needs expo-image-picker), notes. Full input validation + maxLength
+- `app/(tabs)/training/measurement-trends.tsx` — Weight / BF% / waist trend charts + personal bests, error/retry state
+- `src/hooks/useUnits.ts` — `lengthLabel`, `formatLength`, `convertLengthToDisplay`, `convertLengthToCm`
+- `app/(tabs)/training/_layout.tsx` — Routes added for all 3 new screens
+- `app/(tabs)/training/index.tsx` — `BodyMeasurementSummary` wired
+
+### Ray Review Notes
+
+**Status:** APPROVED (after two conditional approval rounds)
+
+**Round 1 fixes:**
+1. ✅ Input validation on weight, body fat %, and circumference fields (range checks before Firestore write)
+2. ✅ `maxLength={500}` on notes TextInput
+3. ✅ Error state + tappable retry on `getMeasurementHistory()` failure in both screens
+4. ✅ Dead `computeMonthlyChange` import removed from `training/index.tsx`
+5. ✅ `Colors.light?.success` → `Colors.light.success` (removed unnecessary optional chain)
+
+**Round 2 fix:**
+6. ✅ Unused `Alert` import removed from `measurement-trends.tsx`
+
+### Known gaps (future milestone)
+- Photo picker stubbed — needs `expo-image-picker` installed and wired
+- `computeMonthlyChange` in Training index always returns null (full history not fetched there) — tracked for future enhancement
+
+---
+
 ## Milestone 13 — Recovery Card + Daily Check-In
 
 **Status:** ✅ Implemented + Ray fixes applied (pending commit)
