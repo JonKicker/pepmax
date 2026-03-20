@@ -59,6 +59,7 @@ export const COLLECTIONS = {
   INVENTORY: 'inventory',
   RECOVERY: 'recovery',           // legacy — read-only after M16a
   RECOVERY_LOG: 'recoveryLog',    // spec §8 path — new writes go here
+  BODY_MODEL: 'bodyModel',        // daily body model snapshots, keyed by YYYY-MM-DD
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];

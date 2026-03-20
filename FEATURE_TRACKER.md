@@ -4,22 +4,87 @@
 
 ---
 
+## Milestone 20 — Body Model Scoring Engine
+
+**Status:** ⏳ Built — Awaiting Ray review
+**Date:** 2026-03-20
+
+### Features included
+
+- `src/types/bodyModel.ts` — `MusculoskeletalZone` (13 zones), `SystemZone` (5 zones), `MuscleZoneScores`, `SystemZoneScores`, `BodyModelBonuses`, `BodyModelSnapshot`
+- `src/constants/bodyModel.ts` — `DEFAULT_RECOVERY_MULTIPLIER = 1.0`, `FATIGUE_LOOKBACK_DAYS = 14`, `BODY_MODEL_MAX_RANGE_DAYS = 90`, `BASE_FATIGUE_PER_SET = 6`, `RPE_MULTIPLIERS`, `BASE_RECOVERY_HOURS` (per zone), `MUSCLE_GROUP_TO_ZONES` mapping, `ZONE_WEIGHTS` (verified sum = 1.000)
+- `src/utils/bodyModelCalc.ts` — Pure functions: `computeAllMuscleZones`, `computeAllSystemScores`, `computeSynergyScore`, `computeBonuses`, `computeAcuteChronicRatio`, `hasConsistencyBonus`, `rpeMultiplier`, `recoveryFraction`, `computeZoneScore`
+- `src/services/bodyModelService.ts` — `computeAndSaveBodyModel(date, calorieTarget?)`, `getBodyModel(date)`, `getBodyModelRange(startDate, endDate)`
+- `src/services/firebase/firestore.ts` — `BODY_MODEL: 'bodyModel'` added to COLLECTIONS
+- `src/services/accountService.ts` — `BODY_MODEL` added to `QUERYABLE_COLLECTIONS`
+- `src/services/dataExportService.ts` — `BODY_MODEL` added to `EXPORT_COLLECTIONS`
+
+### Architecture decisions
+
+- **Partial data failure**: `Promise.allSettled` used for all 4 data source fetches. Any failure falls back to a safe default — computation always proceeds.
+- **Recovery multiplier fallback**: `DEFAULT_RECOVERY_MULTIPLIER = 1.0` applied when no check-in exists. Prevents division-by-zero in `effectiveHours = baseHours / multiplier`.
+- **Phase 1 system scores**: CNS and Immune are data-driven; Cardiovascular uses cardio session history; Metabolic uses calorie adherence; GI hardcoded to 90 (pending side-effect integration). All enhancement targets documented inline.
+- **Trigger wiring deferred**: `computeAndSaveBodyModel` is not yet called from workout/recovery/cardio completion — that's M21 or a follow-up task.
+- **No compound modifier**: `SessionExercise` stores `primaryMuscle` only, not exercise category. Compound 1.2× modifier deferred until workout data model captures category.
+- **getBodyModelRange cap**: `BODY_MODEL_MAX_RANGE_DAYS = 90` enforced via Firestore query `limit()`.
+
+### Ray's conditional approval decisions (locked before code was written)
+
+1. ✅ `DEFAULT_RECOVERY_MULTIPLIER = 1.0` — named constant, null-checked in `recoveryFraction()` before division
+2. ✅ Partial data failure → proceed with defaults (not abort). Each source has a documented fallback.
+
+### Ray Review Notes
+
+**Status:** ⏳ Awaiting first review
+
+---
+
 ## Milestone 19 — Apple HealthKit Integration
 
-**Status:** ✅ Committed (159adaf) — Awaiting Ray review
+**Status:** ✅ Ray-approved (three conditional rounds resolved)
 **Date:** 2026-03-20
 
 ### Features included
 
 - `src/types/healthKit.ts` — `HealthKitRecoveryData`, `HealthKitSleepData` types
-- `src/constants/healthKit.ts` — `HK_READ_PERMISSIONS`, `HK_WRITE_PERMISSIONS` arrays
-- `src/services/healthKitService.ts` — full read/write layer: sleep, HR, HRV, steps, weight, nutrition sync, cardio sync, strength sync. Platform.OS guard + try/catch on every export. Never throws.
-- `src/hooks/useHealthKit.ts` — `enable()` (permission request → Firestore flag), `disable()`, `syncRecoveryData()`, `syncSteps()`, `syncWeight()`. Foreground AppState listener debounced to 5min.
-- `src/components/dashboard/RecoveryCheckInModal.tsx` — HealthKit auto-fill on open (sleep hours, sleep quality, resting HR, HRV refs). Apple Health badge shown when data was pre-filled. `.catch()` on all async HealthKit calls.
+- `src/constants/healthKit.ts` — `HK_READ_IDENTIFIERS`, `HK_WRITE_IDENTIFIERS` arrays (string-literal v13 style)
+- `src/services/healthKitService.ts` — full read/write layer: sleep, HR, HRV, steps, weight, nutrition sync, cardio sync, strength sync. Platform.OS guard + try/catch on every export. Never throws. `requestPermissions` uses documented `as any` cast pending upstream type fix.
+- `src/hooks/useHealthKit.ts` — `enable()` (checks `requestPermissions()` return before writing Firestore flag), `disable()`, `syncRecoveryData()`, `syncSteps()`, `syncWeight()`. Foreground AppState listener debounced to 5min.
+- `src/services/bodyWeightService.ts` — fire-and-forget `writeBodyWeight` after `logWeight`; `note === 'healthkit'` guard prevents sync loop.
+- `src/services/nutritionService.ts` — fire-and-forget `writeNutrition` after `logFood`; UUID stored in Firestore for deduplication.
+- `src/services/bodyMeasurementService.ts` — fire-and-forget `writeBodyWeight`/`writeBodyFat` after measurement log.
+- `src/hooks/useCardioSession.ts` — `writeCardioWorkout` on session end; `healthKitUUID` stored in Firestore.
+- `src/types/profile.ts` — `healthKitEnabled?: boolean`
+- `src/types/cardio.ts` — `healthKitUUID?: string`
+- `src/types/nutrition.ts` — `healthKitUUID?: string` on `FoodLogEntry`
+- `src/components/dashboard/RecoveryCheckInModal.tsx` — HealthKit auto-fill on open (sleep hours, sleep quality, resting HR, HRV refs). `userTouchedRef` guard prevents overwriting user input. Apple Health badge shown when data pre-filled. `.catch()` on async HealthKit chain.
 
 ### Ray Review Notes
 
-**Status:** ⏳ Awaiting first review
+**Status:** APPROVED (after four conditional approval rounds)
+
+**Round 1 fixes:**
+1. ✅ Renamed constants `HK_READ_PERMISSIONS` → `HK_READ_IDENTIFIERS`, `HK_WRITE_PERMISSIONS` → `HK_WRITE_IDENTIFIERS` (string-literal v13 API style)
+2. ✅ Unsafe type cast replaced with documented `as any` + ESLint disable comment explaining v13 API mismatch
+3. ✅ `enable()` now checks `requestPermissions()` return value before persisting `healthKitEnabled: true` to Firestore
+4. ✅ Dead `HK_CACHE_KEY` constant removed
+
+**Round 2 fixes:**
+5. ✅ `syncWeight()` in `useHealthKit` — `note: 'healthkit'` guard added to `bodyWeightService.logWeight` to prevent HealthKit→Firestore→HealthKit sync loop
+6. ✅ Fire-and-forget writes use `.catch(() => {})` — never surface to UI
+7. ✅ `writeNutrition` UUID stored in Firestore for deduplication
+
+**Round 3 fixes:**
+8. ✅ `sleepQuality` estimation incorporates deep/rem ratio (restorative >35% → +1, <15% → -1)
+9. ✅ `userTouchedRef` guard in RecoveryCheckInModal prevents HealthKit pre-fill from overwriting user input after interaction
+10. ✅ Missing `hkBadge`/`hkBadgeText` StyleSheet entries added
+11. ✅ Silent save failure fixed — `Alert.alert` shown on both `result.error` branch and catch branch
+
+**Round 4 fixes:**
+12. ✅ `as any` cast + misleading comment removed from `requestPermissions` — package types already declare `{ toRead, toShare }` signature
+13. ✅ `'healthkit'` magic string replaced with `HK_WEIGHT_SOURCE_MARKER` constant in `constants/healthKit.ts`; both `bodyWeightService` and `useHealthKit` import and use it
+14. ✅ `Platform.OS !== 'ios'` guard added to `fetchRecoveryData` — avoids 3 no-op parallel calls on Android
+15. ✅ Dead `durationSeconds` field removed from `StrengthWriteData` type and `session-summary.tsx` call site
 
 ---
 
