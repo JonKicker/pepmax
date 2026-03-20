@@ -22,6 +22,7 @@ import type { AggregationResult, MicroAggregate } from '../../../src/utils/micro
 import { MICRONUTRIENT_LABELS, MICRONUTRIENT_UNITS } from '../../../src/constants/nutrition';
 import { FOCUS_PACKS } from '../../../src/constants/focusPacks';
 import type { FoodLogEntry } from '../../../src/types/nutrition';
+import PremiumGate from '../../../src/components/premium/PremiumGate';
 
 const TRAFFIC_COLORS = {
   green: '#4CAF50',
@@ -204,6 +205,7 @@ export default function MicrosScreen() {
       : (data?.nutrients ?? []).filter((n) => activePack.nutrients.includes(n.nutrientKey));
 
   return (
+    <PremiumGate mode="blur" fullScreen>
     <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.scroll}>
       {/* Time range toggle */}
       <View style={[styles.toggleRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -301,6 +303,7 @@ export default function MicrosScreen() {
         </View>
       ) : null}
     </ScrollView>
+    </PremiumGate>
   );
 }
 

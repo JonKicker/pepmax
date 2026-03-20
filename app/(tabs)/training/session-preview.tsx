@@ -16,6 +16,8 @@ import { getTemplateById } from '../../../src/services/templateService';
 import { generateBareMinimum } from '../../../src/utils/bareMinimum';
 import { setPendingBareMinimum } from '../../../src/utils/sessionPreviewStore';
 import type { WorkoutTemplate } from '../../../src/types/template';
+import PremiumGate from '../../../src/components/premium/PremiumGate';
+import ProBadge from '../../../src/components/premium/ProBadge';
 
 type Mode = 'full' | 'bareMinimum';
 const TIME_CAPS = [15, 20, 30, 45] as const;
@@ -122,10 +124,12 @@ export default function SessionPreviewScreen() {
           <Text style={[styles.modeBtnText, { color: mode === 'bareMinimum' ? 'white' : colors.textSecondary }]}>
             Bare Minimum
           </Text>
+          <ProBadge style={{ marginLeft: 4 }} />
         </TouchableOpacity>
       </View>
 
       {mode === 'bareMinimum' && (
+        <PremiumGate mode="blur">
         <>
           {/* Time cap pills */}
           <View style={styles.timeCapRow}>
@@ -198,6 +202,7 @@ export default function SessionPreviewScreen() {
             </Text>
           </View>
         </>
+        </PremiumGate>
       )}
 
       {mode === 'full' && (

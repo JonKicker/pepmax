@@ -120,6 +120,7 @@ function RootLayout() {
             <Stack.Screen name="(onboarding)" />
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="paywall" options={{ presentation: 'modal', headerShown: false }} />
+            <Stack.Screen name="go-pro" options={{ presentation: 'modal', headerShown: false }} />
           </Stack>
         </PremiumProvider>
       </ErrorBoundary>

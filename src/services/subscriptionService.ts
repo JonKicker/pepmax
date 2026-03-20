@@ -4,9 +4,33 @@
  * Writes to: users/{uid}/subscription/current
  */
 import { Platform } from 'react-native';
-import { mergeDocument, COLLECTIONS } from './firebase/firestore';
+import { mergeDocument, getDocument, setDocument, COLLECTIONS } from './firebase/firestore';
 import type { SubscriptionRecord, SubscriptionPlan } from '../types/subscription';
 import type { ServiceResult } from '../types/service';
+
+type TrialRecord = {
+  startedAt: string;
+  expiresAt: string;
+};
+
+/**
+ * Write a 7-day dev trial to Firestore.
+ */
+export async function startDevTrial(): Promise<ServiceResult<void>> {
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  return setDocument<TrialRecord>(COLLECTIONS.SUBSCRIPTION, 'trial', {
+    startedAt: now.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+  });
+}
+
+/**
+ * Read the dev trial document from Firestore.
+ */
+export async function getDevTrial(): Promise<ServiceResult<TrialRecord | null>> {
+  return getDocument<TrialRecord>(COLLECTIONS.SUBSCRIPTION, 'trial');
+}
 
 /**
  * Persist a subscription record after a successful purchase or restore.

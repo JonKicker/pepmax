@@ -33,7 +33,7 @@ export default function PremiumGate({ children, mode = 'blur', fallback, fullScr
   // Blur mode — show children with overlay
   const openPaywall = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/paywall');
+    router.push('/go-pro');
   };
 
   return (

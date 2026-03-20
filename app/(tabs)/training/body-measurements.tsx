@@ -19,6 +19,7 @@ import {
   deleteMeasurement,
 } from '../../../src/services/bodyMeasurementService';
 import type { BodyMeasurement } from '../../../src/types/bodyMeasurement';
+import ProBadge from '../../../src/components/premium/ProBadge';
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00');
@@ -160,6 +161,7 @@ export default function BodyMeasurementsScreen() {
         >
           <Ionicons name="trending-up-outline" size={18} color={Colors.gym} />
           <Text style={[styles.ctaBtnText, { color: Colors.gym }]}>View Trends</Text>
+          <ProBadge style={{ marginLeft: 4 }} />
         </TouchableOpacity>
       </View>
 

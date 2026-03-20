@@ -16,10 +16,12 @@ export type SubscriptionRecord = {
 
 export type PremiumState = {
   isPremium: boolean;
+  isTrial: boolean;
   loading: boolean;
   plan: SubscriptionPlan | null;
   expirationDate: string | null;
   checkSubscription: () => Promise<void>;
   purchasePackage: (pkg: PurchasesPackage) => Promise<boolean>;
   restorePurchases: () => Promise<boolean>;
+  startTrial: () => Promise<void>;
 };

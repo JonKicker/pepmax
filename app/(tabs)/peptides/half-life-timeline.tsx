@@ -16,6 +16,7 @@ import { useHalfLifeTimeline } from '../../../src/hooks/useHalfLifeTimeline';
 import type { TimelineRange } from '../../../src/hooks/useHalfLifeTimeline';
 import HalfLifeTimelineChart from '../../../src/components/peptides/HalfLifeTimelineChart';
 import LogSideEffectModal from '../../../src/components/peptides/LogSideEffectModal';
+import PremiumGate from '../../../src/components/premium/PremiumGate';
 
 export default function HalfLifeTimelineScreen() {
   const { colors } = useTheme();
@@ -37,6 +38,7 @@ export default function HalfLifeTimelineScreen() {
   }
 
   return (
+    <PremiumGate mode="blur" fullScreen>
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <HalfLifeTimelineChart
@@ -76,6 +78,7 @@ export default function HalfLifeTimelineScreen() {
         onSaved={() => setRefreshKey((k) => k + 1)}
       />
     </View>
+    </PremiumGate>
   );
 }
 

@@ -4,6 +4,74 @@
 
 ---
 
+## Milestone 17 — Pro Subscription Gating + Dev Trial
+
+**Status:** ✅ Ray-approved (pending commit)
+**Date:** 2026-03-20
+
+### Features included
+
+- `src/types/subscription.ts` — `isTrial: boolean`, `startTrial: () => Promise<void>` added to `PremiumState`
+- `src/constants/premium.ts` — `PRO_FEATURES` array (12 features, free/pro availability flags)
+- `src/services/subscriptionService.ts` — `startDevTrial()` (write `users/{uid}/subscription/trial`), `getDevTrial()` (read same)
+- `src/contexts/PremiumContext.tsx` — `checkTrial()` (validates Firestore trial, sets `expirationDate`), `startTrial()` (idempotent — throws `TRIAL_ALREADY_USED` if prior trial exists), trial check wired into `checkSubscription()` for both dev and RevenueCat paths
+- `src/components/premium/PremiumGate.tsx` — "Tap to unlock" now routes to `/go-pro` instead of `/paywall`
+- `app/(tabs)/peptides/half-life-timeline.tsx` — Wrapped in `<PremiumGate fullScreen>`
+- `app/(tabs)/training/measurement-trends.tsx` — Wrapped in `<PremiumGate fullScreen>`
+- `app/(tabs)/nutrition/micros.tsx` — Wrapped in `<PremiumGate fullScreen>`
+- `app/(tabs)/training/session-preview.tsx` — Bare Minimum panel gated in `<PremiumGate>` + `ProBadge` on toggle button
+- `app/(tabs)/peptides/index.tsx` — `ProBadge` on "Blood Levels" button
+- `app/(tabs)/training/body-measurements.tsx` — `ProBadge` on "View Trends" button
+- `app/(tabs)/nutrition/index.tsx` — `ProBadge` on "Micronutrients" card
+- `app/go-pro.tsx` — **NEW** — Free vs Pro comparison table, "Start Free 7-Day Trial" CTA, trial status display, "View Plans" link
+- `app/_layout.tsx` — `go-pro` registered as modal route
+- `app/(tabs)/profile/index.tsx` — "Upgrade to Premium" → "Go Pro" button routes to `/go-pro`
+
+### Ray Review Notes
+
+**Status:** CONDITIONAL APPROVAL → fixes applied → APPROVED
+
+**Round 1 fixes applied:**
+1. ✅ `checkTrial()` now sets `setExpirationDate(data.expiresAt)` — days-remaining display works correctly
+2. ✅ `startTrial()` idempotency guard — throws `TRIAL_ALREADY_USED` if prior trial exists; no clock reset exploit
+3. ✅ Dev error logging added to `checkTrial()` catch block
+4. ✅ `go-pro.tsx` error handler distinguishes `TRIAL_ALREADY_USED` from generic errors
+
+**Tracked observations (non-blocking, future cleanup):**
+- Dual `expiresAt` computation: service computes at write time, context computes post-async — sub-second delta, low impact. Fix: have `startDevTrial()` return the written timestamp
+- Magic string sentinel `'TRIAL_ALREADY_USED'` — acceptable for single-layer mobile app; convert to typed error class if error handling grows
+- `checkTrial` false-path: `setExpirationDate(null)` not called on expiry — stale value in memory until cold relaunch (no user-visible impact currently)
+
+---
+
+## Milestone 16 — Privacy & Data
+
+**Status:** ✅ Committed (b32b68f)
+**Date:** 2026-03-20
+
+### Features included
+
+- `app/(tabs)/profile/privacy.tsx` — Privacy Panel: 4-card accordion (single-open, chevron icons), inline "type DELETE" account deletion confirmation (cross-platform TextInput, no Alert.prompt)
+- `app/(tabs)/profile/export-data.tsx` — Export screen: premium gate (useEffect redirect), JSON + CSV/ZIP format buttons, per-button loading spinners + "Gathering your data…" message
+- `src/services/dataExportService.ts` — Full rewrite: `exportUserDataAsJSON()` (all collections + profile), `exportUserDataAsCSV()` (JSZip bundle, per-collection CSVs, Timestamps → ISO strings, key union across rows), `exportUserData` alias for backward compat
+- `src/services/accountService.ts` — 11 missing collections added to `QUERYABLE_COLLECTIONS`: sideEffects, aiInsights, consistency, cycles, recipes, bodyMeasurements, inventory, recovery, reconProtocols, equipmentProfiles, nutrition
+- `app/(tabs)/profile/_layout.tsx` — `privacy` + `export-data` routes added
+- `app/(tabs)/profile/index.tsx` — Data & Privacy section: "Privacy & Data" nav row, "Export My Data" nav row, "Delete All Data" kept; Delete Account + handleExportData handlers removed (moved to new screens)
+- `jszip` installed (pure JS, Expo managed workflow compatible)
+
+### Ray Review Notes
+
+**Status:** CONDITIONAL APPROVAL → fix applied, committed
+
+**Fix applied before commit:**
+1. ✅ `router.replace('/paywall')` moved from render body into `useEffect` — React rules violation fix
+
+**Tracked observations (non-blocking):**
+- File accumulation in `documentDirectory` — acknowledged, cleanup pass deferred
+- CSV formula injection — low risk (user's own data to themselves), no fix required
+
+---
+
 ## Milestone 15 — Body Measurements
 
 **Status:** ✅ Committed (17cc508)

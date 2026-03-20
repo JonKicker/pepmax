@@ -30,6 +30,8 @@ import { useAuth } from './AuthContext';
 import {
   logSubscription,
   buildSubscriptionRecord,
+  startDevTrial,
+  getDevTrial,
 } from '../services/subscriptionService';
 import type { PremiumState, SubscriptionPlan } from '../types/subscription';
 
@@ -54,6 +56,7 @@ const PremiumContext = createContext<PremiumState | undefined>(undefined);
 export function PremiumProvider({ children }: { children: React.ReactNode }) {
   const { currentUser } = useAuth();
   const [isPremium, setIsPremium] = useState(false);
+  const [isTrial, setIsTrial] = useState(false);
   const [loading, setLoading] = useState(true);
   const [plan, setPlan] = useState<SubscriptionPlan | null>(null);
   const [expirationDate, setExpirationDate] = useState<string | null>(null);
@@ -165,8 +168,46 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
     [cacheStatus, detectPlan]
   );
 
+  // ─── Trial helpers ───────────────────────────────────────────────────────────
+
+  const checkTrial = useCallback(async (): Promise<boolean> => {
+    try {
+      const { data } = await getDevTrial();
+      if (data?.expiresAt && new Date(data.expiresAt) > new Date()) {
+        setIsPremium(true);
+        setIsTrial(true);
+        setExpirationDate(data.expiresAt);
+        return true;
+      }
+    } catch (e) {
+      if (__DEV__) console.warn('[checkTrial] failed:', e);
+    }
+    setIsTrial(false);
+    return false;
+  }, []);
+
+  const startTrial = useCallback(async (): Promise<void> => {
+    // Idempotency guard — if a trial was ever started, throw so callers can show the right message
+    const existing = await getDevTrial();
+    if (existing.data?.startedAt) throw new Error('TRIAL_ALREADY_USED');
+    const result = await startDevTrial();
+    if (result.error) throw result.error;
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    setIsPremium(true);
+    setIsTrial(true);
+    setExpirationDate(expiresAt);
+    // Cache the trial so offline relaunches still show premium state
+    await cacheStatus({ isPremium: true, plan: null, expirationDate: expiresAt, checkedAt: Date.now() });
+  }, [cacheStatus]);
+
   const checkSubscription = useCallback(async () => {
     if (!configuredRef.current) {
+      // No RevenueCat — trial only
+      const hasTrial = await checkTrial();
+      if (!hasTrial) {
+        setIsPremium(false);
+        setIsTrial(false);
+      }
       setLoading(false);
       return;
     }
@@ -174,6 +215,12 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
     try {
       const info = await Purchases.getCustomerInfo();
       applyCustomerInfo(info);
+      // If RevenueCat says not premium, fall back to Firestore trial
+      if (!info.entitlements.active[ENTITLEMENT_ID]) {
+        await checkTrial();
+      } else {
+        setIsTrial(false);
+      }
     } catch {
       // Offline or error — fall back to cache
       const cached = await loadCachedStatus();
@@ -182,10 +229,11 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
         setPlan(cached.plan);
         setExpirationDate(cached.expirationDate);
       }
+      await checkTrial();
     } finally {
       setLoading(false);
     }
-  }, [applyCustomerInfo, loadCachedStatus]);
+  }, [applyCustomerInfo, loadCachedStatus, checkTrial]);
 
   // ─── Check on mount + foreground ────────────────────────────────────────────
 
@@ -252,12 +300,14 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
     <PremiumContext.Provider
       value={{
         isPremium,
+        isTrial,
         loading,
         plan,
         expirationDate,
         checkSubscription,
         purchasePackage,
         restorePurchases,
+        startTrial,
       }}
     >
       {children}

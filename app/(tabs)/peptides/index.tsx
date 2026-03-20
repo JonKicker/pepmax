@@ -23,6 +23,7 @@ import type { Peptide } from '../../../src/types/peptide';
 import PresetBrowser from '../../../src/components/peptides/PresetBrowser';
 import type { PresetCompound } from '../../../src/data/presetCompounds';
 import { useCycleStatus } from '../../../src/hooks/useCycleStatus';
+import ProBadge from '../../../src/components/premium/ProBadge';
 import type { ActiveCycleInfo } from '../../../src/hooks/useCycleStatus';
 
 // ─── Active cycle card ────────────────────────────────────────────────────────
@@ -382,6 +383,7 @@ export default function PeptidesScreen() {
           >
             <Ionicons name="pulse-outline" size={16} color={Colors.peptide} />
             <Text style={[styles.actionBtnText, { color: Colors.peptide }]}>Blood Levels</Text>
+            <ProBadge style={{ marginLeft: 4 }} />
           </TouchableOpacity>
 
           <TouchableOpacity

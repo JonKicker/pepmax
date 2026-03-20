@@ -26,6 +26,7 @@ import { useAuth } from '../../../src/contexts/AuthContext';
 import { getTodaysLog, deleteFood } from '../../../src/services/nutritionService';
 import { DEFAULT_MEAL_SLOTS } from '../../../src/types/nutrition';
 import type { FoodLogEntry, MealSlotConfig } from '../../../src/types/nutrition';
+import ProBadge from '../../../src/components/premium/ProBadge';
 
 // ─── Calorie Ring ─────────────────────────────────────────────────────────────
 
@@ -481,6 +482,7 @@ export default function NutritionScreen() {
         >
           <Ionicons name="flask-outline" size={20} color={Colors.nutrition} />
           <Text style={[styles.microsLabel, { color: colors.textPrimary }]}>Micronutrients</Text>
+          <ProBadge style={{ marginLeft: 6 }} />
           <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} style={{ marginLeft: 'auto' }} />
         </TouchableOpacity>
 
