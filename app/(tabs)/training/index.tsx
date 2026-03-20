@@ -21,7 +21,10 @@ import { useWorkoutRecovery } from '../../../src/hooks/useWorkoutRecovery';
 import { updateSession } from '../../../src/services/workoutSessionService';
 import { useEquipmentProfiles } from '../../../src/hooks/useEquipmentProfiles';
 import { EquipmentQuickSwitch } from '../../../src/components/training/EquipmentQuickSwitch';
+import BodyMeasurementSummary from '../../../src/components/training/BodyMeasurementSummary';
+import { getLatestMeasurement } from '../../../src/services/bodyMeasurementService';
 import type { WorkoutLog } from '../../../src/types/training';
+import type { BodyMeasurement } from '../../../src/types/bodyMeasurement';
 
 // ─── Swipeable card ───────────────────────────────────────────────────────────
 
@@ -155,6 +158,8 @@ export default function TrainingScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [quickSwitchVisible, setQuickSwitchVisible] = useState(false);
+  const [latestMeasurement, setLatestMeasurement] = useState<BodyMeasurement | null>(null);
+  const [measurementMonthlyChange, setMeasurementMonthlyChange] = useState<number | null>(null);
 
   const { profiles, activeProfile, loadProfiles, switchProfile } = useEquipmentProfiles();
 
@@ -171,11 +176,22 @@ export default function TrainingScreen() {
     setRefreshing(false);
   };
 
+  const loadMeasurementSummary = async () => {
+    const result = await getLatestMeasurement();
+    if (result.data) {
+      setLatestMeasurement(result.data);
+      // We only have the single latest here; monthly change would need full history
+      // Skip for now — leave null (summary still shows last entry date)
+      setMeasurementMonthlyChange(null);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       load();
       checkRecovery();
       loadProfiles();
+      loadMeasurementSummary();
     }, [checkRecovery, loadProfiles])
   );
 
@@ -322,7 +338,22 @@ export default function TrainingScreen() {
           <Ionicons name="analytics-outline" size={18} color={Colors.gym} />
           <Text style={[styles.quickBtnText, { color: Colors.gym }]}>Progress</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.quickBtn, { backgroundColor: Colors.gym + '15', borderColor: Colors.gym + '30' }]}
+          onPress={() => router.push('/(tabs)/training/body-measurements')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="body-outline" size={18} color={Colors.gym} />
+          <Text style={[styles.quickBtnText, { color: Colors.gym }]}>Body</Text>
+        </TouchableOpacity>
       </View>
+
+      {/* Body measurement summary card */}
+      <BodyMeasurementSummary
+        latest={latestMeasurement}
+        monthlyWeightChange={measurementMonthlyChange}
+        colors={colors}
+      />
 
       <FlatList
         data={workouts}
@@ -447,7 +478,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   quickBtn: {
-    width: '47%',
+    width: '30%',
     flexGrow: 1,
     flexDirection: 'row',
     alignItems: 'center',

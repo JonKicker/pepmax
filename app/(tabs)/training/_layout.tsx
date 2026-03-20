@@ -27,6 +27,9 @@ export default function TrainingLayout() {
         <Stack.Screen name="session-detail" options={{ title: 'Session Detail' }} />
         <Stack.Screen name="progress" options={{ title: 'Progress' }} />
         <Stack.Screen name="equipment-profiles" options={{ title: 'Equipment Profiles' }} />
+        <Stack.Screen name="body-measurements" options={{ title: 'Body Measurements' }} />
+        <Stack.Screen name="log-measurement" options={{ title: 'Log Measurement' }} />
+        <Stack.Screen name="measurement-trends" options={{ title: 'Measurement Trends' }} />
       </Stack>
     </ExercisePickerProvider>
   );

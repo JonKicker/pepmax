@@ -20,12 +20,16 @@ export type UnitsHook = {
   weightLabel: string;
   heightLabel: string;
   distanceLabel: string;
+  lengthLabel: 'in' | 'cm';
   formatWeight: (kg: number) => string;
   formatHeight: (cm: number) => string;
   formatDistance: (km: number) => string;
+  formatLength: (cm: number) => string;
   convertWeightToDisplay: (kg: number) => number;
   convertWeightToKg: (displayValue: number) => number;
   convertHeightToCm: (feet: number, inches: number) => number;
+  convertLengthToDisplay: (cm: number) => number;
+  convertLengthToCm: (displayValue: number) => number;
 };
 
 export function useUnits(): UnitsHook {
@@ -69,16 +73,37 @@ export function useUnits(): UnitsHook {
     return (feet * 12 + inches) * CM_PER_INCH;
   }
 
+  // Returns length value in display units (no label)
+  function convertLengthToDisplay(cm: number): number {
+    return isImperial
+      ? parseFloat((cm / CM_PER_INCH).toFixed(1))
+      : parseFloat(cm.toFixed(1));
+  }
+
+  // Converts display-unit length value back to cm for storage
+  function convertLengthToCm(displayValue: number): number {
+    return isImperial ? displayValue * CM_PER_INCH : displayValue;
+  }
+
+  function formatLength(cm: number): string {
+    if (isImperial) return `${(cm / CM_PER_INCH).toFixed(1)} in`;
+    return `${cm.toFixed(1)} cm`;
+  }
+
   return {
     isImperial,
     weightLabel: isImperial ? 'lbs' : 'kg',
     heightLabel: isImperial ? 'ft/in' : 'cm',
     distanceLabel: isImperial ? 'mi' : 'km',
+    lengthLabel: isImperial ? 'in' : 'cm',
     formatWeight,
     formatHeight,
     formatDistance,
+    formatLength,
     convertWeightToDisplay,
     convertWeightToKg,
     convertHeightToCm,
+    convertLengthToDisplay,
+    convertLengthToCm,
   };
 }
