@@ -7,7 +7,7 @@ import { DashboardCard } from './DashboardCard';
 import { Colors } from '../../constants/theme';
 import type { Theme } from '../../constants/theme';
 import type { RecoveryInput } from '../../types/recovery';
-import { multiplierColor } from '../../utils/recovery';
+import { multiplierColor, multiplierLabel } from '../../utils/recovery';
 
 type Props = {
   recovery: RecoveryInput | null;
@@ -34,16 +34,13 @@ export function RecoveryCard({ recovery, colors, onCheckIn }: Props) {
       {recovery ? (
         <View style={styles.hasData}>
           <Text style={[styles.score, { color: multiplierColor(recovery.recoveryMultiplier) }]}>
-            {recovery.readinessScore}
+            {`${recovery.recoveryMultiplier}×`}
           </Text>
           <Text style={[styles.scoreLabel, { color: colors.textSecondary }]}>
-            Readiness Score
+            {multiplierLabel(recovery.recoveryMultiplier)}
           </Text>
           <Text style={[styles.detail, { color: colors.textSecondary }]}>
             Sleep: {recovery.sleepHours}h · {QUALITY_EMOJI[recovery.sleepQuality] ?? ''}
-            {recovery.overallReadiness != null
-              ? `  ·  Readiness: ${recovery.overallReadiness}/10`
-              : ''}
           </Text>
         </View>
       ) : (

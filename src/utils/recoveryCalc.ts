@@ -43,27 +43,25 @@ function mapStressLevel(stress: number): number {
   return map[clampRating(stress, 'stressLevel')];
 }
 
-// Linear: 0 → 0.5, 10 → 1.5 (matches spec §8 overallReadiness: 0–10)
-function mapOverallReadiness(readiness: number): number {
-  if (!Number.isFinite(readiness) || readiness < 0 || readiness > 10) {
-    throw new Error(`overallReadiness must be between 0 and 10, got ${readiness}`);
-  }
-  return 0.5 + (Math.round(readiness) / 10);
+// 1–5 rating: 1=Very Low → 0.5, 3=Moderate → 1.0, 5=Very High → 1.5
+function mapReadiness(readiness: number): number {
+  const map: Record<number, number> = { 1: 0.5, 2: 0.7, 3: 1.0, 4: 1.3, 5: 1.5 };
+  return map[clampRating(readiness, 'readiness')];
 }
 
 export function calculateRecoveryMultiplier(
   sleepHours: number,
   sleepQuality: number,
-  muscleSoreness: number,
-  stressLevel: number,
-  overallReadiness: number,
+  soreness: number,
+  stress: number,
+  readiness: number,
 ): number {
   const scores = [
     mapSleepHours(sleepHours),
     mapSleepQuality(sleepQuality),
-    mapMuscleSoreness(muscleSoreness),
-    mapStressLevel(stressLevel),
-    mapOverallReadiness(overallReadiness),
+    mapMuscleSoreness(soreness),
+    mapStressLevel(stress),
+    mapReadiness(readiness),
   ];
   const avg = scores.reduce((sum, s) => sum + s, 0) / scores.length;
   // parseFloat(toFixed(1)) avoids IEEE 754 drift

@@ -6,44 +6,34 @@
 import { serverTimestamp } from 'firebase/firestore';
 import { setDocument, getDocument, COLLECTIONS } from './firebase/firestore';
 import { toLocalDateKey } from '../utils/nutrition';
-import {
-  calculateRecoveryMultiplier,
-  multiplierToDisplayScore,
-} from '../utils/recoveryCalc';
+import { calculateRecoveryMultiplier } from '../utils/recoveryCalc';
 import type { RecoveryInput } from '../types/recovery';
 import type { ServiceResult } from '../types/service';
 
 function validateRecoveryInput(input: {
   sleepHours: number;
   sleepQuality: number;
-  muscleSoreness: number;
-  stressLevel: number;
-  overallReadiness: number;
+  soreness: number;
+  stress: number;
+  readiness: number;
 }): void {
   if (!Number.isFinite(input.sleepHours) || input.sleepHours < 0 || input.sleepHours > 12) {
     throw new Error(`sleepHours must be 0–12, got ${input.sleepHours}`);
   }
-  for (const field of ['sleepQuality', 'muscleSoreness', 'stressLevel'] as const) {
+  for (const field of ['sleepQuality', 'soreness', 'stress', 'readiness'] as const) {
     const v = input[field];
     if (!Number.isFinite(v) || v < 1 || v > 5) {
       throw new Error(`${field} must be 1–5, got ${v}`);
     }
-  }
-  if (
-    !Number.isFinite(input.overallReadiness) ||
-    input.overallReadiness < 0 ||
-    input.overallReadiness > 10
-  ) {
-    throw new Error(`overallReadiness must be 0–10, got ${input.overallReadiness}`);
   }
 }
 
 export async function saveRecovery(input: {
   sleepHours: number;
   sleepQuality: number;
-  muscleSoreness: number;
-  stressLevel: number;
-  overallReadiness: number;
+  soreness: number;
+  stress: number;
+  readiness: number;
   notes: string;
 }): Promise<ServiceResult<void>> {
   try {
@@ -55,11 +45,10 @@ export async function saveRecovery(input: {
   const recoveryMultiplier = calculateRecoveryMultiplier(
     input.sleepHours,
     input.sleepQuality,
-    input.muscleSoreness,
-    input.stressLevel,
-    input.overallReadiness,
+    input.soreness,
+    input.stress,
+    input.readiness,
   );
-  const readinessScore = multiplierToDisplayScore(recoveryMultiplier);
   const date = toLocalDateKey();
 
   // Truncate notes to 500 chars — never throw, never drop the entry (Ray M16a item 2)
@@ -68,13 +57,12 @@ export async function saveRecovery(input: {
   return setDocument(COLLECTIONS.RECOVERY_LOG, date, {
     sleepHours: input.sleepHours,
     sleepQuality: input.sleepQuality,
-    muscleSoreness: input.muscleSoreness,
-    stressLevel: input.stressLevel,
-    overallReadiness: input.overallReadiness,
+    soreness: input.soreness,
+    stress: input.stress,
+    readiness: input.readiness,
     notes,
     healthKitSynced: false, // hardcoded until HealthKit milestone (Ray M16a item 3)
     recoveryMultiplier,
-    readinessScore,
     timestamp: serverTimestamp(),
     date,
   });

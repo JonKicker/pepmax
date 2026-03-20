@@ -12,7 +12,7 @@ import {
   getConsistencyDocs,
   persistConsistencyDay,
 } from './consistencyService';
-import { getTodayRecovery } from './recoveryService';
+import { getRecovery } from './recoveryService';
 import { getDocument, mergeDocument, COLLECTIONS } from './firebase/firestore';
 import { auth } from './firebase/index';
 import { toLocalDateKey } from '../utils/nutrition';
@@ -82,7 +82,7 @@ export async function fetchDashboardData(opts?: {
     getDoses({ startDate: thirtyDaysAgo }),
     getLogsForDateRange(thirtyDaysAgoKey, todayKey),
     getConsistencyDocs(thirtyDaysAgoKey, todayKey),
-    getTodayRecovery(),
+    getRecovery(todayKey),
   ]);
 
   const data: DashboardData = {

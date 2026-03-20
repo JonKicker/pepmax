@@ -18,7 +18,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { saveRecovery } from '../../services/recoveryService';
 import { multiplierColor } from '../../utils/recovery';
-import { multiplierToDisplayScore, calculateRecoveryMultiplier } from '../../utils/recoveryCalc';
+import { calculateRecoveryMultiplier } from '../../utils/recoveryCalc';
 import { toLocalDateKey } from '../../utils/nutrition';
 import type { Theme } from '../../constants/theme';
 import { Colors } from '../../constants/theme';
@@ -33,6 +33,7 @@ type Props = {
 const QUALITY_LABELS = ['Terrible', 'Poor', 'Fair', 'Good', 'Great'];
 const SORENESS_LABELS = ['None', 'Mild', 'Moderate', 'Severe', 'V. Severe'];
 const STRESS_LABELS = ['None', 'Low', 'Moderate', 'High', 'Very High'];
+const READINESS_LABELS = ['Very Low', 'Low', 'Moderate', 'High', 'Very High'];
 
 function RatingRow({
   labels,
@@ -76,9 +77,9 @@ function RatingRow({
 export function RecoveryCheckInModal({ visible, onDismiss, onSaved, colors }: Props) {
   const [sleepQuality, setSleepQuality] = useState(3);
   const [sleepHours, setSleepHours] = useState(7);
-  const [muscleSoreness, setMuscleSoreness] = useState(1);
-  const [stressLevel, setStressLevel] = useState(1);
-  const [overallReadiness, setOverallReadiness] = useState(5);
+  const [soreness, setSoreness] = useState(1);
+  const [stress, setStress] = useState(1);
+  const [readiness, setReadiness] = useState(3);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [skipCount, setSkipCount] = useState(0);
@@ -88,23 +89,22 @@ export function RecoveryCheckInModal({ visible, onDismiss, onSaved, colors }: Pr
     if (visible) {
       setSleepQuality(3);
       setSleepHours(7);
-      setMuscleSoreness(1);
-      setStressLevel(1);
-      setOverallReadiness(5);
+      setSoreness(1);
+      setStress(1);
+      setReadiness(3);
       setNotes('');
       setSkipCount(0);
     }
   }, [visible]);
 
-  // Live preview of readiness score
+  // Live preview of recovery multiplier
   const liveMultiplier = calculateRecoveryMultiplier(
     sleepHours,
     sleepQuality,
-    muscleSoreness,
-    stressLevel,
-    overallReadiness,
+    soreness,
+    stress,
+    readiness,
   );
-  const liveScore = multiplierToDisplayScore(liveMultiplier);
 
   const handleSave = async () => {
     setSaving(true);
@@ -112,9 +112,9 @@ export function RecoveryCheckInModal({ visible, onDismiss, onSaved, colors }: Pr
       const result = await saveRecovery({
         sleepQuality,
         sleepHours,
-        muscleSoreness,
-        stressLevel,
-        overallReadiness,
+        soreness,
+        stress,
+        readiness,
         notes,
       });
       if (result.error) {
@@ -205,8 +205,8 @@ export function RecoveryCheckInModal({ visible, onDismiss, onSaved, colors }: Pr
             </Text>
             <RatingRow
               labels={SORENESS_LABELS}
-              value={muscleSoreness}
-              onChange={setMuscleSoreness}
+              value={soreness}
+              onChange={setSoreness}
               colors={colors}
             />
 
@@ -216,34 +216,21 @@ export function RecoveryCheckInModal({ visible, onDismiss, onSaved, colors }: Pr
             </Text>
             <RatingRow
               labels={STRESS_LABELS}
-              value={stressLevel}
-              onChange={setStressLevel}
+              value={stress}
+              onChange={setStress}
               colors={colors}
             />
 
-            {/* Overall Readiness (0–10) */}
+            {/* Readiness (1–5) */}
             <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-              Overall Readiness
+              Readiness
             </Text>
-            <View style={styles.stepperRow}>
-              <TouchableOpacity
-                style={[styles.stepBtn, { borderColor: colors.border }]}
-                onPress={() => setOverallReadiness((r) => Math.max(0, r - 1))}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.stepBtnText, { color: colors.textPrimary }]}>−</Text>
-              </TouchableOpacity>
-              <Text style={[styles.stepperValue, { color: colors.textPrimary }]}>
-                {`${overallReadiness} / 10`}
-              </Text>
-              <TouchableOpacity
-                style={[styles.stepBtn, { borderColor: colors.border }]}
-                onPress={() => setOverallReadiness((r) => Math.min(10, r + 1))}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.stepBtnText, { color: colors.textPrimary }]}>+</Text>
-              </TouchableOpacity>
-            </View>
+            <RatingRow
+              labels={READINESS_LABELS}
+              value={readiness}
+              onChange={setReadiness}
+              colors={colors}
+            />
 
             {/* Notes (optional) */}
             <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
@@ -267,13 +254,13 @@ export function RecoveryCheckInModal({ visible, onDismiss, onSaved, colors }: Pr
               returnKeyType="done"
             />
 
-            {/* Live readiness score preview */}
+            {/* Live recovery multiplier preview */}
             <View style={styles.scorePreview}>
               <Text style={[styles.scoreLabel, { color: colors.textSecondary }]}>
-                Readiness Score
+                Recovery Multiplier
               </Text>
               <Text style={[styles.scoreValue, { color: multiplierColor(liveMultiplier) }]}>
-                {liveScore}
+                {`${liveMultiplier}×`}
               </Text>
             </View>
 
