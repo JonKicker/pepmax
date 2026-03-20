@@ -163,7 +163,11 @@ export async function searchUSDA(
     return { data: results, error: null };
   } catch (e) {
     clearTimeout(timeoutId);
-    return { data: null, error: e as Error };
+    const err = e as Error;
+    if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
+      return { data: [], error: null };
+    }
+    return { data: null, error: err };
   }
 }
 
@@ -201,6 +205,10 @@ export async function getUSDAFoodByBarcode(
     return { data: parseFoodItem(foods[0]), error: null };
   } catch (e) {
     clearTimeout(timeoutId);
-    return { data: null, error: e as Error };
+    const err = e as Error;
+    if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
+      return { data: null, error: null };
+    }
+    return { data: null, error: err };
   }
 }

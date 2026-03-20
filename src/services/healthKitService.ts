@@ -2,36 +2,70 @@
  * HealthKit service — all Apple Health read/write operations.
  *
  * Every exported function:
- *  - Starts with a Platform.OS !== 'ios' guard → returns null/no-op
+ *  - Starts with a `!HK` guard → returns null/no-op when native module is absent
  *  - Is wrapped in try/catch → never throws, returns null on failure
  *  - Errors are breadcrumbed via errorReporting, never surfaced to UI
  *
  * Write functions are designed for fire-and-forget (.catch(() => {})) callers.
  * They return a UUID string on success (for deduplication) or null on failure.
+ *
+ * NitroModules guard: the @kingstinct/react-native-healthkit import is wrapped
+ * in a try/catch so the app doesn't crash in Expo Go (which lacks NitroModules).
+ * When unavailable, every function degrades to a safe no-op.
  */
 import { Platform } from 'react-native';
-import {
-  isHealthDataAvailable,
-  requestAuthorization,
-  queryCategorySamples,
-  queryQuantitySamples,
-  saveQuantitySample,
-  saveWorkoutSample,
-  WorkoutActivityType,
-  CategoryValueSleepAnalysis,
-} from '@kingstinct/react-native-healthkit';
 import { addBreadcrumb } from './errorReporting';
 import { HK_READ_IDENTIFIERS, HK_WRITE_IDENTIFIERS } from '../constants/healthKit';
 import { isHKEnabled } from '../utils/hkEnabled';
 import type { HealthKitRecoveryData, HealthKitSleepData } from '../types/healthKit';
 import type { ActivityType } from '../types/cardio';
 
+// ─── Lazy native module import (safe for Expo Go) ────────────────────────────
+
+let HK: {
+  isHealthDataAvailable: () => Promise<boolean>;
+  requestAuthorization: (opts: { toRead: string[]; toShare: string[] }) => Promise<void>;
+  queryCategorySamples: (type: string, opts: unknown) => Promise<Array<{ startDate: string; endDate: string; value: number }>>;
+  queryQuantitySamples: (type: string, opts: unknown) => Promise<Array<{ quantity: number; endDate: string; uuid?: string }>>;
+  saveQuantitySample: (type: string, unit: string, value: number, start: Date, end: Date) => Promise<{ uuid?: string } | null>;
+  saveWorkoutSample: (type: number, samples: unknown[], start: Date, end: Date, opts?: unknown) => Promise<{ uuid?: string } | null>;
+  WorkoutActivityType: Record<string, number>;
+  CategoryValueSleepAnalysis: Record<string, number>;
+} | null = null;
+
+/** true when the native HealthKit module loaded successfully */
+export function isHealthKitAvailable(): boolean {
+  return HK !== null;
+}
+
+try {
+  if (Platform.OS === 'ios') {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const mod = require('@kingstinct/react-native-healthkit');
+    // Manual shim — signatures may drift if upstream package changes
+    HK = {
+      isHealthDataAvailable: mod.isHealthDataAvailable,
+      requestAuthorization: mod.requestAuthorization,
+      queryCategorySamples: mod.queryCategorySamples,
+      queryQuantitySamples: mod.queryQuantitySamples,
+      saveQuantitySample: mod.saveQuantitySample,
+      saveWorkoutSample: mod.saveWorkoutSample,
+      WorkoutActivityType: mod.WorkoutActivityType,
+      CategoryValueSleepAnalysis: mod.CategoryValueSleepAnalysis,
+    };
+  }
+} catch {
+  // NitroModules not available (e.g. Expo Go) — all functions will no-op
+  if (__DEV__) console.log('[HealthKit] Native module unavailable — running in stub mode');
+  HK = null;
+}
+
 // ─── Availability ────────────────────────────────────────────────────────────
 
 export async function isAvailable(): Promise<boolean> {
-  if (Platform.OS !== 'ios') return false;
+  if (!HK) return false;
   try {
-    return await isHealthDataAvailable();
+    return await HK.isHealthDataAvailable();
   } catch {
     return false;
   }
@@ -40,9 +74,9 @@ export async function isAvailable(): Promise<boolean> {
 // ─── Permissions ─────────────────────────────────────────────────────────────
 
 export async function requestPermissions(): Promise<boolean> {
-  if (Platform.OS !== 'ios') return false;
+  if (!HK) return false;
   try {
-    await requestAuthorization({
+    await HK.requestAuthorization({
       toRead: HK_READ_IDENTIFIERS,
       toShare: HK_WRITE_IDENTIFIERS,
     });
@@ -56,14 +90,14 @@ export async function requestPermissions(): Promise<boolean> {
 // ─── Read: Sleep ─────────────────────────────────────────────────────────────
 
 export async function fetchSleepData(date: string): Promise<HealthKitSleepData | null> {
-  if (Platform.OS !== 'ios') return null;
+  if (!HK) return null;
   try {
     // Night before: 6pm previous day → noon same day
     const dayStart = new Date(`${date}T18:00:00`);
     dayStart.setDate(dayStart.getDate() - 1);
     const dayEnd = new Date(`${date}T12:00:00`);
 
-    const samples = await queryCategorySamples('HKCategoryTypeIdentifierSleepAnalysis', {
+    const samples = await HK.queryCategorySamples('HKCategoryTypeIdentifierSleepAnalysis', {
       limit: 0,
       filter: { date: { startDate: dayStart, endDate: dayEnd } },
     });
@@ -74,6 +108,7 @@ export async function fetchSleepData(date: string): Promise<HealthKitSleepData |
     let deepMinutes = 0;
     let remMinutes = 0;
 
+    const CSV = HK.CategoryValueSleepAnalysis;
     for (const sample of samples) {
       const durationMs =
         new Date(sample.endDate).getTime() - new Date(sample.startDate).getTime();
@@ -81,14 +116,14 @@ export async function fetchSleepData(date: string): Promise<HealthKitSleepData |
       const val = sample.value;
 
       if (
-        val === CategoryValueSleepAnalysis.asleepCore ||
-        val === CategoryValueSleepAnalysis.asleepUnspecified
+        val === CSV.asleepCore ||
+        val === CSV.asleepUnspecified
       ) {
         totalMinutes += minutes;
-      } else if (val === CategoryValueSleepAnalysis.asleepDeep) {
+      } else if (val === CSV.asleepDeep) {
         totalMinutes += minutes;
         deepMinutes += minutes;
-      } else if (val === CategoryValueSleepAnalysis.asleepREM) {
+      } else if (val === CSV.asleepREM) {
         totalMinutes += minutes;
         remMinutes += minutes;
       }
@@ -121,12 +156,12 @@ export async function fetchSleepData(date: string): Promise<HealthKitSleepData |
 // ─── Read: Resting Heart Rate ────────────────────────────────────────────────
 
 export async function fetchRestingHeartRate(date: string): Promise<number | null> {
-  if (Platform.OS !== 'ios') return null;
+  if (!HK) return null;
   try {
     const dayStart = new Date(`${date}T00:00:00`);
     const dayEnd = new Date(`${date}T23:59:59`);
 
-    const samples = await queryQuantitySamples('HKQuantityTypeIdentifierRestingHeartRate', {
+    const samples = await HK.queryQuantitySamples('HKQuantityTypeIdentifierRestingHeartRate', {
       limit: 1,
       ascending: false,
       filter: { date: { startDate: dayStart, endDate: dayEnd } },
@@ -143,12 +178,12 @@ export async function fetchRestingHeartRate(date: string): Promise<number | null
 // ─── Read: HRV ───────────────────────────────────────────────────────────────
 
 export async function fetchHRV(date: string): Promise<number | null> {
-  if (Platform.OS !== 'ios') return null;
+  if (!HK) return null;
   try {
     const dayStart = new Date(`${date}T00:00:00`);
     const dayEnd = new Date(`${date}T23:59:59`);
 
-    const samples = await queryQuantitySamples(
+    const samples = await HK.queryQuantitySamples(
       'HKQuantityTypeIdentifierHeartRateVariabilitySDNN',
       {
         limit: 1,
@@ -168,12 +203,12 @@ export async function fetchHRV(date: string): Promise<number | null> {
 // ─── Read: Step Count ────────────────────────────────────────────────────────
 
 export async function fetchStepCount(date: string): Promise<number | null> {
-  if (Platform.OS !== 'ios') return null;
+  if (!HK) return null;
   try {
     const dayStart = new Date(`${date}T00:00:00`);
     const dayEnd = new Date(`${date}T23:59:59`);
 
-    const samples = await queryQuantitySamples('HKQuantityTypeIdentifierStepCount', {
+    const samples = await HK.queryQuantitySamples('HKQuantityTypeIdentifierStepCount', {
       limit: 0,
       filter: { date: { startDate: dayStart, endDate: dayEnd } },
     });
@@ -189,9 +224,9 @@ export async function fetchStepCount(date: string): Promise<number | null> {
 // ─── Read: Weight ────────────────────────────────────────────────────────────
 
 export async function fetchLatestWeight(): Promise<{ kg: number; date: Date } | null> {
-  if (Platform.OS !== 'ios') return null;
+  if (!HK) return null;
   try {
-    const samples = await queryQuantitySamples('HKQuantityTypeIdentifierBodyMass', {
+    const samples = await HK.queryQuantitySamples('HKQuantityTypeIdentifierBodyMass', {
       limit: 1,
       ascending: false,
       filter: {},
@@ -208,7 +243,7 @@ export async function fetchLatestWeight(): Promise<{ kg: number; date: Date } | 
 // ─── Read: Combined Recovery Data ────────────────────────────────────────────
 
 export async function fetchRecoveryData(date: string): Promise<HealthKitRecoveryData> {
-  if (Platform.OS !== 'ios') return {};
+  if (!HK) return {};
   const [sleep, restingHR, hrv] = await Promise.all([
     fetchSleepData(date),
     fetchRestingHeartRate(date),
@@ -232,13 +267,13 @@ type NutritionWriteData = {
 };
 
 export async function writeNutrition(data: NutritionWriteData): Promise<string | null> {
-  if (Platform.OS !== 'ios') return null;
+  if (!HK) return null;
   if (!isHKEnabled()) return null;
   try {
     const startDate = new Date(`${data.date}T12:00:00`);
     const endDate = new Date(startDate.getTime() + 60_000);
 
-    const calSample = await saveQuantitySample(
+    const calSample = await HK.saveQuantitySample(
       'HKQuantityTypeIdentifierDietaryEnergyConsumed',
       'kcal',
       data.calories,
@@ -247,21 +282,21 @@ export async function writeNutrition(data: NutritionWriteData): Promise<string |
     );
 
     await Promise.allSettled([
-      saveQuantitySample(
+      HK.saveQuantitySample(
         'HKQuantityTypeIdentifierDietaryProtein',
         'g',
         data.protein,
         startDate,
         endDate,
       ),
-      saveQuantitySample(
+      HK.saveQuantitySample(
         'HKQuantityTypeIdentifierDietaryCarbohydrates',
         'g',
         data.carbs,
         startDate,
         endDate,
       ),
-      saveQuantitySample(
+      HK.saveQuantitySample(
         'HKQuantityTypeIdentifierDietaryFatTotal',
         'g',
         data.fat,
@@ -279,13 +314,6 @@ export async function writeNutrition(data: NutritionWriteData): Promise<string |
 
 // ─── Write: Cardio Workout ───────────────────────────────────────────────────
 
-const ACTIVITY_TYPE_MAP: Record<ActivityType, WorkoutActivityType> = {
-  run: WorkoutActivityType.running,
-  cycle: WorkoutActivityType.cycling,
-  walk: WorkoutActivityType.walking,
-  swim: WorkoutActivityType.swimming,
-};
-
 type CardioWriteData = {
   activityType: ActivityType;
   startDate: Date;
@@ -297,12 +325,19 @@ type CardioWriteData = {
 };
 
 export async function writeCardioWorkout(data: CardioWriteData): Promise<string | null> {
-  if (Platform.OS !== 'ios') return null;
+  if (!HK) return null;
   if (!isHKEnabled()) return null;
+  const WAT = HK.WorkoutActivityType;
+  const ACTIVITY_TYPE_MAP: Record<string, number> = {
+    run: WAT.running,
+    cycle: WAT.cycling,
+    walk: WAT.walking,
+    swim: WAT.swimming,
+  };
   const hkType = ACTIVITY_TYPE_MAP[data.activityType];
-  if (!hkType) return null;
+  if (hkType == null) return null;
   try {
-    const workout = await saveWorkoutSample(
+    const workout = await HK.saveWorkoutSample(
       hkType,
       [],
       data.startDate,
@@ -327,11 +362,11 @@ type StrengthWriteData = {
 };
 
 export async function writeStrengthWorkout(data: StrengthWriteData): Promise<string | null> {
-  if (Platform.OS !== 'ios') return null;
+  if (!HK) return null;
   if (!isHKEnabled()) return null;
   try {
-    const workout = await saveWorkoutSample(
-      WorkoutActivityType.traditionalStrengthTraining,
+    const workout = await HK.saveWorkoutSample(
+      HK.WorkoutActivityType.traditionalStrengthTraining,
       [],
       data.startDate,
       data.endDate,
@@ -346,10 +381,10 @@ export async function writeStrengthWorkout(data: StrengthWriteData): Promise<str
 // ─── Write: Body Weight ──────────────────────────────────────────────────────
 
 export async function writeBodyWeight(kg: number, date: Date): Promise<string | null> {
-  if (Platform.OS !== 'ios') return null;
+  if (!HK) return null;
   if (!isHKEnabled()) return null;
   try {
-    const sample = await saveQuantitySample(
+    const sample = await HK.saveQuantitySample(
       'HKQuantityTypeIdentifierBodyMass',
       'kg',
       kg,
@@ -366,11 +401,11 @@ export async function writeBodyWeight(kg: number, date: Date): Promise<string | 
 // ─── Write: Body Fat ─────────────────────────────────────────────────────────
 
 export async function writeBodyFat(percent: number, date: Date): Promise<string | null> {
-  if (Platform.OS !== 'ios') return null;
+  if (!HK) return null;
   if (!isHKEnabled()) return null;
   try {
     // HealthKit stores body fat as a fraction 0–1
-    const sample = await saveQuantitySample(
+    const sample = await HK.saveQuantitySample(
       'HKQuantityTypeIdentifierBodyFatPercentage',
       '%',
       percent / 100,

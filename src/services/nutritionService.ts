@@ -278,7 +278,12 @@ async function searchOFF(
     return { data: products, error: null };
   } catch (e) {
     clearTimeout(timeoutId);
-    return { data: null, error: e as Error };
+    const err = e as Error;
+    // Aborts are intentional (user typed new query or timeout) — not errors
+    if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
+      return { data: [], error: null };
+    }
+    return { data: null, error: err };
   }
 }
 
@@ -332,7 +337,9 @@ export async function searchFood(
 
   // Check for abort — if signal was aborted, propagate it
   if (signal?.aborted) {
-    return { data: null, error: new DOMException('Aborted', 'AbortError') };
+    const abortErr = new Error('Aborted');
+    abortErr.name = 'AbortError';
+    return { data: null, error: abortErr };
   }
 
   const merged = [...usdaData, ...offData];
@@ -402,6 +409,11 @@ export async function getFoodByBarcode(
     };
   } catch (e) {
     clearTimeout(timeoutId);
-    return { data: null, error: e as Error };
+    const err = e as Error;
+    // Aborts are intentional (user typed new query or timeout) — not errors
+    if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
+      return { data: null, error: null };
+    }
+    return { data: null, error: err };
   }
 }
