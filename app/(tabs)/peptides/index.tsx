@@ -21,7 +21,7 @@ import { getPeptides, deletePeptide, addPeptideFromPreset } from '../../../src/s
 import { FREQUENCY_LABELS } from '../../../src/types/peptide';
 import type { Peptide } from '../../../src/types/peptide';
 import PresetBrowser from '../../../src/components/peptides/PresetBrowser';
-import type { PresetCompound } from '../../../src/data/presetCompounds';
+import type { Compound } from '../../../src/data/compoundDatabase';
 import { useCycleStatus } from '../../../src/hooks/useCycleStatus';
 import ProBadge from '../../../src/components/premium/ProBadge';
 import type { ActiveCycleInfo } from '../../../src/hooks/useCycleStatus';
@@ -301,7 +301,7 @@ export default function PeptidesScreen() {
     router.push('/(tabs)/peptides/peptide-form');
   };
 
-  const handleAddPreset = async (preset: PresetCompound, dose: number) => {
+  const handleAddPreset = async (preset: Compound, dose: number) => {
     setPresetModalVisible(false);
     const result = await addPeptideFromPreset(preset, dose);
     if (result.error) {

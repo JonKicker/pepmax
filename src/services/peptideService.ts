@@ -22,8 +22,9 @@ import {
   COLLECTIONS,
 } from './firebase/firestore';
 import type { Peptide, Dose, Unit, InjectionSite, Frequency, PeptideCategory, Route } from '../types/peptide';
+import { ROUTES } from '../types/peptide';
 import type { ServiceResult } from '../types/service';
-import type { PresetCompound } from '../data/presetCompounds';
+import type { Compound, CompoundCategory } from '../data/compoundDatabase';
 
 // ─── Input types (strip server-managed fields) ──────────────────────────────
 
@@ -56,6 +57,39 @@ type DoseInput = {
   notes: string;
 };
 
+// ─── Preset mapping helpers ──────────────────────────────────────────────────
+
+function parseRoute(routeStr: string): Route {
+  for (const part of routeStr.split(', ')) {
+    const match = ROUTES.find((r) => r.toLowerCase() === part.trim().toLowerCase());
+    if (match) return match;
+  }
+  return 'SubQ';
+}
+
+function parseUnit(unitStr: string): Unit {
+  if (unitStr === 'mcg') return 'mcg';
+  if (unitStr === 'IU') return 'IU';
+  return 'mg'; // covers 'mg' and fallback for 'mg/kg' (Macimorelin)
+}
+
+function parseFrequency(freqStr: string): Frequency {
+  const f = freqStr.toLowerCase();
+  // Check specific multi-day patterns before the generic 'weekly' catch-all
+  if (f.includes('2x weekly') || f.includes('3x weekly')) return '3xPerWeek';
+  if (f.includes('every other') || f.includes('eod')) return 'everyOtherDay';
+  if (f.includes('weekly') || f === 'once weekly') return 'weekly';
+  if (f.includes('daily') || f.includes('nightly')) return 'daily';
+  return 'custom';
+}
+
+function mapGroupToCategory(group: CompoundCategory): PeptideCategory {
+  if (group === 'GLP-1 / Weight Management') return 'GLP-1';
+  if (group === 'Growth Hormone / GH Secretagogues') return 'GH Secretagogue';
+  if (group === 'Healing / Recovery') return 'Healing';
+  return 'Other';
+}
+
 // ─── Peptide CRUD ────────────────────────────────────────────────────────────
 
 export async function addPeptide(data: PeptideInput): Promise<ServiceResult<string>> {
@@ -84,25 +118,25 @@ export async function getPeptideById(id: string): Promise<ServiceResult<Peptide 
 }
 
 /**
- * Add a preset compound to the user's personal library.
+ * Add a compound from COMPOUND_DATABASE to the user's personal library.
  * Maps the catalog entry + selected dose into a PeptideInput for Firestore.
  */
 export async function addPeptideFromPreset(
-  preset: PresetCompound,
+  compound: Compound,
   selectedDose: number,
 ): Promise<ServiceResult<string>> {
   return addPeptide({
-    name: preset.name,
+    name: compound.name,
     defaultDose: selectedDose,
-    unit: preset.unit,
-    frequency: preset.defaultFrequency,
-    notes: preset.defaultNotes,
-    category: preset.category,
-    halfLifeHours: preset.halfLifeHours,
-    route: preset.defaultRoute,
-    storageTemp: preset.storageTemp,
+    unit: parseUnit(compound.unit),
+    frequency: parseFrequency(compound.dosingFrequency),
+    notes: compound.notesForUsers,
+    category: mapGroupToCategory(compound.group),
+    halfLifeHours: compound.halfLifeHours,
+    route: parseRoute(compound.route),
+    storageTemp: compound.storage,
     isPreset: true,
-    presetId: preset.presetId,
+    presetId: compound.id,
   });
 }
 

@@ -1,8 +1,8 @@
 /**
- * PresetBrowser — modal sheet for browsing and adding pre-built compound presets.
+ * PresetBrowser — modal sheet for browsing and adding compounds from COMPOUND_DATABASE.
  *
- * Features: search bar, category filter chips, compound cards with dose chips.
- * Adding a preset calls onAdd(preset, selectedDose); the parent handles Firestore write.
+ * Features: search bar, 14-group filter chips, expandable compound cards with
+ * dose chips, custom dose input, and a detail view with clinical information.
  */
 import React, { useState, useMemo } from 'react';
 import {
@@ -11,100 +11,266 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  FlatList,
+  SectionList,
   StyleSheet,
   Pressable,
   ScrollView,
   Alert,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../hooks/useTheme';
 import { Colors } from '../../constants/theme';
-import { PEPTIDE_CATEGORIES } from '../../types/peptide';
-import type { PeptideCategory } from '../../types/peptide';
-import { PRESET_COMPOUNDS } from '../../data/presetCompounds';
-import type { PresetCompound } from '../../data/presetCompounds';
+import { searchCompounds, getCompoundGroups } from '../../data/compoundDatabase';
+import type { Compound, CompoundCategory } from '../../data/compoundDatabase';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 type Props = {
   visible: boolean;
   onClose: () => void;
-  onAdd: (preset: PresetCompound, dose: number) => void;
+  onAdd: (compound: Compound, dose: number) => void;
   existingPeptideNames: string[];
 };
 
-// ─── Compound card ────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function CompoundCard({
-  preset,
-  alreadyInLibrary,
-  onAdd,
-  colors,
-}: {
-  preset: PresetCompound;
-  alreadyInLibrary: boolean;
-  onAdd: (dose: number) => void;
-  colors: ReturnType<typeof import('../../hooks/useTheme').useTheme>['colors'];
-}) {
-  const halfLifeLabel =
-    preset.halfLifeHours < 1
-      ? `t½: ${preset.halfLifeHours * 60}min`
-      : `t½: ${preset.halfLifeHours}h`;
+function statusColor(status: string): string {
+  if (status.startsWith('FDA')) return '#27AE60';
+  if (status === 'Research Peptide') return '#E67E22';
+  if (status === 'Compounded') return '#2980B9';
+  return '#888';
+}
 
+// ─── Pill tag ─────────────────────────────────────────────────────────────────
+
+function PillTag({ label, bgColor, textColor }: { label: string; bgColor: string; textColor: string }) {
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={[styles.cardAccent, { backgroundColor: Colors.peptide }]} />
-      <View style={styles.cardContent}>
-        {/* Header */}
-        <View style={styles.cardHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.cardName, { color: colors.textPrimary }]}>{preset.name}</Text>
-            {preset.subcategoryLabel && (
-              <Text style={[styles.cardSubcategory, { color: colors.textSecondary }]}>
-                {preset.subcategoryLabel}
-              </Text>
-            )}
-          </View>
-          {alreadyInLibrary && (
-            <Text style={[styles.alreadyLabel, { color: colors.textSecondary }]}>In library</Text>
-          )}
-        </View>
-
-        {/* Info badges */}
-        <View style={styles.badgeRow}>
-          <Badge label={preset.category} color={Colors.peptide} />
-          <Badge label={halfLifeLabel} color={colors.textSecondary} />
-          <Badge label={preset.defaultRoute} color={colors.textSecondary} />
-        </View>
-
-        {/* Dose chips */}
-        <Text style={[styles.doseLabel, { color: colors.textSecondary }]}>Select dose to add:</Text>
-        <View style={styles.doseRow}>
-          {preset.commonDoses.map((dose) => (
-            <TouchableOpacity
-              key={dose}
-              style={[styles.doseChip, { borderColor: Colors.peptide }]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                onAdd(dose);
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.doseChipText, { color: Colors.peptide }]}>
-                {dose} {preset.unit}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
+    <View style={[styles.pillTag, { backgroundColor: bgColor }]}>
+      <Text style={[styles.pillTagText, { color: textColor }]}>{label}</Text>
     </View>
   );
 }
 
-function Badge({ label, color }: { label: string; color: string }) {
+// ─── Compound card ────────────────────────────────────────────────────────────
+
+function CompoundCard({
+  compound,
+  isExpanded,
+  showDetails,
+  alreadyInLibrary,
+  customDose,
+  onCustomDoseChange,
+  onToggle,
+  onToggleDetails,
+  onAdd,
+  colors,
+}: {
+  compound: Compound;
+  isExpanded: boolean;
+  showDetails: boolean;
+  alreadyInLibrary: boolean;
+  customDose: string;
+  onCustomDoseChange: (v: string) => void;
+  onToggle: () => void;
+  onToggleDetails: () => void;
+  onAdd: (dose: number) => void;
+  colors: ReturnType<typeof import('../../hooks/useTheme').useTheme>['colors'];
+}) {
+  const badgeColor = statusColor(compound.status);
+  const hasAliases = compound.aliases && !compound.aliases.startsWith('N/A');
+
   return (
-    <View style={[styles.badge, { borderColor: color + '40' }]}>
-      <Text style={[styles.badgeText, { color }]}>{label}</Text>
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.surface,
+          borderColor: isExpanded ? Colors.peptide : colors.border,
+        },
+      ]}
+    >
+      <View style={[styles.cardAccent, { backgroundColor: Colors.peptide }]} />
+      <View style={styles.cardContent}>
+        {/* Collapsed header — always tappable */}
+        <TouchableOpacity onPress={onToggle} activeOpacity={0.7} style={styles.cardHeader}>
+          <View style={{ flex: 1 }}>
+            <View style={styles.nameLine}>
+              <Text style={[styles.cardName, { color: colors.textPrimary }]}>{compound.name}</Text>
+              {alreadyInLibrary && (
+                <Text style={[styles.alreadyLabel, { color: colors.textSecondary }]}>In library</Text>
+              )}
+            </View>
+            {!!hasAliases && (
+              <Text style={[styles.cardAliases, { color: colors.textSecondary }]} numberOfLines={1}>
+                {compound.aliases}
+              </Text>
+            )}
+            <View style={styles.headerMeta}>
+              <View style={[styles.statusBadge, { borderColor: badgeColor + '50' }]}>
+                <Text style={[styles.statusBadgeText, { color: badgeColor }]}>{compound.status}</Text>
+              </View>
+              <Text style={[styles.freqText, { color: colors.textSecondary }]}>
+                {compound.dosingFrequency}
+              </Text>
+            </View>
+          </View>
+          <Ionicons
+            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+            size={16}
+            color={colors.textSecondary}
+            style={{ marginLeft: 8, marginTop: 2 }}
+          />
+        </TouchableOpacity>
+
+        {/* Expanded content */}
+        {isExpanded && (
+          <View>
+            {/* Dose chips */}
+            <Text style={[styles.doseLabel, { color: colors.textSecondary }]}>Select dose to add:</Text>
+            <View style={styles.doseRow}>
+              {compound.commonDoses.map((dose) => (
+                <TouchableOpacity
+                  key={dose}
+                  style={[styles.doseChip, { borderColor: Colors.peptide }]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    onAdd(dose);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.doseChipText, { color: Colors.peptide }]}>
+                    {dose} {compound.unit}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+
+              {/* Custom dose chip */}
+              <View style={[styles.customDoseWrap, { borderColor: colors.border }]}>
+                <TextInput
+                  style={[styles.customDoseInput, { color: colors.textPrimary }]}
+                  value={customDose}
+                  onChangeText={onCustomDoseChange}
+                  placeholder="Custom"
+                  placeholderTextColor={colors.textSecondary}
+                  keyboardType="numeric"
+                />
+                {!!customDose && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      const val = parseFloat(customDose);
+                      if (!isNaN(val) && val > 0 && val <= 10000) {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        onAdd(val);
+                      }
+                    }}
+                    style={[styles.customAddBtn, { backgroundColor: Colors.peptide }]}
+                  >
+                    <Text style={styles.customAddBtnText}>Add</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* View Details toggle */}
+            <TouchableOpacity onPress={onToggleDetails} style={styles.detailsToggle} activeOpacity={0.7}>
+              <Text style={[styles.detailsToggleText, { color: Colors.peptide }]}>
+                {showDetails ? 'Hide Details' : 'View Details'}
+              </Text>
+              <Ionicons
+                name={showDetails ? 'chevron-up' : 'chevron-down'}
+                size={14}
+                color={Colors.peptide}
+              />
+            </TouchableOpacity>
+
+            {/* Detail section */}
+            {showDetails && (
+              <View style={[styles.detailSection, { borderTopColor: colors.border }]}>
+                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>MECHANISM</Text>
+                <Text style={[styles.detailText, { color: colors.textPrimary }]}>
+                  {compound.mechanismOfAction}
+                </Text>
+
+                {compound.commonSideEffects.length > 0 && (
+                  <>
+                    <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>SIDE EFFECTS</Text>
+                    <View style={styles.pillRow}>
+                      {compound.commonSideEffects.map((se) => (
+                        <PillTag
+                          key={se}
+                          label={se}
+                          bgColor={colors.border}
+                          textColor={colors.textPrimary}
+                        />
+                      ))}
+                    </View>
+                  </>
+                )}
+
+                {compound.commonStacks.length > 0 && (
+                  <>
+                    <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>COMMON STACKS</Text>
+                    <View style={styles.pillRow}>
+                      {compound.commonStacks.map((s) => (
+                        <PillTag
+                          key={s}
+                          label={s}
+                          bgColor={Colors.peptide + '20'}
+                          textColor={Colors.peptide}
+                        />
+                      ))}
+                    </View>
+                  </>
+                )}
+
+                <View style={styles.metaRow}>
+                  <View style={styles.metaItem}>
+                    <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>HALF-LIFE</Text>
+                    <Text style={[styles.detailText, { color: colors.textPrimary }]}>
+                      {compound.halfLifeDisplay}
+                    </Text>
+                  </View>
+                  <View style={styles.metaItem}>
+                    <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>CYCLE</Text>
+                    <Text style={[styles.detailText, { color: colors.textPrimary }]}>
+                      {compound.cycleLength}
+                    </Text>
+                  </View>
+                </View>
+
+                {compound.reconstitutionNeeded && (
+                  <>
+                    <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>RECONSTITUTION</Text>
+                    <Text style={[styles.detailText, { color: colors.textPrimary }]}>
+                      Vial: {compound.typicalVialSize}
+                    </Text>
+                    <Text style={[styles.detailText, { color: colors.textPrimary }]}>
+                      {compound.concentrationAfterRecon}
+                    </Text>
+                  </>
+                )}
+
+                <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>STORAGE</Text>
+                <Text style={[styles.detailText, { color: colors.textPrimary }]}>{compound.storage}</Text>
+
+                {!!compound.notesForUsers && (
+                  <View style={[styles.notesBox, { backgroundColor: Colors.peptide + '10' }]}>
+                    <Text style={[styles.notesText, { color: colors.textPrimary }]}>
+                      {compound.notesForUsers}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+        )}
+      </View>
     </View>
   );
 }
@@ -114,44 +280,68 @@ function Badge({ label, color }: { label: string; color: string }) {
 export default function PresetBrowser({ visible, onClose, onAdd, existingPeptideNames }: Props) {
   const { colors } = useTheme();
   const [query, setQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState<PeptideCategory | 'All'>('All');
+  const [activeGroup, setActiveGroup] = useState<CompoundCategory | 'All'>('All');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
+  const [customDose, setCustomDose] = useState('');
+
+  const groups = useMemo(() => getCompoundGroups(), []);
 
   const existingSet = useMemo(
     () => new Set(existingPeptideNames.map((n) => n.toLowerCase())),
     [existingPeptideNames],
   );
 
-  const filtered = useMemo(() => {
-    const q = query.toLowerCase().trim();
-    return PRESET_COMPOUNDS.filter((p) => {
-      const matchesQuery = q === '' || p.name.toLowerCase().includes(q);
-      const matchesCategory = activeCategory === 'All' || p.category === activeCategory;
-      return matchesQuery && matchesCategory;
-    });
-  }, [query, activeCategory]);
+  const sections = useMemo(() => {
+    let compounds = searchCompounds(query);
+    if (activeGroup !== 'All') {
+      compounds = compounds.filter((c) => c.group === activeGroup);
+    }
+    const grouped = new Map<CompoundCategory, Compound[]>();
+    for (const c of compounds) {
+      if (!grouped.has(c.group)) grouped.set(c.group, []);
+      grouped.get(c.group)!.push(c);
+    }
+    return Array.from(grouped.entries()).map(([title, data]) => ({ title, data }));
+  }, [query, activeGroup]);
 
-  const handleAdd = (preset: PresetCompound, dose: number) => {
-    const alreadyInLibrary = existingSet.has(preset.name.toLowerCase());
-    if (alreadyInLibrary) {
+  const handleToggle = (id: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (expandedId === id) {
+      setExpandedId(null);
+    } else {
+      setExpandedId(id);
+      setShowDetails(false);
+      setCustomDose('');
+    }
+  };
+
+  const handleToggleDetails = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setShowDetails((prev) => !prev);
+  };
+
+  const handleAdd = (compound: Compound, dose: number) => {
+    if (existingSet.has(compound.name.toLowerCase())) {
       Alert.alert(
         'Already in library',
-        `You already have ${preset.name}. Add another entry?`,
+        `You already have ${compound.name}. Add another entry?`,
         [
           { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Add',
-            onPress: () => onAdd(preset, dose),
-          },
+          { text: 'Add', onPress: () => onAdd(compound, dose) },
         ],
       );
     } else {
-      onAdd(preset, dose);
+      onAdd(compound, dose);
     }
   };
 
   const handleClose = () => {
     setQuery('');
-    setActiveCategory('All');
+    setActiveGroup('All');
+    setExpandedId(null);
+    setShowDetails(false);
+    setCustomDose('');
     onClose();
   };
 
@@ -167,54 +357,54 @@ export default function PresetBrowser({ visible, onClose, onAdd, existingPeptide
 
           {/* Title row */}
           <View style={styles.titleRow}>
-            <Text style={[styles.title, { color: colors.textPrimary }]}>Browse Presets</Text>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>Browse Compounds</Text>
             <TouchableOpacity onPress={handleClose} hitSlop={12}>
               <Ionicons name="close" size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
           {/* Search bar */}
-          <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View
+            style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          >
             <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
             <TextInput
               style={[styles.searchInput, { color: colors.textPrimary }]}
               value={query}
               onChangeText={setQuery}
-              placeholder="Search compounds..."
+              placeholder="Search compounds, goals..."
               placeholderTextColor={colors.textSecondary}
               returnKeyType="search"
               clearButtonMode="while-editing"
             />
           </View>
 
-          {/* Category filter chips */}
+          {/* Group filter chips */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryRow}
+            contentContainerStyle={styles.chipRow}
           >
-            {(['All', ...PEPTIDE_CATEGORIES] as const).map((cat) => {
-              const active = activeCategory === cat;
+            {(['All', ...groups] as const).map((g) => {
+              const active = activeGroup === g;
               return (
                 <TouchableOpacity
-                  key={cat}
+                  key={g}
                   style={[
-                    styles.categoryChip,
+                    styles.chip,
                     {
                       backgroundColor: active ? Colors.peptide : colors.surface,
                       borderColor: active ? Colors.peptide : colors.border,
                     },
                   ]}
-                  onPress={() => setActiveCategory(cat)}
+                  onPress={() => {
+                    setActiveGroup(active ? 'All' : (g as CompoundCategory | 'All'));
+                    setExpandedId(null);
+                  }}
                   activeOpacity={0.7}
                 >
-                  <Text
-                    style={[
-                      styles.categoryChipText,
-                      { color: active ? '#fff' : colors.textSecondary },
-                    ]}
-                  >
-                    {cat}
+                  <Text style={[styles.chipText, { color: active ? '#fff' : colors.textSecondary }]}>
+                    {g}
                   </Text>
                 </TouchableOpacity>
               );
@@ -222,20 +412,37 @@ export default function PresetBrowser({ visible, onClose, onAdd, existingPeptide
           </ScrollView>
 
           {/* Compound list */}
-          <FlatList
-            data={filtered}
-            keyExtractor={(item) => item.presetId}
+          <SectionList
+            sections={sections}
+            keyExtractor={(item) => item.id}
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
+            stickySectionHeadersEnabled={false}
             ListEmptyComponent={
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                 No compounds match your search.
               </Text>
             }
+            renderSectionHeader={({ section: { title } }) => (
+              <Text
+                style={[
+                  styles.sectionHeader,
+                  { color: colors.textSecondary, backgroundColor: colors.background },
+                ]}
+              >
+                {title}
+              </Text>
+            )}
             renderItem={({ item }) => (
               <CompoundCard
-                preset={item}
+                compound={item}
+                isExpanded={expandedId === item.id}
+                showDetails={expandedId === item.id && showDetails}
                 alreadyInLibrary={existingSet.has(item.name.toLowerCase())}
+                customDose={expandedId === item.id ? customDose : ''}
+                onCustomDoseChange={setCustomDose}
+                onToggle={() => handleToggle(item.id)}
+                onToggleDetails={handleToggleDetails}
                 onAdd={(dose) => handleAdd(item, dose)}
                 colors={colors}
               />
@@ -261,7 +468,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingHorizontal: 16,
     paddingBottom: 40,
-    maxHeight: '90%',
+    maxHeight: '92%',
   },
   handle: {
     width: 36,
@@ -294,24 +501,32 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
   },
-  categoryRow: {
+  chipRow: {
     gap: 8,
     paddingBottom: 12,
   },
-  categoryChip: {
+  chip: {
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 20,
     borderWidth: 1,
   },
-  categoryChipText: {
-    fontSize: 13,
+  chipText: {
+    fontSize: 12,
     fontWeight: '600',
   },
   list: {
-    gap: 12,
+    gap: 0,
     paddingTop: 4,
     paddingBottom: 20,
+  },
+  sectionHeader: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    paddingTop: 14,
+    paddingBottom: 6,
   },
   emptyText: {
     textAlign: 'center',
@@ -325,6 +540,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderRadius: 12,
     borderWidth: 1,
+    marginBottom: 8,
     overflow: 'hidden',
   },
   cardAccent: {
@@ -333,48 +549,59 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    paddingRight: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingRight: 10,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 8,
+  },
+  nameLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
   },
   cardName: {
     fontSize: 15,
     fontWeight: '700',
   },
-  cardSubcategory: {
-    fontSize: 12,
-    marginTop: 2,
-  },
   alreadyLabel: {
     fontSize: 11,
     fontStyle: 'italic',
-    marginTop: 2,
   },
-  badgeRow: {
+  cardAliases: {
+    fontSize: 12,
+    marginTop: 1,
+  },
+  headerMeta: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
     flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 10,
   },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+  statusBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
     borderRadius: 20,
     borderWidth: 1,
   },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '600',
+  statusBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
+  freqText: {
+    fontSize: 12,
+  },
+
+  // Dose chips
   doseLabel: {
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 0.5,
+    marginTop: 12,
     marginBottom: 6,
   },
   doseRow: {
@@ -391,5 +618,91 @@ const styles = StyleSheet.create({
   doseChipText: {
     fontSize: 13,
     fontWeight: '700',
+  },
+  customDoseWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  customDoseInput: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 13,
+    minWidth: 72,
+  },
+  customAddBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  customAddBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  // Details toggle
+  detailsToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 12,
+    alignSelf: 'flex-start',
+  },
+  detailsToggleText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  // Detail section
+  detailSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  detailLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  detailText: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  pillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 2,
+  },
+  pillTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+  },
+  pillTagText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    gap: 24,
+    marginTop: 4,
+  },
+  metaItem: {
+    flex: 1,
+  },
+  notesBox: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 8,
+  },
+  notesText: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontStyle: 'italic',
   },
 });
