@@ -1,51 +1,100 @@
 /**
- * Recovery service — daily check-in for sleep quality, hours, and energy.
- * Computes an effort score (10-100) and persists it keyed by local date.
+ * Recovery service — daily check-in for sleep, soreness, stress, and readiness.
+ * Computes a recoveryMultiplier (0.5–1.5) for the Body Model and a
+ * readinessScore (0–100) for display. Persists to recoveryLog keyed by date.
  */
 import { serverTimestamp } from 'firebase/firestore';
 import { setDocument, getDocument, COLLECTIONS } from './firebase/firestore';
 import { toLocalDateKey } from '../utils/nutrition';
-import type { RecoveryEntry } from '../types/recovery';
+import {
+  calculateRecoveryMultiplier,
+  multiplierToDisplayScore,
+} from '../utils/recoveryCalc';
+import type { RecoveryInput } from '../types/recovery';
 import type { ServiceResult } from '../types/service';
 
-export function calculateEffortScore(
-  sleepQuality: number,
-  sleepHours: number,
-  energyLevel: number,
-): number {
-  const raw =
-    sleepQuality * 10 +
-    (Math.min(sleepHours, 9) / 9) * 30 +
-    energyLevel * 10 +
-    10;
-  return Math.round(Math.min(100, Math.max(10, raw)));
+function validateRecoveryInput(input: {
+  sleepHours: number;
+  sleepQuality: number;
+  muscleSoreness: number;
+  stressLevel: number;
+  overallReadiness: number;
+}): void {
+  if (!Number.isFinite(input.sleepHours) || input.sleepHours < 0 || input.sleepHours > 12) {
+    throw new Error(`sleepHours must be 0–12, got ${input.sleepHours}`);
+  }
+  for (const field of ['sleepQuality', 'muscleSoreness', 'stressLevel'] as const) {
+    const v = input[field];
+    if (!Number.isFinite(v) || v < 1 || v > 5) {
+      throw new Error(`${field} must be 1–5, got ${v}`);
+    }
+  }
+  if (
+    !Number.isFinite(input.overallReadiness) ||
+    input.overallReadiness < 0 ||
+    input.overallReadiness > 10
+  ) {
+    throw new Error(`overallReadiness must be 0–10, got ${input.overallReadiness}`);
+  }
 }
 
 export async function saveRecovery(input: {
-  sleepQuality: number;
   sleepHours: number;
-  energyLevel: number;
+  sleepQuality: number;
+  muscleSoreness: number;
+  stressLevel: number;
+  overallReadiness: number;
+  notes: string;
 }): Promise<ServiceResult<void>> {
-  const effortScore = calculateEffortScore(
-    input.sleepQuality,
+  try {
+    validateRecoveryInput(input);
+  } catch (e) {
+    return { data: null, error: e as Error };
+  }
+
+  const recoveryMultiplier = calculateRecoveryMultiplier(
     input.sleepHours,
-    input.energyLevel,
+    input.sleepQuality,
+    input.muscleSoreness,
+    input.stressLevel,
+    input.overallReadiness,
   );
-  const dateKey = toLocalDateKey();
-  return setDocument(COLLECTIONS.RECOVERY, dateKey, {
-    ...input,
-    effortScore,
+  const readinessScore = multiplierToDisplayScore(recoveryMultiplier);
+  const date = toLocalDateKey();
+
+  // Truncate notes to 500 chars — never throw, never drop the entry (Ray M16a item 2)
+  const notes = input.notes.trim().slice(0, 500);
+
+  return setDocument(COLLECTIONS.RECOVERY_LOG, date, {
+    sleepHours: input.sleepHours,
+    sleepQuality: input.sleepQuality,
+    muscleSoreness: input.muscleSoreness,
+    stressLevel: input.stressLevel,
+    overallReadiness: input.overallReadiness,
+    notes,
+    healthKitSynced: false, // hardcoded until HealthKit milestone (Ray M16a item 3)
+    recoveryMultiplier,
+    readinessScore,
     timestamp: serverTimestamp(),
+    date,
   });
 }
 
-export async function getTodayRecovery(): Promise<ServiceResult<RecoveryEntry | null>> {
-  const dateKey = toLocalDateKey();
-  return getDocument<RecoveryEntry>(COLLECTIONS.RECOVERY, dateKey);
+/**
+ * Fetch recovery log for a given date.
+ * Tries new RECOVERY_LOG collection first; falls back to legacy RECOVERY
+ * collection for backward compat with pre-M16a documents.
+ */
+export async function getRecovery(
+  date: string,
+): Promise<ServiceResult<RecoveryInput | null>> {
+  const result = await getDocument<RecoveryInput>(COLLECTIONS.RECOVERY_LOG, date);
+  if (result.error === null && result.data !== null) return result;
+  // Fall back to legacy collection — old docs have energyLevel/effortScore
+  // but callers only read known fields so the cast is safe
+  return getDocument<RecoveryInput>(COLLECTIONS.RECOVERY, date);
 }
 
-export async function getRecoveryByDate(dateKey: string): Promise<RecoveryEntry | null> {
-  const result = await getDocument<RecoveryEntry>(COLLECTIONS.RECOVERY, dateKey);
-  if (result.error || !result.data) return null;
-  return result.data;
+export async function getTodayRecovery(): Promise<ServiceResult<RecoveryInput | null>> {
+  return getRecovery(toLocalDateKey());
 }

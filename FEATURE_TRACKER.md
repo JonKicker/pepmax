@@ -4,6 +4,45 @@
 
 ---
 
+## Milestone 18 — Recovery Logging Data Layer
+
+**Status:** ✅ Ray-approved (pending commit)
+**Date:** 2026-03-20
+
+### Features included
+
+- `src/types/recovery.ts` — `RecoveryInput` type (sleepHours, sleepQuality, soreness, stress, readiness, recoveryMultiplier, timestamp, date). Replaces old `RecoveryEntry` (effortScore model).
+- `src/utils/recoveryCalc.ts` — `calculateRecoveryMultiplier(sleepHours, sleepQuality, soreness, stress, readiness)` pure function. 5 mapping tables (sleepHours range-based, 4 discrete 1–5 fields). `clampRating()` throws on invalid discrete inputs. `parseFloat(toFixed(1))` rounding.
+- `src/services/recoveryService.ts` — `saveRecovery(input)` (validates, calculates multiplier, writes to `COLLECTIONS.RECOVERY` keyed by `toLocalDateKey()`). `getRecovery(date)` reads by YYYY-MM-DD key. Both return `ServiceResult<T>`. Validation failures return `{ data: null, error }` — never throws past the return type.
+
+### Architecture decision
+
+Firestore path confirmed as `users/{uid}/recovery/YYYY-MM-DD` (Option A) — consistent with all 20+ existing collections. Spec path `users/{uid}/days/{date}/recovery` rejected as an orphaned pattern not used elsewhere.
+
+### Known downstream breakage (intentional — follow-up milestone)
+
+- `src/components/dashboard/RecoveryCard.tsx` — uses old `RecoveryEntry`, `effortScore`
+- `src/components/dashboard/RecoveryCheckInModal.tsx` — uses old `saveRecovery` signature, `calculateEffortScore`
+- `src/services/dashboardService.ts` — uses removed `getTodayRecovery`
+- `src/types/dashboard.ts` — uses old `RecoveryEntry`
+- `app/(tabs)/cardio/session-summary.tsx` — uses removed `getRecoveryByDate`, `effortScore`
+- `src/utils/recovery.ts` — `effortColor()` helper for old effortScore
+
+### Ray Review Notes
+
+**Status:** APPROVED (after two conditional approval rounds)
+
+**Round 1 fixes (first pass):**
+1. ✅ `clampRating()` — throws explicitly on out-of-range/non-finite discrete inputs, removed `?? 1.0` silent fallbacks
+2. ✅ `parseFloat(avg.toFixed(1))` — replaces `Math.round(avg * 10) / 10`
+3. ✅ Input validation added to `saveRecovery` before Firestore write
+
+**Round 2 fixes:**
+4. ✅ Firestore path confirmed correct (Option A — existing flat pattern)
+5. ✅ `validateRecoveryInput` wrapped in try/catch — validation failures now return `ServiceResult` error instead of throwing past return type
+
+---
+
 ## Milestone 17 — Pro Subscription Gating + Dev Trial
 
 **Status:** ✅ Ray-approved (pending commit)
