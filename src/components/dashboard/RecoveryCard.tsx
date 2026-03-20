@@ -31,7 +31,7 @@ export function RecoveryCard({ recovery, colors, onCheckIn }: Props) {
       iconColor={Colors.accent}
       colors={colors}
     >
-      {recovery ? (
+      {recovery?.recoveryMultiplier != null ? (
         <View style={styles.hasData}>
           <Text style={[styles.score, { color: multiplierColor(recovery.recoveryMultiplier) }]}>
             {`${recovery.recoveryMultiplier}×`}
