@@ -130,8 +130,9 @@ export async function searchUSDA(
   if (!apiKey) return { data: [], error: null };
   if (!query.trim()) return { data: [], error: null };
 
+  let timedOut = false;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10_000);
+  const timeoutId = setTimeout(() => { timedOut = true; controller.abort(); }, 10_000);
   signal?.addEventListener('abort', () => controller.abort(), { once: true });
 
   try {
@@ -165,6 +166,10 @@ export async function searchUSDA(
     clearTimeout(timeoutId);
     const err = e as Error;
     if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
+      if (timedOut) {
+        return { data: null, error: new Error('Request timed out') };
+      }
+      // Debounce cancellation — not an error
       return { data: [], error: null };
     }
     return { data: null, error: err };

@@ -232,8 +232,9 @@ async function searchOFF(
   query: string,
   signal?: AbortSignal,
 ): Promise<ServiceResult<FoodSearchResult[]>> {
+  let timedOut = false;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10_000);
+  const timeoutId = setTimeout(() => { timedOut = true; controller.abort(); }, 10_000);
   signal?.addEventListener('abort', () => controller.abort(), { once: true });
   try {
     const url = `${OFF_BASE}&search_terms=${encodeURIComponent(query.trim())}`;
@@ -279,8 +280,11 @@ async function searchOFF(
   } catch (e) {
     clearTimeout(timeoutId);
     const err = e as Error;
-    // Aborts are intentional (user typed new query or timeout) — not errors
     if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
+      if (timedOut) {
+        return { data: null, error: new Error('Request timed out') };
+      }
+      // Debounce cancellation — not an error
       return { data: [], error: null };
     }
     return { data: null, error: err };
