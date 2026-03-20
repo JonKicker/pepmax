@@ -102,6 +102,7 @@ export async function computeAndSaveBodyModel(
       recentCardioSessions: cardioSessions,
       recentWorkoutSessions: workoutSessions,
       nutritionAdherence,
+      referenceDate,
     });
 
     // ── Compute bonuses/penalties ────────────────────────────────────────────────

@@ -162,9 +162,10 @@ export type SystemScoreInputs = {
   recoveryMultiplier: number;        // from today's recovery check-in (or DEFAULT_RECOVERY_MULTIPLIER)
   sleepHours: number;                // from today's recovery check-in (or 7 as neutral default)
   stressLevel: number;               // 1–5 from today's check-in (or 1 as neutral default)
-  recentCardioSessions: CardioSession[];   // last 14 days of completed cardio
-  recentWorkoutSessions: WorkoutSession[]; // last 14 days of completed workouts (for CNS load)
+  recentCardioSessions: CardioSession[];   // completed cardio sessions (unfiltered; date window applied internally)
+  recentWorkoutSessions: WorkoutSession[]; // completed workout sessions (unfiltered; date window applied internally)
   nutritionAdherence: number | null; // 0–1 fraction of calorie target met; null if no nutrition data
+  referenceDate: Date;               // target date for computation — use instead of Date.now() for historical correctness
 };
 
 // ─── CNS score ────────────────────────────────────────────────────────────────
@@ -177,12 +178,12 @@ export type SystemScoreInputs = {
  * but not yet wired into system scoring).
  */
 export function computeCNSScore(inputs: SystemScoreInputs): number {
-  const { recoveryMultiplier, stressLevel, recentWorkoutSessions } = inputs;
+  const { recoveryMultiplier, stressLevel, recentWorkoutSessions, referenceDate } = inputs;
 
-  // Only sessions from the past 7 days matter for acute CNS load
+  // Only sessions from the past 7 days relative to referenceDate matter for acute CNS load
   const acuteSessions = recentWorkoutSessions.filter((s) => {
-    const daysAgo = (Date.now() - s.startedAt.toDate().getTime()) / 86_400_000;
-    return daysAgo <= 7;
+    const daysAgo = (referenceDate.getTime() - s.startedAt.toDate().getTime()) / 86_400_000;
+    return daysAgo >= 0 && daysAgo <= 7;
   });
 
   const totalSets = acuteSessions.reduce((sum, s) => sum + s.totalSets, 0);
@@ -208,12 +209,21 @@ export function computeCNSScore(inputs: SystemScoreInputs): number {
  * pace-at-HR efficiency metric (spec §6.4).
  */
 export function computeCardiovascularScore(inputs: SystemScoreInputs): number {
-  const { recentCardioSessions, recoveryMultiplier } = inputs;
+  const { recentCardioSessions, recoveryMultiplier, referenceDate } = inputs;
 
-  if (recentCardioSessions.length === 0) return 70; // neutral: no data
+  // Filter to the 14-day window relative to referenceDate (not wall-clock time)
+  const msPerDay = 86_400_000;
+  const windowSessions = recentCardioSessions.filter((s) => {
+    const endedAt = s.endedAt?.toDate();
+    if (!endedAt) return false;
+    const daysAgo = (referenceDate.getTime() - endedAt.getTime()) / msPerDay;
+    return daysAgo >= 0 && daysAgo <= 14;
+  });
+
+  if (windowSessions.length === 0) return 70; // neutral: no cardio in the window
 
   // Each session contributes points based on duration; cap per session at 18pts
-  const totalPoints = recentCardioSessions.reduce((sum, s) => {
+  const totalPoints = windowSessions.reduce((sum, s) => {
     const minutes = s.duration / 60;
     return sum + Math.min(18, Math.round(minutes * 0.25));
   }, 0);
