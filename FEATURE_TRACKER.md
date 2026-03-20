@@ -4,6 +4,27 @@
 
 ---
 
+## PresetBrowser → COMPOUND_DATABASE Migration
+
+**Status:** ✅ Committed (04b84d7)
+**Date:** 2026-03-20
+
+### Changes
+- `src/components/peptides/PresetBrowser.tsx` — full rewrite: SectionList with 14 CompoundCategory groups, expandable cards, dose chips, custom dose input (capped ≤10000), View Details panel (mechanism, side effects, stacks, reconstitution, storage, notes)
+- `src/services/peptideService.ts` — `parseRoute`, `parseUnit`, `parseFrequency`, `mapGroupToCategory` helpers; `addPeptideFromPreset` now accepts `Compound` (Firestore schema unchanged)
+- `app/(tabs)/peptides/index.tsx` — `PresetCompound` → `Compound` import
+- `src/data/presetCompounds.ts` — deleted
+
+### Ray Review
+**Status:** APPROVED (after one conditional round)
+
+**Fixes applied:**
+1. ✅ `parseFrequency` check order — `2x/3x weekly` checked before `weekly`; `nightly` added to `daily` branch
+2. ✅ Custom dose upper bound — `val <= 10000` guard before Firestore write
+3. ✅ Alias suppression — `.startsWith('N/A')` replaces exact magic string match
+
+---
+
 ## Milestone 20 — Body Model Scoring Engine
 
 **Status:** ⏳ Built — Awaiting Ray review
@@ -132,7 +153,7 @@ All downstream breakage resolved:
 
 ## Milestone 17 — Pro Subscription Gating + Dev Trial
 
-**Status:** ✅ Ray-approved (pending commit)
+**Status:** ✅ Committed (cb3ca0c)
 **Date:** 2026-03-20
 
 ### Features included
@@ -239,7 +260,7 @@ All downstream breakage resolved:
 
 ## Milestone 13 — Recovery Card + Daily Check-In
 
-**Status:** ✅ Implemented + Ray fixes applied (pending commit)
+**Status:** ✅ Committed (0438985)
 **Date:** 2026-03-19
 
 ### Features included
@@ -452,7 +473,7 @@ All downstream breakage resolved:
 
 ## Milestone 12 — Flexible Consistency System
 
-**Status:** ✅ Implemented (pending commit)
+**Status:** ✅ Committed
 **Date:** 2026-03-18
 
 ### Features included
@@ -476,7 +497,7 @@ All downstream breakage resolved:
 
 ## Micronutrient Dashboard — Post-Ray Fixes
 
-**Status:** ✅ Applied (pending commit)
+**Status:** ✅ Committed (531a7a0)
 **Date:** 2026-03-19
 
 ### Ray Conditional Approval items resolved
