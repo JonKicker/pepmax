@@ -19,14 +19,17 @@
 
 Firestore path confirmed as `users/{uid}/recovery/YYYY-MM-DD` (Option A) — consistent with all 20+ existing collections. Spec path `users/{uid}/days/{date}/recovery` rejected as an orphaned pattern not used elsewhere.
 
-### Known downstream breakage (intentional — follow-up milestone)
+### Consumer fixes (follow-up commit — 2026-03-20)
 
-- `src/components/dashboard/RecoveryCard.tsx` — uses old `RecoveryEntry`, `effortScore`
-- `src/components/dashboard/RecoveryCheckInModal.tsx` — uses old `saveRecovery` signature, `calculateEffortScore`
-- `src/services/dashboardService.ts` — uses removed `getTodayRecovery`
-- `src/types/dashboard.ts` — uses old `RecoveryEntry`
-- `app/(tabs)/cardio/session-summary.tsx` — uses removed `getRecoveryByDate`, `effortScore`
-- `src/utils/recovery.ts` — `effortColor()` helper for old effortScore
+All downstream breakage resolved:
+
+- `src/types/dashboard.ts` — `RecoveryEntry` → `RecoveryInput`
+- `src/components/dashboard/RecoveryCard.tsx` — `readinessScore` display with `effortColor`, sleep/soreness detail
+- `src/components/dashboard/RecoveryCheckInModal.tsx` — 5-input form (sleep quality, sleep hours, muscle soreness, stress level, overall readiness 0-10), scrollable layout, live `readinessScore` preview, notes field
+- `src/utils/recovery.ts` — `effortColor` (0-100 readinessScore), `multiplierColor`, `multiplierLabel`
+- `src/utils/recoveryCalc.ts` — updated to use type field names (`muscleSoreness`, `stressLevel`, `overallReadiness` 0-10), added `multiplierToDisplayScore`
+- `src/services/recoveryService.ts` — accepts full type field names + `notes`, dual-collection fallback for legacy docs
+- `app/(tabs)/cardio/session-summary.tsx` — `getRecovery` + `recoveryMultiplier` display
 
 ### Ray Review Notes
 
