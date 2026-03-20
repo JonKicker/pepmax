@@ -1,5 +1,5 @@
 // src/data/compoundDatabase.ts
-// PepMax Default Compound Library — 38 verified compounds
+// PepMax Default Compound Library — 38 verified compounds with quick-add dose chips
 // Auto-generated from PepMax_Compound_Database_FINAL.xlsx
 // Last updated: March 2026
 
@@ -27,7 +27,6 @@ export type CompoundCategory =
   | 'Nootropic / Cognitive / Sleep';
 
 export interface Compound {
-  // Unique identifier (kebab-case of compound name)
   id: string;
 
   // Basic info
@@ -38,13 +37,15 @@ export interface Compound {
   userGoal: string;
   status: CompoundStatus;
 
-  // Dosing
+  // Dosing & quick-add
   route: string;
   injectionSite: string;
   doseRange: string;
   dosingFrequency: string;
+  commonDoses: number[];    // dose chip values for quick-add
+  unit: string;             // 'mg' | 'mcg' | 'IU' | 'mg/kg'
 
-  // Pharmacokinetics (key for half-life graph)
+  // Pharmacokinetics
   halfLifeDisplay: string;
   halfLifeHours: number;
 
@@ -80,6 +81,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen, thigh, upper arm',
     doseRange: '0.25 - 2.4 mg',
     dosingFrequency: 'Weekly',
+    commonDoses: [0.25, 0.5, 1.0, 1.7, 2.4],
+    unit: 'mg',
     halfLifeDisplay: '~7 days',
     halfLifeHours: 168.0,
     typicalVialSize: 'Prefilled pen',
@@ -104,6 +107,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen, thigh, upper arm',
     doseRange: '2.5 - 15 mg',
     dosingFrequency: 'Weekly',
+    commonDoses: [2.5, 5, 7.5, 10, 12.5, 15],
+    unit: 'mg',
     halfLifeDisplay: '~5 days',
     halfLifeHours: 120.0,
     typicalVialSize: 'Prefilled pen',
@@ -128,6 +133,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen, thigh, upper arm',
     doseRange: '0.6 → 1.2 → 1.8 mg (T2D); up to 3 mg (obesity)',
     dosingFrequency: 'Once daily',
+    commonDoses: [0.6, 1.2, 1.8, 2.4, 3.0],
+    unit: 'mg',
     halfLifeDisplay: '~13 hrs',
     halfLifeHours: 13.0,
     typicalVialSize: 'Prefilled pen',
@@ -152,6 +159,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen, thigh, upper arm',
     doseRange: '0.75 → 1.5 → 3 → 4.5 mg',
     dosingFrequency: 'Once weekly',
+    commonDoses: [0.75, 1.5, 3.0, 4.5],
+    unit: 'mg',
     halfLifeDisplay: '~5 days',
     halfLifeHours: 120.0,
     typicalVialSize: 'Prefilled auto-injector',
@@ -176,6 +185,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen, thigh, upper arm (rotate weekly)',
     doseRange: '1 - 12 mg',
     dosingFrequency: 'Weekly',
+    commonDoses: [1, 2, 4, 8, 12],
+    unit: 'mg',
     halfLifeDisplay: '~6 days (~144-168 hrs)',
     halfLifeHours: 144.0,
     typicalVialSize: '2 mg, 4 mg, 8 mg, or 10 mg vials (compounded)',
@@ -200,6 +211,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen, thigh, upper arm',
     doseRange: '5-10 mcg (IR); 2 mg (ER)',
     dosingFrequency: 'Twice daily (IR); weekly (ER)',
+    commonDoses: [5, 10],
+    unit: 'mcg',
     halfLifeDisplay: '~2.4 hrs',
     halfLifeHours: 2.4,
     typicalVialSize: 'Prefilled pen',
@@ -226,6 +239,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen',
     doseRange: '200-300 mcg per dose',
     dosingFrequency: 'Once nightly (before bed)',
+    commonDoses: [100, 200, 300],
+    unit: 'mcg',
     halfLifeDisplay: '~8 min',
     halfLifeHours: 0.13,
     typicalVialSize: '5 mg or 9 mg vial',
@@ -250,6 +265,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen (rotate sites)',
     doseRange: '1 - 2 mg',
     dosingFrequency: 'Daily',
+    commonDoses: [1, 1.4, 2],
+    unit: 'mg',
     halfLifeDisplay: '~30 min',
     halfLifeHours: 0.5,
     typicalVialSize: 'Prefilled kits',
@@ -274,6 +291,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen, love handles',
     doseRange: '2 mg',
     dosingFrequency: 'Weekly',
+    commonDoses: [1, 2],
+    unit: 'mg',
     halfLifeDisplay: '~6-8 days',
     halfLifeHours: 168.0,
     typicalVialSize: '2 mg or 5 mg vial',
@@ -298,6 +317,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen',
     doseRange: '100 mcg',
     dosingFrequency: '1-3x Daily',
+    commonDoses: [100, 200, 300],
+    unit: 'mcg',
     halfLifeDisplay: '~30 min',
     halfLifeHours: 0.5,
     typicalVialSize: '2 mg or 5 mg vial',
@@ -322,6 +343,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen',
     doseRange: '100 - 300 mcg',
     dosingFrequency: '1-3x Daily',
+    commonDoses: [100, 200, 300],
+    unit: 'mcg',
     halfLifeDisplay: '~2 hrs',
     halfLifeHours: 2.0,
     typicalVialSize: '2 mg or 5 mg vial',
@@ -346,6 +369,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'N/A (oral)',
     doseRange: '10-25 mg per day',
     dosingFrequency: 'Once daily, typically before bed',
+    commonDoses: [10, 15, 25],
+    unit: 'mg',
     halfLifeDisplay: '~24 hrs',
     halfLifeHours: 24.0,
     typicalVialSize: 'Capsule/tablet (10 or 25 mg)',
@@ -370,6 +395,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'N/A (oral)',
     doseRange: '0.5 mg/kg single dose',
     dosingFrequency: 'Single diagnostic dose',
+    commonDoses: [0.5],
+    unit: 'mg/kg',
     halfLifeDisplay: '~4.1 hrs',
     halfLifeHours: 4.1,
     typicalVialSize: 'Oral solution kit',
@@ -396,6 +423,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Near injury site, or abdomen',
     doseRange: '250 - 500 mcg',
     dosingFrequency: '1-2x Daily',
+    commonDoses: [250, 500, 750],
+    unit: 'mcg',
     halfLifeDisplay: '~4 hrs (estimated)',
     halfLifeHours: 0.5,
     typicalVialSize: '5 mg or 10 mg vial',
@@ -420,6 +449,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen or near injury',
     doseRange: '2 - 10 mg',
     dosingFrequency: '1-2x Weekly',
+    commonDoses: [2, 2.5, 5, 10],
+    unit: 'mg',
     halfLifeDisplay: '~4 hrs (estimated)',
     halfLifeHours: 48.0,
     typicalVialSize: '2 mg or 5 mg vial',
@@ -446,6 +477,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Bilateral IM into target muscles; or abdomen (SubQ)',
     doseRange: '100 mcg per day (SubQ); 50-100 mcg IM bilateral',
     dosingFrequency: 'Once daily; 10-30 day cycles',
+    commonDoses: [50, 100],
+    unit: 'mcg',
     halfLifeDisplay: '~90 min',
     halfLifeHours: 1.5,
     typicalVialSize: '1 mg vial',
@@ -472,6 +505,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen',
     doseRange: '5 - 10 mg',
     dosingFrequency: '1-3x Weekly',
+    commonDoses: [5, 10],
+    unit: 'mg',
     halfLifeDisplay: '~3 hrs (estimated)',
     halfLifeHours: 2.0,
     typicalVialSize: '5 mg or 10 mg vial',
@@ -498,6 +533,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Thigh or abdomen',
     doseRange: '20 mcg',
     dosingFrequency: 'Once daily',
+    commonDoses: [20],
+    unit: 'mcg',
     halfLifeDisplay: '~1 hr',
     halfLifeHours: 1.0,
     typicalVialSize: 'Prefilled pen',
@@ -522,6 +559,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Periumbilical abdomen',
     doseRange: '80 mcg',
     dosingFrequency: 'Once daily',
+    commonDoses: [80],
+    unit: 'mcg',
     halfLifeDisplay: '~1.7 hrs',
     halfLifeHours: 1.7,
     typicalVialSize: 'Prefilled pen',
@@ -548,6 +587,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen, thigh, upper arm',
     doseRange: 'Varies by type and patient',
     dosingFrequency: 'Multiple daily or once daily',
+    commonDoses: [5, 10, 15, 20, 30],
+    unit: 'IU',
     halfLifeDisplay: '4 min - 20+ hrs',
     halfLifeHours: 0,
     typicalVialSize: 'Prefilled pen/vial',
@@ -572,6 +613,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen, thigh',
     doseRange: '15-60 mcg (T1D); 60-120 mcg (T2D)',
     dosingFrequency: 'Before major meals',
+    commonDoses: [15, 30, 60, 120],
+    unit: 'mcg',
     halfLifeDisplay: '~48 min',
     halfLifeHours: 0.8,
     typicalVialSize: 'Prefilled pen',
@@ -596,6 +639,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Thigh, upper arm, abdomen',
     doseRange: '1 mg (injection); 3 mg (nasal)',
     dosingFrequency: 'As needed (emergency)',
+    commonDoses: [0.5, 1],
+    unit: 'mg',
     halfLifeDisplay: '~8-18 min',
     halfLifeHours: 0.25,
     typicalVialSize: 'Auto-injector or nasal kit',
@@ -622,6 +667,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen or thigh',
     doseRange: '1.75 mg',
     dosingFrequency: 'As needed (45 min before; max 1/24 hrs)',
+    commonDoses: [1.75],
+    unit: 'mg',
     halfLifeDisplay: '~2.7 hrs',
     halfLifeHours: 2.7,
     typicalVialSize: 'Auto-injector',
@@ -646,6 +693,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen',
     doseRange: '0.5 - 2 mg',
     dosingFrequency: 'As needed',
+    commonDoses: [0.5, 1, 1.5, 2],
+    unit: 'mg',
     halfLifeDisplay: '~2.7 hrs',
     halfLifeHours: 2.7,
     typicalVialSize: '10 mg vial',
@@ -670,6 +719,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen, thigh, upper arm',
     doseRange: '250-1000 mcg (loading); 500-1000 mcg (maintenance)',
     dosingFrequency: 'Daily during loading (6-8 wks); then 1-2x weekly',
+    commonDoses: [0.1, 0.25, 0.5, 1],
+    unit: 'mg',
     halfLifeDisplay: '~33 hrs',
     halfLifeHours: 33.0,
     typicalVialSize: '10 mg vial',
@@ -694,6 +745,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen',
     doseRange: '1 → 2 → 3 mg',
     dosingFrequency: 'Once daily',
+    commonDoses: [1, 2, 3],
+    unit: 'mg',
     halfLifeDisplay: '~11 hrs',
     halfLifeHours: 11.0,
     typicalVialSize: 'Multi-dose vial',
@@ -718,6 +771,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Suprailiac (above hip)',
     doseRange: '16 mg implant',
     dosingFrequency: 'Every 2 months',
+    commonDoses: [16],
+    unit: 'mg',
     halfLifeDisplay: '~15 hrs',
     halfLifeHours: 15.0,
     typicalVialSize: 'Implant (clinician-placed)',
@@ -744,6 +799,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen, thigh',
     doseRange: '1.5 mg',
     dosingFrequency: '2x Weekly',
+    commonDoses: [1.6, 3.2, 6.4],
+    unit: 'mg',
     halfLifeDisplay: '~2 hrs',
     halfLifeHours: 2.0,
     typicalVialSize: '5 mg or 10 mg vial',
@@ -768,6 +825,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen, near wound site (SubQ); wound (topical)',
     doseRange: '0.5-2 mg per injection (SubQ)',
     dosingFrequency: 'Once daily to 3x per week',
+    commonDoses: [50, 100, 200],
+    unit: 'mcg',
     halfLifeDisplay: '~1-2 hrs (estimated)',
     halfLifeHours: 1.5,
     typicalVialSize: '5 mg vial',
@@ -794,6 +853,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Nasal (primary); Abdomen (SubQ)',
     doseRange: '200-400 mcg (nasal); 250-500 mcg (SubQ)',
     dosingFrequency: '1-3x daily',
+    commonDoses: [250, 500, 750],
+    unit: 'mcg',
     halfLifeDisplay: '~2 min (rapid CNS action)',
     halfLifeHours: 0.03,
     typicalVialSize: 'Nasal spray or vial',
@@ -818,6 +879,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Nasal',
     doseRange: '200-600 mcg',
     dosingFrequency: '2-3x daily',
+    commonDoses: [200, 400, 600],
+    unit: 'mcg',
     halfLifeDisplay: '~2 min (rapid CNS action)',
     halfLifeHours: 0.03,
     typicalVialSize: 'Nasal spray',
@@ -842,6 +905,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Inner forearm/neck (transdermal); abdomen (SubQ)',
     doseRange: '10-20 mg topical; 10-20 mg oral; 1-5 mg SubQ',
     dosingFrequency: 'Once daily; 5 days on / 2 off',
+    commonDoses: [10, 20, 30],
+    unit: 'mg',
     halfLifeDisplay: 'Very long (estimated days)',
     halfLifeHours: 72.0,
     typicalVialSize: '50-100 mg powder; or 10 mg capsules',
@@ -866,6 +931,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen',
     doseRange: '100-300 mcg',
     dosingFrequency: 'Once nightly before bed',
+    commonDoses: [100, 200, 300],
+    unit: 'mcg',
     halfLifeDisplay: '~15 min',
     halfLifeHours: 0.25,
     typicalVialSize: '5 mg vial',
@@ -892,6 +959,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Nasal (intranasal); abdomen (SubQ)',
     doseRange: '10-40 IU intranasal; 100-500 mcg SubQ',
     dosingFrequency: 'As needed 30-45 min before; or once daily',
+    commonDoses: [10, 20, 40],
+    unit: 'IU',
     halfLifeDisplay: '~3-5 min (IV); CNS effect ~60-120 min',
     halfLifeHours: 0.067,
     typicalVialSize: 'Compounded nasal spray 50-100 IU/mL; SubQ: 5 mg vial',
@@ -918,6 +987,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen (near fat deposits)',
     doseRange: '300-500 mcg',
     dosingFrequency: 'Once daily (morning fasted)',
+    commonDoses: [250, 300, 500],
+    unit: 'mcg',
     halfLifeDisplay: '~3 hrs (estimated)',
     halfLifeHours: 3.0,
     typicalVialSize: '5 mg vial',
@@ -942,6 +1013,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'N/A (oral capsule)',
     doseRange: '50-150 mg',
     dosingFrequency: 'Once daily',
+    commonDoses: [50, 100, 150],
+    unit: 'mg',
     halfLifeDisplay: 'Not well-established',
     halfLifeHours: 0,
     typicalVialSize: 'Capsule (50-150 mg)',
@@ -968,6 +1041,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen (SubQ); face/scalp (topical)',
     doseRange: '1 - 2 mg',
     dosingFrequency: 'Daily',
+    commonDoses: [0.5, 1, 2],
+    unit: 'mg',
     halfLifeDisplay: '~30 min (estimated systemic)',
     halfLifeHours: 0.5,
     typicalVialSize: '5 mg vial or 50-100 mg powder',
@@ -994,6 +1069,8 @@ export const COMPOUND_DATABASE: Compound[] = [
     injectionSite: 'Abdomen or gluteal',
     doseRange: '3.75-22.5 mg (depot)',
     dosingFrequency: 'Monthly to 6-monthly',
+    commonDoses: [3.75, 7.5, 11.25, 22.5],
+    unit: 'mg',
     halfLifeDisplay: '~3 hrs (depot lasts weeks)',
     halfLifeHours: 3.0,
     typicalVialSize: 'Depot injection kit',
@@ -1011,13 +1088,11 @@ export const COMPOUND_DATABASE: Compound[] = [
 
 // ─── Helper Functions ─────────────────────────────────────────────
 
-// Get all unique category groups for filter UI
 export function getCompoundGroups(): CompoundCategory[] {
   const groups = new Set(COMPOUND_DATABASE.map((c) => c.group));
   return Array.from(groups) as CompoundCategory[];
 }
 
-// Search compounds by name, alias, or category
 export function searchCompounds(query: string): Compound[] {
   const q = query.toLowerCase().trim();
   if (!q) return COMPOUND_DATABASE;
@@ -1031,22 +1106,18 @@ export function searchCompounds(query: string): Compound[] {
   );
 }
 
-// Get compounds by group
 export function getCompoundsByGroup(group: CompoundCategory): Compound[] {
   return COMPOUND_DATABASE.filter((c) => c.group === group);
 }
 
-// Get a single compound by ID
 export function getCompoundById(id: string): Compound | undefined {
   return COMPOUND_DATABASE.find((c) => c.id === id);
 }
 
-// Get only compounds that need reconstitution (for calculator)
 export function getReconstitutableCompounds(): Compound[] {
   return COMPOUND_DATABASE.filter((c) => c.reconstitutionNeeded);
 }
 
-// Get compounds by FDA status
 export function getFDAApprovedCompounds(): Compound[] {
   return COMPOUND_DATABASE.filter((c) => c.status.includes('FDA'));
 }
