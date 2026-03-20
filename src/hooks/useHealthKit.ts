@@ -9,6 +9,8 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { AppState, Platform } from 'react-native';
 import { updateDocument, COLLECTIONS } from '../services/firebase/firestore';
+import { HK_WEIGHT_SOURCE_MARKER } from '../constants/healthKit';
+import { setHKEnabled } from '../utils/hkEnabled';
 import {
   isAvailable,
   requestPermissions,
@@ -81,11 +83,18 @@ export function useHealthKit() {
         weight: hkWeight.kg,
         displayUnit: 'kg',
         date: dateKey,
-        note: 'healthkit',
+        note: HK_WEIGHT_SOURCE_MARKER,
       });
     } catch {
       // fire-and-forget: never surface to user
     }
+  }, [isEnabled]);
+
+  // ─── sync module-level flag with profile preference ──────────────────────
+  // Keeps isHKEnabled() (used in service-layer write-backs) in sync with the
+  // Firestore-backed userProfile flag without requiring hooks in service files.
+  useEffect(() => {
+    setHKEnabled(isEnabled);
   }, [isEnabled]);
 
   // ─── foreground AppState sync ─────────────────────────────────────────────

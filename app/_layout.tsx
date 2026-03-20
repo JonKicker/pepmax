@@ -21,6 +21,7 @@ import { PremiumProvider } from '../src/contexts/PremiumContext';
 import ErrorBoundary from '../src/components/ErrorBoundary';
 import { initSentry, sentryWrap, setUser as sentrySetUser } from '../src/services/errorReporting';
 import { analytics, AnalyticsEvent } from '../src/services/analytics';
+import { loadHKEnabled } from '../src/utils/hkEnabled';
 
 // Initialize Sentry once at module load — before any component renders.
 initSentry();
@@ -105,6 +106,9 @@ function ThemedStatusBar() {
 function RootLayout() {
   useEffect(() => {
     analytics.track(AnalyticsEvent.APP_OPENED);
+    // Load cached HK opt-in flag so service-layer write-backs respect the user's
+    // preference before the Firestore profile finishes loading.
+    loadHKEnabled().catch(() => {});
   }, []);
 
   return (

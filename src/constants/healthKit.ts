@@ -25,3 +25,11 @@ export const HK_WRITE_IDENTIFIERS: readonly (
   'HKQuantityTypeIdentifierBodyMass',
   'HKQuantityTypeIdentifierBodyFatPercentage',
 ] as const;
+
+/** Sentinel stored in BodyWeightInput.note to mark entries imported from HealthKit.
+ *  Used by logWeight() to prevent a Firestore→HealthKit→Firestore sync loop. */
+export const HK_WEIGHT_SOURCE_MARKER = 'healthkit';
+
+/** AsyncStorage key for caching the user's healthKitEnabled preference.
+ *  Lets isHKEnabled() return synchronously before the auth profile loads. */
+export const HK_ENABLED_STORAGE_KEY = '@pepmax_hk_enabled';

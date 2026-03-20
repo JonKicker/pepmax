@@ -22,6 +22,7 @@ import {
 } from '@kingstinct/react-native-healthkit';
 import { addBreadcrumb } from './errorReporting';
 import { HK_READ_IDENTIFIERS, HK_WRITE_IDENTIFIERS } from '../constants/healthKit';
+import { isHKEnabled } from '../utils/hkEnabled';
 import type { HealthKitRecoveryData, HealthKitSleepData } from '../types/healthKit';
 import type { ActivityType } from '../types/cardio';
 
@@ -41,11 +42,7 @@ export async function isAvailable(): Promise<boolean> {
 export async function requestPermissions(): Promise<boolean> {
   if (Platform.OS !== 'ios') return false;
   try {
-    // Cast required: @kingstinct/react-native-healthkit v13 changed requestAuthorization
-    // to accept an object { toRead, toShare } but the published TypeScript types still
-    // declare the old positional-array signature. Remove this cast when types catch up.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (requestAuthorization as any)({
+    await requestAuthorization({
       toRead: HK_READ_IDENTIFIERS,
       toShare: HK_WRITE_IDENTIFIERS,
     });
@@ -211,6 +208,7 @@ export async function fetchLatestWeight(): Promise<{ kg: number; date: Date } | 
 // ─── Read: Combined Recovery Data ────────────────────────────────────────────
 
 export async function fetchRecoveryData(date: string): Promise<HealthKitRecoveryData> {
+  if (Platform.OS !== 'ios') return {};
   const [sleep, restingHR, hrv] = await Promise.all([
     fetchSleepData(date),
     fetchRestingHeartRate(date),
@@ -235,6 +233,7 @@ type NutritionWriteData = {
 
 export async function writeNutrition(data: NutritionWriteData): Promise<string | null> {
   if (Platform.OS !== 'ios') return null;
+  if (!isHKEnabled()) return null;
   try {
     const startDate = new Date(`${data.date}T12:00:00`);
     const endDate = new Date(startDate.getTime() + 60_000);
@@ -299,6 +298,7 @@ type CardioWriteData = {
 
 export async function writeCardioWorkout(data: CardioWriteData): Promise<string | null> {
   if (Platform.OS !== 'ios') return null;
+  if (!isHKEnabled()) return null;
   const hkType = ACTIVITY_TYPE_MAP[data.activityType];
   if (!hkType) return null;
   try {
@@ -324,11 +324,11 @@ export async function writeCardioWorkout(data: CardioWriteData): Promise<string 
 type StrengthWriteData = {
   startDate: Date;
   endDate: Date;
-  durationSeconds: number;
 };
 
 export async function writeStrengthWorkout(data: StrengthWriteData): Promise<string | null> {
   if (Platform.OS !== 'ios') return null;
+  if (!isHKEnabled()) return null;
   try {
     const workout = await saveWorkoutSample(
       WorkoutActivityType.traditionalStrengthTraining,
@@ -347,6 +347,7 @@ export async function writeStrengthWorkout(data: StrengthWriteData): Promise<str
 
 export async function writeBodyWeight(kg: number, date: Date): Promise<string | null> {
   if (Platform.OS !== 'ios') return null;
+  if (!isHKEnabled()) return null;
   try {
     const sample = await saveQuantitySample(
       'HKQuantityTypeIdentifierBodyMass',
@@ -366,6 +367,7 @@ export async function writeBodyWeight(kg: number, date: Date): Promise<string | 
 
 export async function writeBodyFat(percent: number, date: Date): Promise<string | null> {
   if (Platform.OS !== 'ios') return null;
+  if (!isHKEnabled()) return null;
   try {
     // HealthKit stores body fat as a fraction 0–1
     const sample = await saveQuantitySample(
