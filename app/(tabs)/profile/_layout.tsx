@@ -12,6 +12,8 @@ export default function ProfileLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ title: 'Settings' }} />
+      <Stack.Screen name="privacy" options={{ title: 'Privacy & Data' }} />
+      <Stack.Screen name="export-data" options={{ title: 'Export My Data' }} />
     </Stack>
   );
 }

@@ -39,6 +39,7 @@
     "expo-store-review": "~9.0.9",
     "expo-web-browser": "~15.0.10",
     "firebase": "^12.10.0",
+    "jszip": "^3.10.1",
     "mixpanel-react-native": "^3.3.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
