@@ -186,7 +186,7 @@ export function computeCNSScore(inputs: SystemScoreInputs): number {
     return daysAgo >= 0 && daysAgo <= 7;
   });
 
-  const totalSets = acuteSessions.reduce((sum, s) => sum + s.totalSets, 0);
+  const totalSets = acuteSessions.reduce((sum, s) => sum + (s.totalSets ?? 0), 0);
   // Each set contributes ~0.8 CNS load points; deduction capped at 50
   const loadDeduction = Math.min(50, totalSets * 0.8);
 
@@ -224,7 +224,7 @@ export function computeCardiovascularScore(inputs: SystemScoreInputs): number {
 
   // Each session contributes points based on duration; cap per session at 18pts
   const totalPoints = windowSessions.reduce((sum, s) => {
-    const minutes = s.duration / 60;
+    const minutes = (s.duration ?? 0) / 60;
     return sum + Math.min(18, Math.round(minutes * 0.25));
   }, 0);
 
@@ -366,31 +366,31 @@ export function computeAcuteChronicRatio(
 
   // Gym load: total sets per window
   const gymAcute = workoutSessions
-    .filter((s) => (referenceDate.getTime() - s.startedAt.toDate().getTime()) / msPerDay <= 7)
-    .reduce((sum, s) => sum + s.totalSets, 0);
+    .filter((s) => { const d = (referenceDate.getTime() - s.startedAt.toDate().getTime()) / msPerDay; return d >= 0 && d <= 7; })
+    .reduce((sum, s) => sum + (s.totalSets ?? 0), 0);
 
   const gymChronic28 = workoutSessions
-    .filter((s) => (referenceDate.getTime() - s.startedAt.toDate().getTime()) / msPerDay <= 28)
-    .reduce((sum, s) => sum + s.totalSets, 0);
+    .filter((s) => { const d = (referenceDate.getTime() - s.startedAt.toDate().getTime()) / msPerDay; return d >= 0 && d <= 28; })
+    .reduce((sum, s) => sum + (s.totalSets ?? 0), 0);
 
   // Cardio load: each minute of cardio = 1 "set equivalent" for ratio purposes
   const cardioAcute = cardioSessions
     .filter((s) => {
       const endedAt = s.endedAt?.toDate();
-      return (
-        endedAt && (referenceDate.getTime() - endedAt.getTime()) / msPerDay <= 7
-      );
+      if (!endedAt) return false;
+      const d = (referenceDate.getTime() - endedAt.getTime()) / msPerDay;
+      return d >= 0 && d <= 7;
     })
-    .reduce((sum, s) => sum + Math.round(s.duration / 60), 0);
+    .reduce((sum, s) => sum + Math.round((s.duration ?? 0) / 60), 0);
 
   const cardioChronic28 = cardioSessions
     .filter((s) => {
       const endedAt = s.endedAt?.toDate();
-      return (
-        endedAt && (referenceDate.getTime() - endedAt.getTime()) / msPerDay <= 28
-      );
+      if (!endedAt) return false;
+      const d = (referenceDate.getTime() - endedAt.getTime()) / msPerDay;
+      return d >= 0 && d <= 28;
     })
-    .reduce((sum, s) => sum + Math.round(s.duration / 60), 0);
+    .reduce((sum, s) => sum + Math.round((s.duration ?? 0) / 60), 0);
 
   const acute = gymAcute + cardioAcute;
   const chronicWeeklyAvg = (gymChronic28 + cardioChronic28) / 4; // 28 days / 4 weeks
@@ -416,7 +416,7 @@ export function hasConsistencyBonus(
 
   for (const s of workoutSessions) {
     const daysAgo = (referenceDate.getTime() - s.startedAt.toDate().getTime()) / msPerDay;
-    if (daysAgo <= 7) {
+    if (daysAgo >= 0 && daysAgo <= 7) {
       activeDays.add(s.startedAt.toDate().toDateString());
     }
   }
@@ -424,7 +424,7 @@ export function hasConsistencyBonus(
     const endedAt = s.endedAt?.toDate();
     if (!endedAt) continue;
     const daysAgo = (referenceDate.getTime() - endedAt.getTime()) / msPerDay;
-    if (daysAgo <= 7) {
+    if (daysAgo >= 0 && daysAgo <= 7) {
       activeDays.add(endedAt.toDateString());
     }
   }

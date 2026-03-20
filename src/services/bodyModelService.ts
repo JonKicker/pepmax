@@ -55,6 +55,10 @@ export async function computeAndSaveBodyModel(
   date: string,
   calorieTarget = 0,
 ): Promise<ServiceResult<BodyModelSnapshot>> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return { data: null, error: `Invalid date format: ${date}` };
+  }
+
   try {
     // ── Fetch all data sources in parallel; failures fall back to safe defaults ──
     const [workoutResult, cardioResult, recoveryResult, nutritionResult] =
@@ -81,7 +85,7 @@ export async function computeAndSaveBodyModel(
     // DEFAULT_RECOVERY_MULTIPLIER = 1.0: prevents division-by-zero in recovery curve
     const recoveryMultiplier = recovery?.recoveryMultiplier ?? DEFAULT_RECOVERY_MULTIPLIER;
     const sleepHours = recovery?.sleepHours ?? 7;
-    const stressLevel = recovery?.stress ?? 1;
+    const stressLevel = recovery?.stressLevel ?? 1;
 
     // Nutrition adherence: calories / calorieTarget, clamped 0–1
     // null when no nutrition logged or no calorie target set
@@ -139,7 +143,7 @@ export async function computeAndSaveBodyModel(
 
     return { data: snapshot, error: null };
   } catch (e) {
-    return { data: null, error: String(e) };
+    return { data: null, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
