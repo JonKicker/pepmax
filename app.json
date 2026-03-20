@@ -17,7 +17,13 @@
       "infoPlist": {
         "NSCameraUsageDescription": "PepMax uses the camera to scan food barcodes.",
         "NSLocationWhenInUseUsageDescription": "PepMax uses your location to track your running, cycling, and walking routes on a map.",
-        "NSLocationAlwaysUsageDescription": "PepMax uses your location to track your running, cycling, and walking routes on a map."
+        "NSLocationAlwaysUsageDescription": "PepMax uses your location to track your running, cycling, and walking routes on a map.",
+        "NSHealthShareUsageDescription": "PepMax reads your sleep, heart rate, HRV, steps, and weight from Apple Health to enhance recovery scoring and activity tracking.",
+        "NSHealthUpdateUsageDescription": "PepMax writes your logged workouts, nutrition, and body weight to Apple Health so all your health data stays in one place."
+      },
+      "entitlements": {
+        "com.apple.developer.healthkit": true,
+        "com.apple.developer.healthkit.background-delivery": true
       }
     },
     "android": {
@@ -48,7 +54,8 @@
         }
       ],
       "@sentry/react-native",
-      "expo-mail-composer"
+      "expo-mail-composer",
+      ["@kingstinct/react-native-healthkit", {}]
     ]
   }
 }

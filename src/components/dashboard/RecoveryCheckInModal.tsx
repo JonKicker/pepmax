@@ -107,15 +107,17 @@ export function RecoveryCheckInModal({ visible, onDismiss, onSaved, colors }: Pr
 
       if (hkEnabled) {
         const date = toLocalDateKey();
-        syncRecoveryData(date).then((data) => {
-          if (data.sleep) {
-            setSleepHours(Math.min(12, Math.max(0, data.sleep.totalHours)));
-            setSleepQuality(Math.min(5, Math.max(1, data.sleep.quality)));
-            setHkBadge(true);
-          }
-          if (data.restingHR != null) hkRestingHRRef.current = data.restingHR;
-          if (data.hrv != null) hkHrvRef.current = data.hrv;
-        });
+        syncRecoveryData(date)
+          .then((data) => {
+            if (data.sleep) {
+              setSleepHours(Math.min(12, Math.max(0, data.sleep.totalHours)));
+              setSleepQuality(Math.min(5, Math.max(1, data.sleep.quality)));
+              setHkBadge(true);
+            }
+            if (data.restingHR != null) hkRestingHRRef.current = data.restingHR;
+            if (data.hrv != null) hkHrvRef.current = data.hrv;
+          })
+          .catch((e) => console.error('[RecoveryCheckInModal] HealthKit sync error:', e));
       }
     }
   }, [visible, hkEnabled, syncRecoveryData]);
@@ -461,4 +463,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  hkBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: '#E8F5E9',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 8,
+  },
+  hkBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2E7D32',
+  },
 });
