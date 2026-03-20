@@ -10,15 +10,18 @@
  * They return a UUID string on success (for deduplication) or null on failure.
  */
 import { Platform } from 'react-native';
-import HealthKit, {
-  HKQuantityTypeIdentifier,
-  HKCategoryTypeIdentifier,
-  HKWorkoutActivityType,
-  HKCategoryValueSleepAnalysis,
-  HKUnit,
+import {
+  isHealthDataAvailable,
+  requestAuthorization,
+  queryCategorySamples,
+  queryQuantitySamples,
+  saveQuantitySample,
+  saveWorkoutSample,
+  WorkoutActivityType,
+  CategoryValueSleepAnalysis,
 } from '@kingstinct/react-native-healthkit';
 import { addBreadcrumb } from './errorReporting';
-import { HK_READ_PERMISSIONS, HK_WRITE_PERMISSIONS } from '../constants/healthKit';
+import { HK_READ_IDENTIFIERS, HK_WRITE_IDENTIFIERS } from '../constants/healthKit';
 import type { HealthKitRecoveryData, HealthKitSleepData } from '../types/healthKit';
 import type { ActivityType } from '../types/cardio';
 
@@ -27,7 +30,7 @@ import type { ActivityType } from '../types/cardio';
 export async function isAvailable(): Promise<boolean> {
   if (Platform.OS !== 'ios') return false;
   try {
-    return await HealthKit.isHealthDataAvailable();
+    return await isHealthDataAvailable();
   } catch {
     return false;
   }
@@ -38,10 +41,14 @@ export async function isAvailable(): Promise<boolean> {
 export async function requestPermissions(): Promise<boolean> {
   if (Platform.OS !== 'ios') return false;
   try {
-    await HealthKit.requestAuthorization(
-      HK_READ_PERMISSIONS as (HKQuantityTypeIdentifier | HKCategoryTypeIdentifier)[],
-      HK_WRITE_PERMISSIONS as HKQuantityTypeIdentifier[],
-    );
+    // Cast required: @kingstinct/react-native-healthkit v13 changed requestAuthorization
+    // to accept an object { toRead, toShare } but the published TypeScript types still
+    // declare the old positional-array signature. Remove this cast when types catch up.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (requestAuthorization as any)({
+      toRead: HK_READ_IDENTIFIERS,
+      toShare: HK_WRITE_IDENTIFIERS,
+    });
     return true;
   } catch (e) {
     addBreadcrumb('healthKit', 'requestPermissions failed', { error: String(e) });
@@ -55,14 +62,14 @@ export async function fetchSleepData(date: string): Promise<HealthKitSleepData |
   if (Platform.OS !== 'ios') return null;
   try {
     // Night before: 6pm previous day → noon same day
-    const dayStart = new Date(`${date}T06:00:00`);
+    const dayStart = new Date(`${date}T18:00:00`);
     dayStart.setDate(dayStart.getDate() - 1);
     const dayEnd = new Date(`${date}T12:00:00`);
 
-    const samples = await HealthKit.queryCategorySamples(
-      HKCategoryTypeIdentifier.sleepAnalysis,
-      { from: dayStart, to: dayEnd },
-    );
+    const samples = await queryCategorySamples('HKCategoryTypeIdentifierSleepAnalysis', {
+      limit: 0,
+      filter: { date: { startDate: dayStart, endDate: dayEnd } },
+    });
 
     if (!samples || samples.length === 0) return null;
 
@@ -74,40 +81,33 @@ export async function fetchSleepData(date: string): Promise<HealthKitSleepData |
       const durationMs =
         new Date(sample.endDate).getTime() - new Date(sample.startDate).getTime();
       const minutes = durationMs / 60_000;
-
-      // HKCategoryValueSleepAnalysis: 0=inBed, 1=asleep(core), 2=awake,
-      // 3=deep, 4=rem (watchOS 9+ / iOS 16+ values)
       const val = sample.value;
-      if (val === HKCategoryValueSleepAnalysis.asleepCore || val === 1) {
+
+      if (
+        val === CategoryValueSleepAnalysis.asleepCore ||
+        val === CategoryValueSleepAnalysis.asleepUnspecified
+      ) {
         totalMinutes += minutes;
-      } else if (val === HKCategoryValueSleepAnalysis.asleepDeep || val === 3) {
+      } else if (val === CategoryValueSleepAnalysis.asleepDeep) {
         totalMinutes += minutes;
         deepMinutes += minutes;
-      } else if (val === HKCategoryValueSleepAnalysis.asleepREM || val === 4) {
+      } else if (val === CategoryValueSleepAnalysis.asleepREM) {
         totalMinutes += minutes;
         remMinutes += minutes;
-      } else if (val === HKCategoryValueSleepAnalysis.asleepUnspecified || val === 0) {
-        totalMinutes += minutes;
       }
+      // inBed values don't count toward sleep totals
     }
 
     const totalHours = Math.round((totalMinutes / 60) * 2) / 2; // 0.5 increments
     if (totalHours === 0) return null;
 
-    // Base quality 1–5 from total duration
+    // Estimate quality 1–5 from total hours
     let quality: number;
     if (totalHours < 5) quality = 1;
     else if (totalHours < 6) quality = 2;
     else if (totalHours < 7) quality = 3;
     else if (totalHours < 8.5) quality = 4;
     else quality = 5;
-
-    // Refine quality using restorative sleep stages when available
-    if (totalMinutes > 0 && (deepMinutes > 0 || remMinutes > 0)) {
-      const restorativeRatio = (deepMinutes + remMinutes) / totalMinutes;
-      if (restorativeRatio > 0.35) quality = Math.min(5, quality + 1);
-      else if (restorativeRatio < 0.15) quality = Math.max(1, quality - 1);
-    }
 
     return {
       totalHours,
@@ -129,10 +129,11 @@ export async function fetchRestingHeartRate(date: string): Promise<number | null
     const dayStart = new Date(`${date}T00:00:00`);
     const dayEnd = new Date(`${date}T23:59:59`);
 
-    const samples = await HealthKit.queryQuantitySamples(
-      HKQuantityTypeIdentifier.restingHeartRate,
-      { from: dayStart, to: dayEnd, limit: 1, ascending: false },
-    );
+    const samples = await queryQuantitySamples('HKQuantityTypeIdentifierRestingHeartRate', {
+      limit: 1,
+      ascending: false,
+      filter: { date: { startDate: dayStart, endDate: dayEnd } },
+    });
 
     if (!samples || samples.length === 0) return null;
     return Math.round(samples[0].quantity);
@@ -150,9 +151,13 @@ export async function fetchHRV(date: string): Promise<number | null> {
     const dayStart = new Date(`${date}T00:00:00`);
     const dayEnd = new Date(`${date}T23:59:59`);
 
-    const samples = await HealthKit.queryQuantitySamples(
-      HKQuantityTypeIdentifier.heartRateVariabilitySDNN,
-      { from: dayStart, to: dayEnd, limit: 1, ascending: false },
+    const samples = await queryQuantitySamples(
+      'HKQuantityTypeIdentifierHeartRateVariabilitySDNN',
+      {
+        limit: 1,
+        ascending: false,
+        filter: { date: { startDate: dayStart, endDate: dayEnd } },
+      },
     );
 
     if (!samples || samples.length === 0) return null;
@@ -163,7 +168,7 @@ export async function fetchHRV(date: string): Promise<number | null> {
   }
 }
 
-// ─── Read: Step Count ─────────────────────────────────────────────────────────
+// ─── Read: Step Count ────────────────────────────────────────────────────────
 
 export async function fetchStepCount(date: string): Promise<number | null> {
   if (Platform.OS !== 'ios') return null;
@@ -171,10 +176,10 @@ export async function fetchStepCount(date: string): Promise<number | null> {
     const dayStart = new Date(`${date}T00:00:00`);
     const dayEnd = new Date(`${date}T23:59:59`);
 
-    const samples = await HealthKit.queryQuantitySamples(
-      HKQuantityTypeIdentifier.stepCount,
-      { from: dayStart, to: dayEnd },
-    );
+    const samples = await queryQuantitySamples('HKQuantityTypeIdentifierStepCount', {
+      limit: 0,
+      filter: { date: { startDate: dayStart, endDate: dayEnd } },
+    });
 
     if (!samples || samples.length === 0) return null;
     return Math.round(samples.reduce((sum, s) => sum + s.quantity, 0));
@@ -184,15 +189,16 @@ export async function fetchStepCount(date: string): Promise<number | null> {
   }
 }
 
-// ─── Read: Weight ─────────────────────────────────────────────────────────────
+// ─── Read: Weight ────────────────────────────────────────────────────────────
 
 export async function fetchLatestWeight(): Promise<{ kg: number; date: Date } | null> {
   if (Platform.OS !== 'ios') return null;
   try {
-    const samples = await HealthKit.queryQuantitySamples(
-      HKQuantityTypeIdentifier.bodyMass,
-      { limit: 1, ascending: false },
-    );
+    const samples = await queryQuantitySamples('HKQuantityTypeIdentifierBodyMass', {
+      limit: 1,
+      ascending: false,
+      filter: {},
+    });
 
     if (!samples || samples.length === 0) return null;
     return { kg: samples[0].quantity, date: new Date(samples[0].endDate) };
@@ -233,40 +239,39 @@ export async function writeNutrition(data: NutritionWriteData): Promise<string |
     const startDate = new Date(`${data.date}T12:00:00`);
     const endDate = new Date(startDate.getTime() + 60_000);
 
-    // Write each macro as a separate sample; use calories UUID as the canonical one
-    const uuid = await HealthKit.saveQuantitySample(
-      HKQuantityTypeIdentifier.dietaryEnergyConsumed,
-      HKUnit.Kilocalorie,
+    const calSample = await saveQuantitySample(
+      'HKQuantityTypeIdentifierDietaryEnergyConsumed',
+      'kcal',
       data.calories,
       startDate,
       endDate,
     );
 
     await Promise.allSettled([
-      HealthKit.saveQuantitySample(
-        HKQuantityTypeIdentifier.dietaryProtein,
-        HKUnit.Gram,
+      saveQuantitySample(
+        'HKQuantityTypeIdentifierDietaryProtein',
+        'g',
         data.protein,
         startDate,
         endDate,
       ),
-      HealthKit.saveQuantitySample(
-        HKQuantityTypeIdentifier.dietaryCarbohydrates,
-        HKUnit.Gram,
+      saveQuantitySample(
+        'HKQuantityTypeIdentifierDietaryCarbohydrates',
+        'g',
         data.carbs,
         startDate,
         endDate,
       ),
-      HealthKit.saveQuantitySample(
-        HKQuantityTypeIdentifier.dietaryFatTotal,
-        HKUnit.Gram,
+      saveQuantitySample(
+        'HKQuantityTypeIdentifierDietaryFatTotal',
+        'g',
         data.fat,
         startDate,
         endDate,
       ),
     ]);
 
-    return uuid ?? null;
+    return calSample?.uuid ?? null;
   } catch (e) {
     addBreadcrumb('healthKit', 'writeNutrition failed', { error: String(e) });
     return null;
@@ -275,11 +280,11 @@ export async function writeNutrition(data: NutritionWriteData): Promise<string |
 
 // ─── Write: Cardio Workout ───────────────────────────────────────────────────
 
-const ACTIVITY_TYPE_MAP: Record<ActivityType, HKWorkoutActivityType> = {
-  run: HKWorkoutActivityType.running,
-  cycle: HKWorkoutActivityType.cycling,
-  walk: HKWorkoutActivityType.walking,
-  swim: HKWorkoutActivityType.swimming,
+const ACTIVITY_TYPE_MAP: Record<ActivityType, WorkoutActivityType> = {
+  run: WorkoutActivityType.running,
+  cycle: WorkoutActivityType.cycling,
+  walk: WorkoutActivityType.walking,
+  swim: WorkoutActivityType.swimming,
 };
 
 type CardioWriteData = {
@@ -294,18 +299,20 @@ type CardioWriteData = {
 
 export async function writeCardioWorkout(data: CardioWriteData): Promise<string | null> {
   if (Platform.OS !== 'ios') return null;
+  const hkType = ACTIVITY_TYPE_MAP[data.activityType];
+  if (!hkType) return null;
   try {
-    const uuid = await HealthKit.saveWorkout({
-      startDate: data.startDate,
-      endDate: data.endDate,
-      activityType: ACTIVITY_TYPE_MAP[data.activityType],
-      totalEnergyBurned: data.calories,
-      totalEnergyBurnedUnit: HKUnit.Kilocalorie,
-      totalDistance: data.distanceMeters / 1000,
-      totalDistanceUnit: HKUnit.Kilometer,
-    });
-
-    return uuid ?? null;
+    const workout = await saveWorkoutSample(
+      hkType,
+      [],
+      data.startDate,
+      data.endDate,
+      {
+        energyBurned: data.calories,
+        distance: data.distanceMeters / 1000, // km
+      },
+    );
+    return workout?.uuid ?? null;
   } catch (e) {
     addBreadcrumb('healthKit', 'writeCardioWorkout failed', { error: String(e) });
     return null;
@@ -323,13 +330,13 @@ type StrengthWriteData = {
 export async function writeStrengthWorkout(data: StrengthWriteData): Promise<string | null> {
   if (Platform.OS !== 'ios') return null;
   try {
-    const uuid = await HealthKit.saveWorkout({
-      startDate: data.startDate,
-      endDate: data.endDate,
-      activityType: HKWorkoutActivityType.traditionalStrengthTraining,
-    });
-
-    return uuid ?? null;
+    const workout = await saveWorkoutSample(
+      WorkoutActivityType.traditionalStrengthTraining,
+      [],
+      data.startDate,
+      data.endDate,
+    );
+    return workout?.uuid ?? null;
   } catch (e) {
     addBreadcrumb('healthKit', 'writeStrengthWorkout failed', { error: String(e) });
     return null;
@@ -341,14 +348,14 @@ export async function writeStrengthWorkout(data: StrengthWriteData): Promise<str
 export async function writeBodyWeight(kg: number, date: Date): Promise<string | null> {
   if (Platform.OS !== 'ios') return null;
   try {
-    const uuid = await HealthKit.saveQuantitySample(
-      HKQuantityTypeIdentifier.bodyMass,
-      HKUnit.Kilogram,
+    const sample = await saveQuantitySample(
+      'HKQuantityTypeIdentifierBodyMass',
+      'kg',
       kg,
       date,
       date,
     );
-    return uuid ?? null;
+    return sample?.uuid ?? null;
   } catch (e) {
     addBreadcrumb('healthKit', 'writeBodyWeight failed', { error: String(e) });
     return null;
@@ -360,14 +367,15 @@ export async function writeBodyWeight(kg: number, date: Date): Promise<string | 
 export async function writeBodyFat(percent: number, date: Date): Promise<string | null> {
   if (Platform.OS !== 'ios') return null;
   try {
-    const uuid = await HealthKit.saveQuantitySample(
-      HKQuantityTypeIdentifier.bodyFatPercentage,
-      HKUnit.Percent,
-      percent / 100, // HK stores as 0–1 fraction
+    // HealthKit stores body fat as a fraction 0–1
+    const sample = await saveQuantitySample(
+      'HKQuantityTypeIdentifierBodyFatPercentage',
+      '%',
+      percent / 100,
       date,
       date,
     );
-    return uuid ?? null;
+    return sample?.uuid ?? null;
   } catch (e) {
     addBreadcrumb('healthKit', 'writeBodyFat failed', { error: String(e) });
     return null;

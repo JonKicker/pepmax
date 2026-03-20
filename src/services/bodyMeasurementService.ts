@@ -13,6 +13,7 @@ import {
 } from './firebase/firestore';
 import { setDocument } from './firebase/firestore';
 import { uploadFile, deleteFile } from './firebase/storage';
+import { writeBodyWeight, writeBodyFat } from './healthKitService';
 import type { ServiceResult } from '../types/service';
 import type { BodyMeasurement, BodyMeasurementInput } from '../types/bodyMeasurement';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -34,6 +35,15 @@ export async function logMeasurement(
       displayUnit: input.weightUnit,
       date: input.date,
     });
+    // Fire-and-forget HealthKit writes
+    const measureDate = new Date(`${input.date}T12:00:00`);
+    writeBodyWeight(input.weight, measureDate).catch(() => {});
+    if (input.bodyFatPercent != null) {
+      writeBodyFat(input.bodyFatPercent, measureDate).catch(() => {});
+    }
+  } else if (result.data && input.bodyFatPercent != null) {
+    const measureDate = new Date(`${input.date}T12:00:00`);
+    writeBodyFat(input.bodyFatPercent, measureDate).catch(() => {});
   }
 
   return result;

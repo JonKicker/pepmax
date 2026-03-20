@@ -56,6 +56,9 @@ export type UserProfile = {
   // Default when absent: all 7 days (every day is planned).
   trainingDays?: number[];
 
+  // Apple HealthKit sync opt-in (iOS only)
+  healthKitEnabled?: boolean;
+
   // Notification opt-ins (default: both enabled)
   notificationPrefs?: {
     doseReminders: boolean;

@@ -79,7 +79,7 @@ export function useHealthKit() {
 
       await logWeight({
         weight: hkWeight.kg,
-        displayUnit: 'metric',
+        displayUnit: 'kg',
         date: dateKey,
         note: 'healthkit',
       });

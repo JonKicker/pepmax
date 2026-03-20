@@ -76,6 +76,7 @@ export type CardioSession = {
   maxHeartRate?: number;
   heartRateData?: HeartRatePoint[];
   timeInZones?: TimeInZone[];
+  healthKitUUID?: string;
   // Meta
   createdAt?: Timestamp;
   updatedAt?: Timestamp;

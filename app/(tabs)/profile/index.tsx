@@ -9,7 +9,7 @@
  *   5. Nutrition        — link to nutrition/settings with calorie target subtitle
  *   6. Sign Out
  */
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -47,6 +47,7 @@ import type { Units, Sex } from '../../../src/types/profile';
 import { SettingsSection } from '../../../src/components/settings/SettingsSection';
 import { SettingsRow } from '../../../src/components/settings/SettingsRow';
 import { SegmentedControl } from '../../../src/components/settings/SegmentedControl';
+import { useHealthKit } from '../../../src/hooks/useHealthKit';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -88,6 +89,19 @@ export default function SettingsScreen() {
   const [draftActivityMultiplier, setDraftActivityMultiplier] = useState(1.55);
   const [draftGoalType, setDraftGoalType] = useState<'lose' | 'maintain' | 'gain'>('maintain');
   const [savingStats, setSavingStats] = useState(false);
+
+  // ── HealthKit ────────────────────────────────────────────────────────────────
+  const { isEnabled: hkEnabled, enable: hkEnable, disable: hkDisable } = useHealthKit();
+  const handleHealthKitToggle = useCallback(
+    async (value: boolean) => {
+      if (value) {
+        await hkEnable();
+      } else {
+        await hkDisable();
+      }
+    },
+    [hkEnable, hkDisable],
+  );
 
   // ── Other ──────────────────────────────────────────────────────────────────
   const [restoringPurchases, setRestoringPurchases] = useState(false);
@@ -613,6 +627,20 @@ export default function SettingsScreen() {
           onPress={() => router.push('/(tabs)/nutrition/settings')}
         />
       </SettingsSection>
+
+      {/* ── 6. Apple Health (iOS only) ───────────────────────────────────── */}
+      {Platform.OS === 'ios' && (
+        <SettingsSection title="Apple Health">
+          <SettingsRow
+            icon="heart-outline"
+            label="Connect Apple Health"
+            rightElement={
+              <Switch value={hkEnabled} onValueChange={handleHealthKitToggle} />
+            }
+            separator={false}
+          />
+        </SettingsSection>
+      )}
 
       {/* -- 7. Data & Privacy */}
       <SettingsSection title="Data & Privacy">

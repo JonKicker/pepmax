@@ -47,6 +47,7 @@ export type FoodLogEntry = {
   servingUnit: string;    // e.g. "g", "serving", "cup"
   barcode?: string;
   micronutrients?: Micronutrients;
+  healthKitUUID?: string;
   createdAt: Timestamp;
 };
 

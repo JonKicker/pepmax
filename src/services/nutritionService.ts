@@ -14,8 +14,10 @@ import {
   addDocument,
   deleteDocument,
   queryDocuments,
+  updateDocument,
   COLLECTIONS,
 } from './firebase/firestore';
+import { writeNutrition } from './healthKitService';
 import { toLocalDateKey, sanitizeOFFProduct } from '../utils/nutrition';
 import { searchUSDA, getUSDAFoodByBarcode } from './usdaService';
 import type {
@@ -60,7 +62,22 @@ type FavoriteFoodInput = {
 
 export async function logFood(data: FoodLogInput): Promise<ServiceResult<string>> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return addDocument(COLLECTIONS.FOOD_LOG, data as any);
+  const result = await addDocument(COLLECTIONS.FOOD_LOG, data as any);
+  if (result.data) {
+    const docId = result.data;
+    writeNutrition({
+      calories: data.calories,
+      protein: data.protein,
+      carbs: data.carbs,
+      fat: data.fat,
+      date: data.date,
+    }).then((uuid) => {
+      if (uuid) {
+        updateDocument(COLLECTIONS.FOOD_LOG, docId, { healthKitUUID: uuid }).catch(() => {});
+      }
+    }).catch(() => {});
+  }
+  return result;
 }
 
 export async function deleteFood(id: string): Promise<ServiceResult<void>> {

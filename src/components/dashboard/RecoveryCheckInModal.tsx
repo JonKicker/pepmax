@@ -88,6 +88,10 @@ export function RecoveryCheckInModal({ visible, onDismiss, onSaved, colors }: Pr
   const [hkBadge, setHkBadge] = useState(false);
   const hkRestingHRRef = useRef<number | undefined>(undefined);
   const hkHrvRef = useRef<number | undefined>(undefined);
+  // Tracks which sleep fields the user has manually touched since modal opened.
+  // Pre-fill from HealthKit is skipped for touched fields to prevent overwriting
+  // user input when the HK fetch resolves after the user has already interacted.
+  const userTouchedRef = useRef<Set<'sleepHours' | 'sleepQuality'>>(new Set());
 
   const { isEnabled: hkEnabled, syncRecoveryData } = useHealthKit();
 
@@ -104,23 +108,45 @@ export function RecoveryCheckInModal({ visible, onDismiss, onSaved, colors }: Pr
       setHkBadge(false);
       hkRestingHRRef.current = undefined;
       hkHrvRef.current = undefined;
+      userTouchedRef.current = new Set();
 
       if (hkEnabled) {
         const date = toLocalDateKey();
         syncRecoveryData(date)
           .then((data) => {
             if (data.sleep) {
-              setSleepHours(Math.min(12, Math.max(0, data.sleep.totalHours)));
-              setSleepQuality(Math.min(5, Math.max(1, data.sleep.quality)));
-              setHkBadge(true);
+              if (!userTouchedRef.current.has('sleepHours')) {
+                setSleepHours(Math.min(12, Math.max(0, data.sleep.totalHours)));
+              }
+              if (!userTouchedRef.current.has('sleepQuality')) {
+                setSleepQuality(Math.min(5, Math.max(1, data.sleep.quality)));
+              }
+              if (
+                !userTouchedRef.current.has('sleepHours') ||
+                !userTouchedRef.current.has('sleepQuality')
+              ) {
+                setHkBadge(true);
+              }
             }
             if (data.restingHR != null) hkRestingHRRef.current = data.restingHR;
             if (data.hrv != null) hkHrvRef.current = data.hrv;
           })
-          .catch((e) => console.error('[RecoveryCheckInModal] HealthKit sync error:', e));
+          .catch(() => {
+            // HK fetch failure is silent — user fills in manually
+          });
       }
     }
   }, [visible, hkEnabled, syncRecoveryData]);
+
+  // Wrappers that mark sleep fields as user-touched before delegating to state setters
+  const handleSleepHoursChange = (fn: (h: number) => number) => {
+    userTouchedRef.current.add('sleepHours');
+    setSleepHours(fn);
+  };
+  const handleSleepQualityChange = (v: number) => {
+    userTouchedRef.current.add('sleepQuality');
+    setSleepQuality(v);
+  };
 
   // Live preview of recovery multiplier
   const liveMultiplier = calculateRecoveryMultiplier(
@@ -202,7 +228,7 @@ export function RecoveryCheckInModal({ visible, onDismiss, onSaved, colors }: Pr
             <RatingRow
               labels={QUALITY_LABELS}
               value={sleepQuality}
-              onChange={setSleepQuality}
+              onChange={handleSleepQualityChange}
               colors={colors}
             />
 
@@ -214,7 +240,7 @@ export function RecoveryCheckInModal({ visible, onDismiss, onSaved, colors }: Pr
               <TouchableOpacity
                 style={[styles.stepBtn, { borderColor: colors.border }]}
                 onPress={() =>
-                  setSleepHours((h) => Math.max(0, parseFloat((h - 0.5).toFixed(1))))
+                  handleSleepHoursChange((h) => Math.max(0, parseFloat((h - 0.5).toFixed(1))))
                 }
                 activeOpacity={0.7}
               >
@@ -226,7 +252,7 @@ export function RecoveryCheckInModal({ visible, onDismiss, onSaved, colors }: Pr
               <TouchableOpacity
                 style={[styles.stepBtn, { borderColor: colors.border }]}
                 onPress={() =>
-                  setSleepHours((h) => Math.min(12, parseFloat((h + 0.5).toFixed(1))))
+                  handleSleepHoursChange((h) => Math.min(12, parseFloat((h + 0.5).toFixed(1))))
                 }
                 activeOpacity={0.7}
               >
@@ -354,19 +380,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     marginBottom: 12,
-  },
-  hkBadge: {
-    alignSelf: 'center',
-    backgroundColor: '#e8f4fd',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginBottom: 4,
-  },
-  hkBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#007aff',
   },
   sectionLabel: {
     fontSize: 13,

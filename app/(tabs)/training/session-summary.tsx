@@ -16,6 +16,7 @@ import { Colors } from '../../../src/constants/theme';
 import { getSessionById, updateSession } from '../../../src/services/workoutSessionService';
 import type { WorkoutSession } from '../../../src/types/workout';
 import { Timestamp } from 'firebase/firestore';
+import { writeStrengthWorkout } from '../../../src/services/healthKitService';
 
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -115,15 +116,23 @@ export default function SessionSummaryScreen() {
     setSaving(true);
 
     const stats = computeStats();
+    const endedAt = Timestamp.now();
     await updateSession(session.id, {
       status: 'completed',
-      endedAt: Timestamp.now(),
+      endedAt,
       duration: stats.duration,
       totalVolume: stats.volume,
       totalSets: stats.sets,
       notes,
       rating,
     });
+
+    // Fire-and-forget HealthKit write
+    writeStrengthWorkout({
+      startDate: session.startedAt.toDate(),
+      endDate: endedAt.toDate(),
+      durationSeconds: stats.duration,
+    }).catch(() => {});
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setSaving(false);

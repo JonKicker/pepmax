@@ -12,6 +12,7 @@ import {
   queryDocuments,
   deleteDocument,
 } from './firebase/firestore';
+import { writeBodyWeight } from './healthKitService';
 import type { ServiceResult } from '../types/service';
 import type { BodyWeightEntry, BodyWeightInput } from '../types/bodyTracking';
 
@@ -20,12 +21,17 @@ export { computeWeightStats } from '../utils/bodyTracking';
 // ─── Write ──────────────────────────────────────────────────────────────────
 
 export async function logWeight(input: BodyWeightInput): Promise<ServiceResult<void>> {
-  return setDocument(COLLECTIONS.BODY_WEIGHT, input.date, {
+  const result = await setDocument(COLLECTIONS.BODY_WEIGHT, input.date, {
     weight: input.weight,
     displayUnit: input.displayUnit,
     date: input.date,
     ...(input.note ? { note: input.note } : {}),
   });
+  // Fire-and-forget HealthKit write — skip if this entry came from HealthKit itself
+  if (!result.error && input.note !== 'healthkit') {
+    writeBodyWeight(input.weight, new Date(`${input.date}T12:00:00`)).catch(() => {});
+  }
+  return result;
 }
 
 // ─── Read ───────────────────────────────────────────────────────────────────

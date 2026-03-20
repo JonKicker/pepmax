@@ -14,6 +14,7 @@ import {
 } from '../utils/cardio';
 import { cacheSessionState, clearCachedSession, getCachedSession } from '../utils/cardioCache';
 import { analytics, AnalyticsEvent } from '../services/analytics';
+import { writeCardioWorkout } from '../services/healthKitService';
 
 export function useCardioSession(
   sessionId: string,
@@ -325,9 +326,10 @@ export function useCardioSession(
     const zones = hasHR ? getHRZones(maxHR) : [];
     const timeInZones = hasHR ? computeTimeInZones(hrData, zones, maxHR) : undefined;
 
+    const endedAt = Timestamp.now();
     await updateCardioSession(sessionId, {
       status: 'completed',
-      endedAt: Timestamp.now(),
+      endedAt,
       route: routeRef.current,
       distance: finalDistance,
       duration: finalElapsed,
@@ -345,6 +347,26 @@ export function useCardioSession(
         timeInZones,
       }),
     });
+
+    // Fire-and-forget HealthKit write
+    const sess = sessionRef.current;
+    if (sess?.activityType) {
+      const startDate = sess.startedAt.toDate();
+      const endDate = endedAt.toDate();
+      writeCardioWorkout({
+        activityType: sess.activityType,
+        startDate,
+        endDate,
+        distanceMeters: finalDistance,
+        durationSeconds: finalElapsed,
+        calories: caloriesRef.current,
+        avgHeartRate: hasHR ? avgHeartRateRef.current : undefined,
+      }).then((uuid) => {
+        if (uuid) {
+          updateCardioSession(sessionId, { healthKitUUID: uuid }).catch(() => {});
+        }
+      }).catch(() => {});
+    }
 
     await clearCachedSession();
     analytics.track(AnalyticsEvent.CARDIO_SESSION_COMPLETED, {
