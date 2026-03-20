@@ -13,6 +13,7 @@ import {
   deleteDocument,
 } from './firebase/firestore';
 import { writeBodyWeight } from './healthKitService';
+import { HK_WEIGHT_SOURCE_MARKER } from '../constants/healthKit';
 import type { ServiceResult } from '../types/service';
 import type { BodyWeightEntry, BodyWeightInput } from '../types/bodyTracking';
 
@@ -28,7 +29,7 @@ export async function logWeight(input: BodyWeightInput): Promise<ServiceResult<v
     ...(input.note ? { note: input.note } : {}),
   });
   // Fire-and-forget HealthKit write — skip if this entry came from HealthKit itself
-  if (!result.error && input.note !== 'healthkit') {
+  if (!result.error && input.note !== HK_WEIGHT_SOURCE_MARKER) {
     writeBodyWeight(input.weight, new Date(`${input.date}T12:00:00`)).catch(() => {});
   }
   return result;

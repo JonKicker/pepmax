@@ -2,13 +2,13 @@ import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, SafeAreaView, KeyboardAvoidingView,
-  Platform, ScrollView,
+  Platform, ScrollView, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/hooks/useTheme';
 import { Colors } from '../../src/constants/theme';
-import { signUp } from '../../src/services/firebase/auth';
+import { signUp, resetPassword } from '../../src/services/firebase/auth';
 import { mergeDocument, COLLECTIONS } from '../../src/services/firebase/firestore';
 import { getAuthErrorMessage } from '../../src/constants/authErrors';
 import { analytics, AnalyticsEvent } from '../../src/services/analytics';
@@ -85,6 +85,38 @@ export default function SignUpScreen() {
 
     if (result.error) {
       setLoading(false);
+      const errCode = (result.error as { code?: string }).code ?? '';
+
+      if (errCode === 'auth/email-already-in-use') {
+        Alert.alert(
+          'Email Already Registered',
+          'An account with this email already exists. What would you like to do?',
+          [
+            {
+              text: 'Log In Instead',
+              onPress: () => router.replace('/(auth)/log-in'),
+            },
+            {
+              text: 'Reset Password',
+              onPress: async () => {
+                try {
+                  const resetResult = await resetPassword(email.trim());
+                  if (resetResult.error) {
+                    setSubmitError(getAuthErrorMessage(resetResult.error));
+                  } else {
+                    Alert.alert('Email Sent', 'Password reset email sent! Check your inbox.');
+                  }
+                } catch (err) {
+                  setSubmitError('Could not send reset email. Please try again.');
+                }
+              },
+            },
+            { text: 'Cancel', style: 'cancel' },
+          ]
+        );
+        return;
+      }
+
       setSubmitError(getAuthErrorMessage(result.error));
       return;
     }

@@ -131,7 +131,6 @@ export default function SessionSummaryScreen() {
     writeStrengthWorkout({
       startDate: session.startedAt.toDate(),
       endDate: endedAt.toDate(),
-      durationSeconds: stats.duration,
     }).catch(() => {});
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
