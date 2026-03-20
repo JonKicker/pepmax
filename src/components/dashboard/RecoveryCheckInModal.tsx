@@ -1,17 +1,24 @@
 /**
- * RecoveryCheckInModal — morning check-in for sleep quality, hours, and energy.
+ * RecoveryCheckInModal — structured daily check-in per Body Model spec §5.
+ * Captures sleep, soreness, stress, readiness, and optional notes.
+ * Scrollable to prevent input clipping on small screens.
  */
 import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
   Text,
+  TextInput,
   TouchableOpacity,
+  ScrollView,
   StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { saveRecovery, calculateEffortScore } from '../../services/recoveryService';
-import { effortColor } from '../../utils/recovery';
+import { saveRecovery } from '../../services/recoveryService';
+import { multiplierColor } from '../../utils/recovery';
+import { multiplierToDisplayScore, calculateRecoveryMultiplier } from '../../utils/recoveryCalc';
 import { toLocalDateKey } from '../../utils/nutrition';
 import type { Theme } from '../../constants/theme';
 import { Colors } from '../../constants/theme';
@@ -24,30 +31,100 @@ type Props = {
 };
 
 const QUALITY_LABELS = ['Terrible', 'Poor', 'Fair', 'Good', 'Great'];
-const ENERGY_LABELS = ['Exhausted', 'Low', 'Normal', 'Good', 'Energized'];
+const SORENESS_LABELS = ['None', 'Mild', 'Moderate', 'Severe', 'V. Severe'];
+const STRESS_LABELS = ['None', 'Low', 'Moderate', 'High', 'Very High'];
+
+function RatingRow({
+  labels,
+  value,
+  onChange,
+  colors,
+}: {
+  labels: string[];
+  value: number;
+  onChange: (v: number) => void;
+  colors: Theme['colors'];
+}) {
+  return (
+    <View style={styles.buttonRow}>
+      {labels.map((label, i) => {
+        const val = i + 1;
+        const selected = value === val;
+        return (
+          <TouchableOpacity
+            key={val}
+            style={[
+              styles.ratingBtn,
+              { borderColor: selected ? Colors.accent : colors.border },
+              selected && { backgroundColor: Colors.accent },
+            ]}
+            onPress={() => onChange(val)}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[styles.ratingText, { color: selected ? '#fff' : colors.textSecondary }]}
+            >
+              {label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
 
 export function RecoveryCheckInModal({ visible, onDismiss, onSaved, colors }: Props) {
   const [sleepQuality, setSleepQuality] = useState(3);
   const [sleepHours, setSleepHours] = useState(7);
-  const [energyLevel, setEnergyLevel] = useState(3);
+  const [muscleSoreness, setMuscleSoreness] = useState(1);
+  const [stressLevel, setStressLevel] = useState(1);
+  const [overallReadiness, setOverallReadiness] = useState(5);
+  const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [skipCount, setSkipCount] = useState(0);
 
-  // Fix 1: reset skipCount each time the modal opens
+  // Reset all state each time the modal opens
   useEffect(() => {
-    if (visible) setSkipCount(0);
+    if (visible) {
+      setSleepQuality(3);
+      setSleepHours(7);
+      setMuscleSoreness(1);
+      setStressLevel(1);
+      setOverallReadiness(5);
+      setNotes('');
+      setSkipCount(0);
+    }
   }, [visible]);
 
-  const score = calculateEffortScore(sleepQuality, sleepHours, energyLevel);
+  // Live preview of readiness score
+  const liveMultiplier = calculateRecoveryMultiplier(
+    sleepHours,
+    sleepQuality,
+    muscleSoreness,
+    stressLevel,
+    overallReadiness,
+  );
+  const liveScore = multiplierToDisplayScore(liveMultiplier);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await saveRecovery({ sleepQuality, sleepHours, energyLevel });
-      onSaved();
-      onDismiss();
+      const result = await saveRecovery({
+        sleepQuality,
+        sleepHours,
+        muscleSoreness,
+        stressLevel,
+        overallReadiness,
+        notes,
+      });
+      if (result.error) {
+        console.error('[RecoveryCheckInModal] save error:', result.error);
+      } else {
+        onSaved();
+        onDismiss();
+      }
     } catch (e) {
-      console.error('[RecoveryCheckInModal] save error:', e);
+      console.error('[RecoveryCheckInModal] unexpected error:', e);
     } finally {
       setSaving(false);
     }
@@ -58,7 +135,6 @@ export function RecoveryCheckInModal({ visible, onDismiss, onSaved, colors }: Pr
       setSkipCount(1);
       return;
     }
-    // Second skip — dismiss for the day
     const dateKey = toLocalDateKey();
     try {
       await AsyncStorage.setItem(`recovery_dismissed_${dateKey}`, '1');
@@ -72,113 +148,164 @@ export function RecoveryCheckInModal({ visible, onDismiss, onSaved, colors }: Pr
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss}>
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <View style={[styles.sheet, { backgroundColor: colors.surface }]}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Morning Check-In</Text>
 
-          {/* Sleep Quality */}
-          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Sleep Quality</Text>
-          <View style={styles.buttonRow}>
-            {QUALITY_LABELS.map((label, i) => {
-              const val = i + 1;
-              const selected = sleepQuality === val;
-              return (
-                <TouchableOpacity
-                  key={val}
-                  style={[
-                    styles.ratingBtn,
-                    { borderColor: selected ? Colors.accent : colors.border },
-                    selected && { backgroundColor: Colors.accent },
-                  ]}
-                  onPress={() => setSleepQuality(val)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.ratingText, { color: selected ? '#fff' : colors.textSecondary }]}>
-                    {label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* Sleep Hours */}
-          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Sleep Hours</Text>
-          <View style={styles.hoursRow}>
-            <TouchableOpacity
-              style={[styles.stepBtn, { borderColor: colors.border }]}
-              onPress={() => setSleepHours((h) => Math.max(3, parseFloat((h - 0.5).toFixed(1))))}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.stepBtnText, { color: colors.textPrimary }]}>−</Text>
-            </TouchableOpacity>
-            <Text style={[styles.hoursValue, { color: colors.textPrimary }]}>
-              {`${sleepHours}h`}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.scrollContent}
+          >
+            {/* Sleep Quality */}
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+              Sleep Quality
             </Text>
-            <TouchableOpacity
-              style={[styles.stepBtn, { borderColor: colors.border }]}
-              onPress={() => setSleepHours((h) => Math.min(12, parseFloat((h + 0.5).toFixed(1))))}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.stepBtnText, { color: colors.textPrimary }]}>+</Text>
-            </TouchableOpacity>
-          </View>
+            <RatingRow
+              labels={QUALITY_LABELS}
+              value={sleepQuality}
+              onChange={setSleepQuality}
+              colors={colors}
+            />
 
-          {/* Energy Level */}
-          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Energy Level</Text>
-          <View style={styles.buttonRow}>
-            {ENERGY_LABELS.map((label, i) => {
-              const val = i + 1;
-              const selected = energyLevel === val;
-              return (
-                <TouchableOpacity
-                  key={val}
-                  style={[
-                    styles.ratingBtn,
-                    { borderColor: selected ? Colors.accent : colors.border },
-                    selected && { backgroundColor: Colors.accent },
-                  ]}
-                  onPress={() => setEnergyLevel(val)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.ratingText, { color: selected ? '#fff' : colors.textSecondary }]}>
-                    {label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* Live score preview */}
-          <View style={styles.scorePreview}>
-            <Text style={[styles.scoreLabel, { color: colors.textSecondary }]}>Effort Score</Text>
-            <Text style={[styles.scoreValue, { color: effortColor(score) }]}>{score}</Text>
-          </View>
-
-          {skipCount === 1 && (
-            <Text style={[styles.nagText, { color: colors.textSecondary }]}>
-              Helps optimize your training
+            {/* Sleep Hours */}
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+              Sleep Hours
             </Text>
-          )}
+            <View style={styles.stepperRow}>
+              <TouchableOpacity
+                style={[styles.stepBtn, { borderColor: colors.border }]}
+                onPress={() =>
+                  setSleepHours((h) => Math.max(0, parseFloat((h - 0.5).toFixed(1))))
+                }
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.stepBtnText, { color: colors.textPrimary }]}>−</Text>
+              </TouchableOpacity>
+              <Text style={[styles.stepperValue, { color: colors.textPrimary }]}>
+                {`${sleepHours}h`}
+              </Text>
+              <TouchableOpacity
+                style={[styles.stepBtn, { borderColor: colors.border }]}
+                onPress={() =>
+                  setSleepHours((h) => Math.min(12, parseFloat((h + 0.5).toFixed(1))))
+                }
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.stepBtnText, { color: colors.textPrimary }]}>+</Text>
+              </TouchableOpacity>
+            </View>
 
-          <View style={styles.buttons}>
-            <TouchableOpacity
-              style={[styles.skipBtn, { borderColor: colors.border }]}
-              onPress={handleSkip}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.skipText, { color: colors.textSecondary }]}>Skip</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.saveBtn, { backgroundColor: Colors.accent, opacity: saving ? 0.6 : 1 }]}
-              onPress={handleSave}
-              disabled={saving}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.saveText}>{saving ? 'Saving...' : 'Save'}</Text>
-            </TouchableOpacity>
-          </View>
+            {/* Muscle Soreness */}
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+              Muscle Soreness
+            </Text>
+            <RatingRow
+              labels={SORENESS_LABELS}
+              value={muscleSoreness}
+              onChange={setMuscleSoreness}
+              colors={colors}
+            />
+
+            {/* Stress Level */}
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+              Stress Level
+            </Text>
+            <RatingRow
+              labels={STRESS_LABELS}
+              value={stressLevel}
+              onChange={setStressLevel}
+              colors={colors}
+            />
+
+            {/* Overall Readiness (0–10) */}
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+              Overall Readiness
+            </Text>
+            <View style={styles.stepperRow}>
+              <TouchableOpacity
+                style={[styles.stepBtn, { borderColor: colors.border }]}
+                onPress={() => setOverallReadiness((r) => Math.max(0, r - 1))}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.stepBtnText, { color: colors.textPrimary }]}>−</Text>
+              </TouchableOpacity>
+              <Text style={[styles.stepperValue, { color: colors.textPrimary }]}>
+                {`${overallReadiness} / 10`}
+              </Text>
+              <TouchableOpacity
+                style={[styles.stepBtn, { borderColor: colors.border }]}
+                onPress={() => setOverallReadiness((r) => Math.min(10, r + 1))}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.stepBtnText, { color: colors.textPrimary }]}>+</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Notes (optional) */}
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+              Notes (optional)
+            </Text>
+            <TextInput
+              style={[
+                styles.notesInput,
+                {
+                  borderColor: colors.border,
+                  color: colors.textPrimary,
+                  backgroundColor: colors.background,
+                },
+              ]}
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="How are you feeling today?"
+              placeholderTextColor={colors.textSecondary}
+              multiline
+              maxLength={500}
+              returnKeyType="done"
+            />
+
+            {/* Live readiness score preview */}
+            <View style={styles.scorePreview}>
+              <Text style={[styles.scoreLabel, { color: colors.textSecondary }]}>
+                Readiness Score
+              </Text>
+              <Text style={[styles.scoreValue, { color: multiplierColor(liveMultiplier) }]}>
+                {liveScore}
+              </Text>
+            </View>
+
+            {skipCount === 1 && (
+              <Text style={[styles.nagText, { color: colors.textSecondary }]}>
+                Helps optimize your training
+              </Text>
+            )}
+
+            <View style={styles.buttons}>
+              <TouchableOpacity
+                style={[styles.skipBtn, { borderColor: colors.border }]}
+                onPress={handleSkip}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.skipText, { color: colors.textSecondary }]}>Skip</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.saveBtn,
+                  { backgroundColor: Colors.accent, opacity: saving ? 0.6 : 1 },
+                ]}
+                onPress={handleSave}
+                disabled={saving}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.saveText}>{saving ? 'Saving...' : 'Save'}</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -193,6 +320,10 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 24,
+    paddingBottom: 0,
+    maxHeight: '90%',
+  },
+  scrollContent: {
     paddingBottom: 40,
     gap: 6,
   },
@@ -225,7 +356,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
-  hoursRow: {
+  stepperRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -245,11 +376,19 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     lineHeight: 26,
   },
-  hoursValue: {
-    fontSize: 32,
+  stepperValue: {
+    fontSize: 28,
     fontWeight: '700',
-    minWidth: 70,
+    minWidth: 90,
     textAlign: 'center',
+  },
+  notesInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 14,
+    minHeight: 72,
+    textAlignVertical: 'top',
   },
   scorePreview: {
     alignItems: 'center',

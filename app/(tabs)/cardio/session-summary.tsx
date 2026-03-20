@@ -12,7 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors } from '../../../src/constants/theme';
 import { getSessionById, getRecentSessions, detectNewPRs, updateCardioSession } from '../../../src/services/cardioService';
-import { getRecoveryByDate } from '../../../src/services/recoveryService';
+import { getRecovery } from '../../../src/services/recoveryService';
+import { multiplierColor } from '../../../src/utils/recovery';
 import { toLocalDateKey } from '../../../src/utils/nutrition';
 import { useCardioSettings } from '../../../src/hooks/useCardioSettings';
 import {
@@ -61,7 +62,7 @@ export default function SessionSummaryScreen() {
   const [currentPRIdx, setCurrentPRIdx] = useState(0);
   const [hrDismissed, setHrDismissed] = useState(false);
   const [shareModalVisible, setShareModalVisible] = useState(false);
-  const [effortScore, setEffortScore] = useState<number | null>(null);
+  const [recoveryMultiplier, setRecoveryMultiplier] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -79,10 +80,10 @@ export default function SessionSummaryScreen() {
             setCurrentPRIdx(0);
           }
         }
-        // Fetch recovery effort score for this session's date
+        // Fetch recovery multiplier for this session's date
         const sessionDateKey = toLocalDateKey(result.data.startedAt.toDate());
-        const recovery = await getRecoveryByDate(sessionDateKey);
-        if (recovery) setEffortScore(recovery.effortScore);
+        const recovery = await getRecovery(sessionDateKey);
+        if (recovery.data) setRecoveryMultiplier(recovery.data.recoveryMultiplier);
       }
       setLoading(false);
     })();
@@ -156,15 +157,11 @@ export default function SessionSummaryScreen() {
         <StatRow label="Calories" value={`${session.calories} kcal`} colors={colors} />
         <StatRow label="Elevation Gain" value={`${Math.round(session.elevationGain)} m`} colors={colors} />
         <StatRow label="Elevation Loss" value={`${Math.round(session.elevationLoss)} m`} colors={colors} />
-        {effortScore != null && (
+        {recoveryMultiplier != null && (
           <StatRow
-            label="Effort Score"
-            value={`${effortScore}/100`}
-            colors={effortScore >= 70
-              ? { ...colors, textPrimary: '#4CAF50' }
-              : effortScore >= 50
-                ? { ...colors, textPrimary: '#FF9800' }
-                : { ...colors, textPrimary: '#F44336' }}
+            label="Recovery Score"
+            value={`${recoveryMultiplier}×`}
+            colors={{ ...colors, textPrimary: multiplierColor(recoveryMultiplier) }}
           />
         )}
         {session.activityType === 'swim' && session.lapCount != null && (

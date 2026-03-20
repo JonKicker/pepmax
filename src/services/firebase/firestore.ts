@@ -57,7 +57,8 @@ export const COLLECTIONS = {
   RECIPES: 'recipes',
   BODY_MEASUREMENTS: 'bodyMeasurements',
   INVENTORY: 'inventory',
-  RECOVERY: 'recovery',
+  RECOVERY: 'recovery',           // legacy — read-only after M16a
+  RECOVERY_LOG: 'recoveryLog',    // spec §8 path — new writes go here
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];

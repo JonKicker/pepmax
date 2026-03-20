@@ -1,21 +1,21 @@
 /**
- * RecoveryCard — displays today's effort score or prompts for a check-in.
+ * RecoveryCard — displays today's readiness score or prompts for a check-in.
  */
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { DashboardCard } from './DashboardCard';
 import { Colors } from '../../constants/theme';
 import type { Theme } from '../../constants/theme';
-import type { RecoveryEntry } from '../../types/recovery';
-import { effortColor } from '../../utils/recovery';
+import type { RecoveryInput } from '../../types/recovery';
+import { multiplierColor } from '../../utils/recovery';
 
 type Props = {
-  recovery: RecoveryEntry | null;
+  recovery: RecoveryInput | null;
   colors: Theme['colors'];
   onCheckIn: () => void;
 };
 
-const EMOJI: Record<number, string> = {
+const QUALITY_EMOJI: Record<number, string> = {
   1: '😫',
   2: '😕',
   3: '😐',
@@ -33,13 +33,17 @@ export function RecoveryCard({ recovery, colors, onCheckIn }: Props) {
     >
       {recovery ? (
         <View style={styles.hasData}>
-          <Text style={[styles.score, { color: effortColor(recovery.effortScore) }]}>
-            {recovery.effortScore}
+          <Text style={[styles.score, { color: multiplierColor(recovery.recoveryMultiplier) }]}>
+            {recovery.readinessScore}
           </Text>
-          <Text style={[styles.scoreLabel, { color: colors.textSecondary }]}>Effort Score</Text>
+          <Text style={[styles.scoreLabel, { color: colors.textSecondary }]}>
+            Readiness Score
+          </Text>
           <Text style={[styles.detail, { color: colors.textSecondary }]}>
-            Sleep: {recovery.sleepHours}h · {EMOJI[recovery.sleepQuality] ?? ''}
-            {'  '}Energy: {EMOJI[recovery.energyLevel] ?? ''}
+            Sleep: {recovery.sleepHours}h · {QUALITY_EMOJI[recovery.sleepQuality] ?? ''}
+            {recovery.overallReadiness != null
+              ? `  ·  Readiness: ${recovery.overallReadiness}/10`
+              : ''}
           </Text>
         </View>
       ) : (
