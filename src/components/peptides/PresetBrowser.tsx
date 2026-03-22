@@ -4,7 +4,7 @@
  * Features: search bar, 14-group filter chips, expandable compound cards with
  * dose chips, custom dose input, and a detail view with clinical information.
  */
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -24,7 +24,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../hooks/useTheme';
 import { Colors } from '../../constants/theme';
-import { searchCompounds, getCompoundGroups } from '../../data/compoundDatabase';
+import { searchCompounds, getCompoundGroups, hasSafetyWarning } from '../../data/compoundDatabase';
 import type { Compound, CompoundCategory } from '../../data/compoundDatabase';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -40,11 +40,10 @@ type Props = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function statusColor(status: string): string {
-  if (status.startsWith('FDA')) return '#27AE60';
-  if (status === 'Research Peptide') return '#E67E22';
-  if (status === 'Compounded') return '#2980B9';
-  return '#888';
+function statusBadgeProps(status: string): { label: string; bg: string; text: string } {
+  if (status.startsWith('FDA')) return { label: 'FDA', bg: '#E8F5E9', text: '#1B5E20' };
+  if (status === 'Research Peptide') return { label: 'Research', bg: '#FFF3E0', text: '#E65100' };
+  return { label: 'Compounded', bg: '#E0E0E0', text: '#424242' };
 }
 
 // ─── Pill tag ─────────────────────────────────────────────────────────────────
@@ -82,8 +81,9 @@ function CompoundCard({
   onAdd: (dose: number) => void;
   colors: ReturnType<typeof import('../../hooks/useTheme').useTheme>['colors'];
 }) {
-  const badgeColor = statusColor(compound.status);
+  const badge = statusBadgeProps(compound.status);
   const hasAliases = compound.aliases && !compound.aliases.startsWith('N/A');
+  const showWarning = hasSafetyWarning(compound);
 
   return (
     <View
@@ -102,6 +102,9 @@ function CompoundCard({
           <View style={{ flex: 1 }}>
             <View style={styles.nameLine}>
               <Text style={[styles.cardName, { color: colors.textPrimary }]}>{compound.name}</Text>
+              {showWarning && (
+                <Ionicons name="warning" size={15} color={Colors.warning} style={{ marginLeft: 2, marginTop: 1 }} />
+              )}
               {alreadyInLibrary && (
                 <Text style={[styles.alreadyLabel, { color: colors.textSecondary }]}>In library</Text>
               )}
@@ -112,8 +115,8 @@ function CompoundCard({
               </Text>
             )}
             <View style={styles.headerMeta}>
-              <View style={[styles.statusBadge, { borderColor: badgeColor + '50' }]}>
-                <Text style={[styles.statusBadgeText, { color: badgeColor }]}>{compound.status}</Text>
+              <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+                <Text style={[styles.statusBadgeText, { color: badge.text }]}>{badge.label}</Text>
               </View>
               <Text style={[styles.freqText, { color: colors.textSecondary }]}>
                 {compound.dosingFrequency}
@@ -261,9 +264,18 @@ function CompoundCard({
 
                 {!!compound.notesForUsers && (
                   <View style={[styles.notesBox, { backgroundColor: Colors.peptide + '10' }]}>
-                    <Text style={[styles.notesText, { color: colors.textPrimary }]}>
-                      {compound.notesForUsers}
-                    </Text>
+                    {compound.notesForUsers.split('⚠️').map((segment, i) => (
+                      <Text
+                        key={i}
+                        style={[
+                          styles.notesText,
+                          { color: i > 0 ? Colors.warning : colors.textPrimary },
+                          i > 0 && { fontWeight: '600' },
+                        ]}
+                      >
+                        {i > 0 ? '⚠️ ' : ''}{segment}
+                      </Text>
+                    ))}
                   </View>
                 )}
               </View>
@@ -280,6 +292,8 @@ function CompoundCard({
 export default function PresetBrowser({ visible, onClose, onAdd, existingPeptideNames }: Props) {
   const { colors } = useTheme();
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeGroup, setActiveGroup] = useState<CompoundCategory | 'All'>('All');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -287,13 +301,23 @@ export default function PresetBrowser({ visible, onClose, onAdd, existingPeptide
 
   const groups = useMemo(() => getCompoundGroups(), []);
 
+  useEffect(() => {
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, []);
+
+  const handleSearch = useCallback((text: string) => {
+    setQuery(text);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedQuery(text), 500);
+  }, []);
+
   const existingSet = useMemo(
     () => new Set(existingPeptideNames.map((n) => n.toLowerCase())),
     [existingPeptideNames],
   );
 
   const sections = useMemo(() => {
-    let compounds = searchCompounds(query);
+    let compounds = searchCompounds(debouncedQuery);
     if (activeGroup !== 'All') {
       compounds = compounds.filter((c) => c.group === activeGroup);
     }
@@ -303,7 +327,7 @@ export default function PresetBrowser({ visible, onClose, onAdd, existingPeptide
       grouped.get(c.group)!.push(c);
     }
     return Array.from(grouped.entries()).map(([title, data]) => ({ title, data }));
-  }, [query, activeGroup]);
+  }, [debouncedQuery, activeGroup]);
 
   const handleToggle = (id: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -338,6 +362,8 @@ export default function PresetBrowser({ visible, onClose, onAdd, existingPeptide
 
   const handleClose = () => {
     setQuery('');
+    setDebouncedQuery('');
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     setActiveGroup('All');
     setExpandedId(null);
     setShowDetails(false);
@@ -371,7 +397,7 @@ export default function PresetBrowser({ visible, onClose, onAdd, existingPeptide
             <TextInput
               style={[styles.searchInput, { color: colors.textPrimary }]}
               value={query}
-              onChangeText={setQuery}
+              onChangeText={handleSearch}
               placeholder="Search compounds, goals..."
               placeholderTextColor={colors.textSecondary}
               returnKeyType="search"
@@ -507,9 +533,12 @@ const styles = StyleSheet.create({
   },
   chip: {
     paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingVertical: 10,
+    minHeight: 48,
     borderRadius: 20,
     borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chipText: {
     fontSize: 12,
@@ -583,10 +612,9 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   statusBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 20,
-    borderWidth: 1,
   },
   statusBadgeText: {
     fontSize: 10,
@@ -611,9 +639,12 @@ const styles = StyleSheet.create({
   },
   doseChip: {
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 10,
+    minHeight: 48,
     borderRadius: 8,
     borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   doseChipText: {
     fontSize: 13,
@@ -634,7 +665,10 @@ const styles = StyleSheet.create({
   },
   customAddBtn: {
     paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingVertical: 10,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   customAddBtnText: {
     color: '#fff',
@@ -649,6 +683,8 @@ const styles = StyleSheet.create({
     gap: 4,
     marginTop: 12,
     alignSelf: 'flex-start',
+    minHeight: 48,
+    paddingVertical: 4,
   },
   detailsToggleText: {
     fontSize: 13,

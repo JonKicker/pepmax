@@ -15,7 +15,7 @@ import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors } from '../../../src/constants/theme';
-import { addPeptide, updatePeptide, getPeptideById } from '../../../src/services/peptideService';
+import { addPeptide, updatePeptide, getPeptideById, parseUnit, parseFrequency, parseRoute, mapGroupToCategory } from '../../../src/services/peptideService';
 import {
   UNITS,
   FREQUENCIES,
@@ -24,6 +24,8 @@ import {
   ROUTES,
 } from '../../../src/types/peptide';
 import type { Peptide, Unit, Frequency, PeptideCategory, Route } from '../../../src/types/peptide';
+import { searchCompounds } from '../../../src/data/compoundDatabase';
+import type { Compound } from '../../../src/data/compoundDatabase';
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -43,6 +45,10 @@ export default function PeptideFormScreen() {
   const [frequency, setFrequency] = useState<Frequency>('daily');
   const [customDays, setCustomDays] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
+
+  // Autocomplete
+  const [suggestions, setSuggestions] = useState<Compound[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   // Extended metadata (all optional)
   const [category, setCategory] = useState<PeptideCategory | undefined>();
@@ -78,6 +84,31 @@ export default function PeptideFormScreen() {
     setCustomDays((prev) =>
       prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
     );
+  };
+
+  const handleNameChange = (text: string) => {
+    setName(text);
+    if (!isEditing && text.trim().length >= 2) {
+      const matches = searchCompounds(text).slice(0, 5);
+      setSuggestions(matches);
+      setShowSuggestions(matches.length > 0);
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleSelectSuggestion = (compound: Compound) => {
+    setName(compound.name);
+    if (compound.commonDoses.length > 0) setDefaultDose(String(compound.commonDoses[0]));
+    setUnit(parseUnit(compound.unit));
+    setFrequency(parseFrequency(compound.dosingFrequency));
+    const r = parseRoute(compound.route);
+    if (r) setRoute(r);
+    setCategory(mapGroupToCategory(compound.group));
+    setHalfLifeHours(String(compound.halfLifeHours));
+    setStorageTemp(compound.storage);
+    setNotes(compound.notesForUsers);
+    setShowSuggestions(false);
   };
 
   const handleSave = async () => {
@@ -146,15 +177,37 @@ export default function PeptideFormScreen() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           {/* Name */}
           <Text style={[styles.label, { color: colors.textSecondary }]}>PEPTIDE NAME *</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.border }]}
-            value={name}
-            onChangeText={setName}
-            placeholder='e.g. BPC-157, TB-500, Semaglutide'
-            placeholderTextColor={colors.textSecondary}
-            autoCapitalize="characters"
-            returnKeyType="next"
-          />
+          <View style={{ zIndex: 10 }}>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.border }]}
+              value={name}
+              onChangeText={handleNameChange}
+              placeholder='e.g. BPC-157, TB-500, Semaglutide'
+              placeholderTextColor={colors.textSecondary}
+              autoCapitalize="characters"
+              returnKeyType="next"
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            />
+            {showSuggestions && (
+              <View style={[styles.suggestionsBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                {suggestions.map((c) => (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={[styles.suggestionItem, { borderBottomColor: colors.border }]}
+                    onPress={() => handleSelectSuggestion(c)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.suggestionName, { color: colors.textPrimary }]}>{c.name}</Text>
+                    {!!c.aliases && !c.aliases.startsWith('N/A') && (
+                      <Text style={[styles.suggestionAliases, { color: colors.textSecondary }]} numberOfLines={1}>
+                        {c.aliases}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
 
           {/* Default dose + unit */}
           <Text style={[styles.label, { color: colors.textSecondary }]}>DEFAULT DOSE *</Text>
@@ -402,4 +455,30 @@ const styles = StyleSheet.create({
 
   saveBtn: { marginTop: 30, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
   saveBtnText: { color: 'white', fontSize: 16, fontWeight: '700' },
+
+  // Autocomplete
+  suggestionsBox: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    borderWidth: 1,
+    borderRadius: 10,
+    zIndex: 10,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 48,
+    justifyContent: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  suggestionName: { fontSize: 14, fontWeight: '600' },
+  suggestionAliases: { fontSize: 11, marginTop: 1 },
 });

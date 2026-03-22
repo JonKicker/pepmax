@@ -4,6 +4,31 @@
 
 ---
 
+## Compound Database Integration (FINAL)
+
+**Status:** ✅ Ray-approved (one conditional round resolved)
+**Date:** 2026-03-22
+
+### Changes
+
+- `src/data/compoundDatabase.ts` — Replaced with fact-checked FINAL version: type-safe `DoseUnit`, `hasSafetyWarning()` export, corrected compound data (Selank, Semax, Sermorelin, CJC-1295, TB-500 corrections). Fixed `reconstitutionNeeded: true` → `false` on Semaglutide and Tirzepatide (prefilled pens).
+- `src/components/peptides/PresetBrowser.tsx` — ⚠️ warning icon on compounds with safety warnings; filled status badges ("FDA" green, "Research" orange, "Compounded" gray); 500ms search debounce via `debouncedQuery` + `debounceRef`; orange/bold warning text for `⚠️` segments in `notesForUsers`; 48dp min touch targets on chips, dose chips, custom add btn, details toggle.
+- `app/(tabs)/peptides/recon-calculator.tsx` — Compound picker section using `getReconstitutableCompounds()`; pre-fills vial size (regex parsed from `typicalVialSize`) and first common dose on selection; user can override.
+- `app/(tabs)/peptides/peptide-form.tsx` — Compound autocomplete on name input (≥2 chars, top 5 results, suppressed in edit mode); on selection pre-fills name, dose, unit, frequency, route, category, halfLifeHours, storage, notes.
+- `src/services/peptideService.ts` — Exported `parseRoute`, `parseUnit`, `parseFrequency`, `mapGroupToCategory` for use in peptide form.
+- `compoundDatabase_FINAL.ts` — Deleted from project root (moved to `src/data/`).
+
+### Ray Review Notes
+
+**Status:** CONDITIONAL APPROVAL
+
+**Tracked observations (non-blocking, fix before public release):**
+1. Dark mode badge contrast — FDA/Research badge pastels (#E8F5E9, #FFF3E0) may look jarring on dark surfaces. Recommend dark-mode variants before paywall/public release.
+2. `parseRoute` always returns `'SubQ'` fallback — `if (r) setRoute(r)` in `handleSelectSuggestion` is always true. Audit `ROUTES` array vs compound route strings.
+3. `FlatList` with `scrollEnabled={false}` in recon calculator — simple `.map()` would suffice for ~17 items. Cleanup candidate.
+
+---
+
 ## Milestone 21 — Deferred Items Completion
 
 **Status:** ✅ Ray-approved (one conditional round resolved)

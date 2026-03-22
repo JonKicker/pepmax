@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  FlatList,
 } from 'react-native';
+import { getReconstitutableCompounds } from '../../../src/data/compoundDatabase';
+import type { Compound } from '../../../src/data/compoundDatabase';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -206,6 +209,11 @@ const pcStyles = StyleSheet.create({
 export default function ReconCalculatorScreen() {
   const { colors } = useTheme();
 
+  // Compound picker
+  const reconCompounds = useMemo(() => getReconstitutableCompounds(), []);
+  const [selectedCompound, setSelectedCompound] = useState<Compound | null>(null);
+  const [showCompoundPicker, setShowCompoundPicker] = useState(false);
+
   // Calculator inputs
   const [vialMg, setVialMg] = useState('');
   const [waterMl, setWaterMl] = useState('');
@@ -327,6 +335,17 @@ export default function ReconCalculatorScreen() {
     loadProtocols();
   };
 
+  const handleSelectCompound = (compound: Compound) => {
+    setSelectedCompound(compound);
+    setShowCompoundPicker(false);
+    const match = compound.typicalVialSize.match(/(\d+(?:\.\d+)?)\s*mg/i);
+    if (match) setVialMg(match[1]);
+    if (compound.commonDoses.length > 0) {
+      setDoseMg(String(compound.commonDoses[0]));
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -362,6 +381,47 @@ export default function ReconCalculatorScreen() {
               )}
             </View>
           )}
+
+          {/* ── Compound Picker ── */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Compound</Text>
+            <Text style={[styles.sectionHint, { color: colors.textSecondary }]}>
+              Optional — select to pre-fill calculator
+            </Text>
+            <TouchableOpacity
+              style={[styles.compoundPickerBtn, { backgroundColor: colors.surface, borderColor: selectedCompound ? Colors.peptide : colors.border }]}
+              onPress={() => setShowCompoundPicker((v) => !v)}
+              activeOpacity={0.7}
+            >
+              <Text style={{ color: selectedCompound ? colors.textPrimary : colors.textSecondary, fontSize: 15 }}>
+                {selectedCompound ? selectedCompound.name : 'Select a compound...'}
+              </Text>
+              <Ionicons
+                name={showCompoundPicker ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+            {showCompoundPicker && (
+              <View style={[styles.pickerList, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <FlatList
+                  data={reconCompounds}
+                  keyExtractor={(item) => item.id}
+                  scrollEnabled={false}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={[styles.pickerItem, { borderBottomColor: colors.border }]}
+                      onPress={() => handleSelectCompound(item)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.pickerItemName, { color: colors.textPrimary }]}>{item.name}</Text>
+                      <Text style={[styles.pickerItemMeta, { color: colors.textSecondary }]}>{item.typicalVialSize}</Text>
+                    </TouchableOpacity>
+                  )}
+                />
+              </View>
+            )}
+          </View>
 
           {/* ── Calculator ── */}
           <View style={styles.section}>
@@ -660,6 +720,33 @@ const styles = StyleSheet.create({
     paddingLeft: 20,
     paddingRight: 80,
   },
+
+  // Compound picker
+  compoundPickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    minHeight: 48,
+  },
+  pickerList: {
+    marginTop: 6,
+    borderWidth: 1,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  pickerItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 48,
+    justifyContent: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  pickerItemName: { fontSize: 14, fontWeight: '600' },
+  pickerItemMeta: { fontSize: 11, marginTop: 2 },
 
   // Save protocol
   saveProtocolBtn: {

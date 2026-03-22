@@ -59,7 +59,7 @@ type DoseInput = {
 
 // ─── Preset mapping helpers ──────────────────────────────────────────────────
 
-function parseRoute(routeStr: string): Route {
+export function parseRoute(routeStr: string): Route {
   for (const part of routeStr.split(', ')) {
     const match = ROUTES.find((r) => r.toLowerCase() === part.trim().toLowerCase());
     if (match) return match;
@@ -67,13 +67,13 @@ function parseRoute(routeStr: string): Route {
   return 'SubQ';
 }
 
-function parseUnit(unitStr: string): Unit {
+export function parseUnit(unitStr: string): Unit {
   if (unitStr === 'mcg') return 'mcg';
   if (unitStr === 'IU') return 'IU';
   return 'mg'; // covers 'mg' and fallback for 'mg/kg' (Macimorelin)
 }
 
-function parseFrequency(freqStr: string): Frequency {
+export function parseFrequency(freqStr: string): Frequency {
   const f = freqStr.toLowerCase();
   // Check specific multi-day patterns before the generic 'weekly' catch-all
   if (f.includes('2x weekly') || f.includes('3x weekly')) return '3xPerWeek';
@@ -83,7 +83,7 @@ function parseFrequency(freqStr: string): Frequency {
   return 'custom';
 }
 
-function mapGroupToCategory(group: CompoundCategory): PeptideCategory {
+export function mapGroupToCategory(group: CompoundCategory): PeptideCategory {
   if (group === 'GLP-1 / Weight Management') return 'GLP-1';
   if (group === 'Growth Hormone / GH Secretagogues') return 'GH Secretagogue';
   if (group === 'Healing / Recovery') return 'Healing';
