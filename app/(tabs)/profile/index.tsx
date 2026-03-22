@@ -290,6 +290,24 @@ export default function SettingsScreen() {
     ]);
   }
 
+  async function runDeleteAccount() {
+    setDeletingAccount(true);
+    try {
+      const result = await deleteAccount();
+      if (result.error) {
+        // Surface the service's message directly — it is already user-friendly
+        // (e.g. 'For security, please sign out and sign back in before deleting your account.')
+        Alert.alert('Could not delete account', result.error.message);
+        return;
+      }
+      // On success: AuthGuard detects currentUser → null and redirects to welcome.
+    } catch {
+      Alert.alert('Error', 'Could not delete your account. Please try again.');
+    } finally {
+      setDeletingAccount(false);
+    }
+  }
+
   function handleDeleteAccount() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     Alert.alert(
@@ -301,34 +319,31 @@ export default function SettingsScreen() {
           text: 'Continue',
           style: 'destructive',
           onPress: () => {
-            Alert.prompt(
-              'Confirm Account Deletion',
-              `Type your email address to confirm:\n${currentUser?.email ?? ''}`,
-              async (input) => {
-                if ((input ?? '').trim().toLowerCase() !== (currentUser?.email ?? '').toLowerCase()) {
-                  Alert.alert('Email does not match', 'Please type your exact email address to confirm.');
-                  return;
-                }
-                setDeletingAccount(true);
-                try {
-                  const result = await deleteAccount();
-                  if (result.error) {
-                    if (result.error.message === 'auth/requires-recent-login') {
-                      Alert.alert('Re-authentication required', 'Please sign out and sign back in before deleting your account.');
-                    } else {
-                      Alert.alert('Error', 'Could not delete your account. Please try again.');
-                    }
+            if (Platform.OS === 'ios') {
+              // iOS: require typed email to confirm — Alert.prompt is iOS-only
+              Alert.prompt(
+                'Confirm Account Deletion',
+                `Type your email address to confirm:\n${currentUser?.email ?? ''}`,
+                async (input) => {
+                  if ((input ?? '').trim().toLowerCase() !== (currentUser?.email ?? '').toLowerCase()) {
+                    Alert.alert('Email does not match', 'Please type your exact email address to confirm.');
                     return;
                   }
-                  // AuthGuard detects currentUser → null and redirects to welcome
-                } catch {
-                  Alert.alert('Error', 'Could not delete your account. Please try again.');
-                } finally {
-                  setDeletingAccount(false);
-                }
-              },
-              'plain-text',
-            );
+                  await runDeleteAccount();
+                },
+                'plain-text',
+              );
+            } else {
+              // Android: Alert.prompt is unavailable — require a second explicit confirmation
+              Alert.alert(
+                'Are you absolutely sure?',
+                `This will permanently delete your account (${currentUser?.email ?? ''}) and all your data. This cannot be reversed.`,
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Yes, Delete My Account', style: 'destructive', onPress: runDeleteAccount },
+                ],
+              );
+            }
           },
         },
       ],
