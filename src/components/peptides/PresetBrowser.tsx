@@ -40,10 +40,16 @@ type Props = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function statusBadgeProps(status: string): { label: string; bg: string; text: string } {
-  if (status.startsWith('FDA')) return { label: 'FDA', bg: '#E8F5E9', text: '#1B5E20' };
-  if (status === 'Research Peptide') return { label: 'Research', bg: '#FFF3E0', text: '#E65100' };
-  return { label: 'Compounded', bg: '#E0E0E0', text: '#424242' };
+function statusBadgeProps(status: string, isDark: boolean): { label: string; bg: string; text: string } {
+  if (status.startsWith('FDA')) return isDark
+    ? { label: 'FDA', bg: '#1B5E20', text: '#A5D6A7' }
+    : { label: 'FDA', bg: '#E8F5E9', text: '#1B5E20' };
+  if (status === 'Research Peptide') return isDark
+    ? { label: 'Research', bg: '#BF360C', text: '#FFCCBC' }
+    : { label: 'Research', bg: '#FFF3E0', text: '#E65100' };
+  return isDark
+    ? { label: 'Compounded', bg: '#424242', text: '#E0E0E0' }
+    : { label: 'Compounded', bg: '#E0E0E0', text: '#424242' };
 }
 
 // ─── Pill tag ─────────────────────────────────────────────────────────────────
@@ -80,8 +86,9 @@ function CompoundCard({
   onToggleDetails: () => void;
   onAdd: (dose: number) => void;
   colors: ReturnType<typeof import('../../hooks/useTheme').useTheme>['colors'];
+  isDark: boolean;
 }) {
-  const badge = statusBadgeProps(compound.status);
+  const badge = statusBadgeProps(compound.status, isDark);
   const hasAliases = compound.aliases && !compound.aliases.startsWith('N/A');
   const showWarning = hasSafetyWarning(compound);
 
@@ -290,7 +297,7 @@ function CompoundCard({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function PresetBrowser({ visible, onClose, onAdd, existingPeptideNames }: Props) {
-  const { colors } = useTheme();
+  const { colors, dark: isDark } = useTheme();
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -471,6 +478,7 @@ export default function PresetBrowser({ visible, onClose, onAdd, existingPeptide
                 onToggleDetails={handleToggleDetails}
                 onAdd={(dose) => handleAdd(item, dose)}
                 colors={colors}
+                isDark={isDark}
               />
             )}
           />

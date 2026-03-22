@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import { VictoryChart, VictoryLine, VictoryAxis, VictoryVoronoiContainer, VictoryTooltip } from 'victory-native';
 import type { HeartRatePoint, HeartRateZone } from '../../types/cardio';
+import type { useTheme } from '../../hooks/useTheme';
 
 const CHART_WIDTH = Dimensions.get('window').width - 64;
 
@@ -9,9 +10,10 @@ type Props = {
   hrData: HeartRatePoint[];
   zones: HeartRateZone[];
   maxHR: number;
+  colors: ReturnType<typeof useTheme>['colors'];
 };
 
-export default function HeartRateChart({ hrData, zones, maxHR }: Props) {
+export default function HeartRateChart({ hrData, zones, maxHR, colors }: Props) {
   if (hrData.length < 2) return null;
 
   const startTime = hrData[0].timestamp;
@@ -53,8 +55,8 @@ export default function HeartRateChart({ hrData, zones, maxHR }: Props) {
       >
         <VictoryAxis
           style={{
-            axis: { stroke: '#ccc' },
-            tickLabels: { fontSize: 8, fill: '#888' },
+            axis: { stroke: colors.border },
+            tickLabels: { fontSize: 8, fill: colors.textSecondary },
           }}
           tickFormat={(t: number) => `${Math.floor(t / 60)}m`}
           tickCount={5}
@@ -62,9 +64,9 @@ export default function HeartRateChart({ hrData, zones, maxHR }: Props) {
         <VictoryAxis
           dependentAxis
           style={{
-            axis: { stroke: '#ccc' },
-            tickLabels: { fontSize: 8, fill: '#888' },
-            grid: { stroke: '#eee', strokeDasharray: '3,3' },
+            axis: { stroke: colors.border },
+            tickLabels: { fontSize: 8, fill: colors.textSecondary },
+            grid: { stroke: colors.border, strokeDasharray: '3,3' },
           }}
         />
         <VictoryLine

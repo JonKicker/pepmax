@@ -288,6 +288,7 @@ export default function SessionDetailScreen() {
               hrData={session.heartRateData}
               zones={zones}
               maxHR={maxHR}
+              colors={colors}
             />
           </View>
           {session.timeInZones && session.timeInZones.length > 0 && (

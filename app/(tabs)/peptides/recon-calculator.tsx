@@ -12,7 +12,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  FlatList,
 } from 'react-native';
 import { getReconstitutableCompounds } from '../../../src/data/compoundDatabase';
 import type { Compound } from '../../../src/data/compoundDatabase';
@@ -404,21 +403,17 @@ export default function ReconCalculatorScreen() {
             </TouchableOpacity>
             {showCompoundPicker && (
               <View style={[styles.pickerList, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <FlatList
-                  data={reconCompounds}
-                  keyExtractor={(item) => item.id}
-                  scrollEnabled={false}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={[styles.pickerItem, { borderBottomColor: colors.border }]}
-                      onPress={() => handleSelectCompound(item)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.pickerItemName, { color: colors.textPrimary }]}>{item.name}</Text>
-                      <Text style={[styles.pickerItemMeta, { color: colors.textSecondary }]}>{item.typicalVialSize}</Text>
-                    </TouchableOpacity>
-                  )}
-                />
+                {reconCompounds.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[styles.pickerItem, { borderBottomColor: colors.border }]}
+                    onPress={() => handleSelectCompound(item)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.pickerItemName, { color: colors.textPrimary }]}>{item.name}</Text>
+                    <Text style={[styles.pickerItemMeta, { color: colors.textSecondary }]}>{item.typicalVialSize}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             )}
           </View>
