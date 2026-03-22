@@ -10,6 +10,7 @@ export default function PeptidesLayout() {
         headerStyle: { backgroundColor: colors.surface },
         headerTintColor: Colors.peptide,
         headerTitleStyle: { color: colors.textPrimary },
+        animation: 'slide_from_right',
       }}
     >
       <Stack.Screen name="index" options={{ title: 'Peptide Library' }} />

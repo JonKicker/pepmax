@@ -115,11 +115,13 @@ export default function MeasurementTrendChart({
           <VictoryArea
             data={data}
             style={{ data: { fill: color + '20', stroke: 'transparent' } }}
+            interpolation="monotoneX"
           />
           {/* Daily faint line */}
           <VictoryLine
             data={data}
             style={{ data: { stroke: color, strokeWidth: 1.5, opacity: 0.3 } }}
+            interpolation="monotoneX"
           />
           {/* Weekly average scatter */}
           {weeklyData.length > 0 && (

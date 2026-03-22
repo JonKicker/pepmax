@@ -11,6 +11,7 @@ export default function TrainingLayout() {
           headerStyle: { backgroundColor: colors.surface },
           headerTintColor: colors.textPrimary,
           headerTitleStyle: { color: colors.textPrimary },
+          animation: 'slide_from_right',
         }}
       >
         <Stack.Screen name="index" options={{ title: 'Training' }} />

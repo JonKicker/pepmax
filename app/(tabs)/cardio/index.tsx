@@ -163,6 +163,17 @@ export default function CardioScreen() {
         ))}
       </ScrollView>
 
+      <TouchableOpacity
+        style={[styles.fab, { backgroundColor: Colors.cardio }]}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          router.push('/(tabs)/cardio/start-session');
+        }}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="add" size={30} color="white" />
+      </TouchableOpacity>
+
       <View style={[styles.footer, { borderTopColor: colors.border }]}>
         <TouchableOpacity
           style={styles.footerBtn}
@@ -194,7 +205,7 @@ export default function CardioScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  list: { padding: 16, paddingBottom: 16, gap: 12 },
+  list: { padding: 16, paddingBottom: 148, gap: 12 },
 
   card: {
     flexDirection: 'row',
@@ -238,4 +249,20 @@ const styles = StyleSheet.create({
   },
   footerBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   footerBtnText: { fontSize: 14, fontWeight: '600' },
+
+  fab: {
+    position: 'absolute',
+    bottom: 72,
+    right: 24,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 8,
+  },
 });

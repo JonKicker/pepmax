@@ -6,6 +6,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { ScrollView, RefreshControl, StyleSheet, TouchableOpacity } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withDelay, withTiming, withSpring } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -31,6 +32,24 @@ import PremiumGate from '../../../src/components/premium/PremiumGate';
 import { useSmartInsights } from '../../../src/hooks/useSmartInsights';
 import { toLocalDateKey } from '../../../src/utils/nutrition';
 import type { DashboardCardId } from '../../../src/types/dashboard';
+
+function AnimatedCard({ index, children }: { index: number; children: React.ReactNode }) {
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(20);
+
+  useEffect(() => {
+    opacity.value = withDelay(index * 100, withTiming(1, { duration: 350 }));
+    translateY.value = withDelay(index * 100, withSpring(0, { damping: 18, stiffness: 120 }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentional: animate on mount only, index is stable for a given card
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  return <Animated.View style={animStyle}>{children}</Animated.View>;
+}
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -225,12 +244,16 @@ export default function DashboardScreen() {
         {/* Card feed */}
         {loading && !data ? (
           <>
-            <SkeletonCard />
-            <SkeletonCard />
-            <SkeletonCard />
+            <AnimatedCard index={0}><SkeletonCard /></AnimatedCard>
+            <AnimatedCard index={1}><SkeletonCard /></AnimatedCard>
+            <AnimatedCard index={2}><SkeletonCard /></AnimatedCard>
           </>
         ) : (
-          cardOrder.map((cardId) => renderCard(cardId))
+          cardOrder.map((cardId, i) => {
+            const card = renderCard(cardId);
+            if (!card) return null;
+            return <AnimatedCard key={cardId} index={i}>{card}</AnimatedCard>;
+          })
         )}
       </ScrollView>
 

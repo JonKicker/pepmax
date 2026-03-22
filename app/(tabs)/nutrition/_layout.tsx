@@ -10,6 +10,7 @@ export default function NutritionLayout() {
         headerStyle: { backgroundColor: colors.surface },
         headerTintColor: Colors.nutrition,
         headerTitleStyle: { color: colors.textPrimary },
+        animation: 'slide_from_right',
       }}
     >
       <Stack.Screen name="index" options={{ title: 'Nutrition' }} />
