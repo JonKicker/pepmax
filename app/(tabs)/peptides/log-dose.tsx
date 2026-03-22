@@ -31,6 +31,7 @@ import {
   FREQUENCY_TO_HOURS,
 } from '../../../src/services/notificationService';
 import { decrementInventoryOnDose } from '../../../src/services/inventoryService';
+import { analytics, AnalyticsEvent } from '../../../src/services/analytics';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -177,12 +178,18 @@ export default function LogDoseScreen() {
       return;
     }
 
+    analytics.track(AnalyticsEvent.DOSE_LOGGED, {
+      peptide_name: selectedPeptide.name,
+      method: 'full_form',
+    });
+
     // Schedule next-dose reminder — fire-and-forget, never blocks the save flow
     const intervalHours = FREQUENCY_TO_HOURS[selectedPeptide.frequency];
     if (intervalHours !== undefined) {
       scheduleDoseReminder(selectedPeptide.id, selectedPeptide.name, intervalHours).catch(
         () => {},
       );
+      analytics.track(AnalyticsEvent.REMINDER_SET, {});
     }
 
     // Fire-and-forget inventory decrement

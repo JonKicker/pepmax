@@ -18,6 +18,7 @@
 import { USDA_NUTRIENT_IDS } from '../constants/nutrition';
 import type { FoodSearchResult, FoodPortion, Micronutrients } from '../types/nutrition';
 import type { ServiceResult } from '../types/service';
+import { addBreadcrumb } from './errorReporting';
 
 const USDA_BASE = 'https://api.nal.usda.gov/fdc/v1';
 const PORTION_DESC_MAX = 50;
@@ -56,6 +57,26 @@ function parsePortions(foodPortions: any[]): FoodPortion[] {
     }));
 }
 
+const PREP_KEYWORDS = /\b(raw|cooked|grilled|baked|fried|roasted|boiled|steamed|skinless|boneless|lean|enriched|regular|instant|dried|frozen|canned|smoked|whole|low.fat|nonfat|reduced|plain|unsalted|salted|organic|fresh)\b/i;
+
+function extractShortTitle(description: string): string {
+  const parts = description.split(',').map((p) => p.trim());
+  const main = parts[0];
+  // Walk parts[1..4] looking for the first useful qualifier
+  for (let i = 1; i <= Math.min(4, parts.length - 1); i++) {
+    const part = parts[i];
+    if (!part) continue;
+    // Skip parts with " or " (varietal noise like "broiler or fryers")
+    if (part.includes(' or ')) continue;
+    // Skip parts that are purely prep-method keywords
+    if (PREP_KEYWORDS.test(part) && part.split(/\s+/).length <= 3) continue;
+    // Skip parts that start with a digit (e.g. "80% lean")
+    if (/^\d/.test(part)) continue;
+    return `${main} ${part}`;
+  }
+  return main;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseFoodItem(food: any): FoodSearchResult {
   const nutrients = buildNutrientLookup(food?.foodNutrients ?? []);
@@ -85,8 +106,12 @@ function parseFoodItem(food: any): FoodSearchResult {
 
   const portions = parsePortions(food?.foodPortions ?? []);
 
+  const description = String(food?.description ?? 'Unknown Food').trim() || 'Unknown Food';
+
   return {
-    name: String(food?.description ?? 'Unknown Food').trim() || 'Unknown Food',
+    name: extractShortTitle(description),
+    usdaFullDescription: description,
+    usdaDataType: String(food?.dataType ?? ''),
     brand: String(food?.brandOwner ?? food?.brandName ?? '').trim(),
     calories100g: Math.round(getNutrient(nutrients, 'calories')),
     protein100g: Math.round(getNutrient(nutrients, 'protein') * 10) / 10,
@@ -142,6 +167,7 @@ export async function searchUSDA(
       dataType: 'SR Legacy,Foundation',
     });
 
+    addBreadcrumb('api', 'usda_food_search', { query: query.trim() });
     const response = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
 
@@ -198,6 +224,7 @@ export async function getUSDAFoodByBarcode(
       pageSize: '1',
     });
 
+    addBreadcrumb('api', 'usda_barcode_search', { barcode });
     const response = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
 

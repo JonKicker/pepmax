@@ -26,6 +26,7 @@ import {
 import type { Peptide, Unit, Frequency, PeptideCategory, Route } from '../../../src/types/peptide';
 import { searchCompounds } from '../../../src/data/compoundDatabase';
 import type { Compound } from '../../../src/data/compoundDatabase';
+import { analytics, AnalyticsEvent } from '../../../src/services/analytics';
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -155,6 +156,9 @@ export default function PeptideFormScreen() {
       return;
     }
 
+    if (!isEditing) {
+      analytics.track(AnalyticsEvent.PEPTIDE_ADDED, { peptide_name: name.trim() });
+    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.back();
   };

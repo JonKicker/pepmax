@@ -16,6 +16,7 @@ import { Timestamp } from 'firebase/firestore';
 import { useTheme } from '../../hooks/useTheme';
 import { Colors } from '../../constants/theme';
 import { addSideEffect } from '../../services/sideEffectService';
+import { analytics, AnalyticsEvent } from '../../services/analytics';
 import { getPeptides } from '../../services/peptideService';
 import {
   SIDE_EFFECT_OPTIONS,
@@ -86,6 +87,7 @@ export default function LogSideEffectModal({ visible, onClose, onSaved }: Props)
       return;
     }
 
+    analytics.track(AnalyticsEvent.SIDE_EFFECT_REPORTED, {});
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     onSaved();
     onClose();

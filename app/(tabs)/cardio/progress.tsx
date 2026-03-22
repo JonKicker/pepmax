@@ -18,6 +18,8 @@ import {
   VictoryBar,
   VictoryAxis,
   VictoryScatter,
+  VictoryVoronoiContainer,
+  VictoryTooltip,
 } from 'victory-native';
 import { Calendar } from 'react-native-calendars';
 import { useTheme } from '../../../src/hooks/useTheme';
@@ -186,6 +188,27 @@ export default function ProgressScreen() {
             width={CHART_WIDTH}
             height={200}
             padding={{ top: 16, bottom: 36, left: 50, right: 16 }}
+            containerComponent={
+              <VictoryVoronoiContainer
+                voronoiDimension="x"
+                labels={({ datum }: { datum: { x: Date; y: number } }) => {
+                  const m = Math.floor(datum.y / 60);
+                  const s = Math.floor(datum.y % 60);
+                  const dateStr = datum.x instanceof Date
+                    ? datum.x.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    : String(datum.x);
+                  return `${dateStr}\n${m}:${String(s).padStart(2, '0')}/${unit === 'mi' ? 'mi' : 'km'}`;
+                }}
+                labelComponent={
+                  <VictoryTooltip
+                    flyoutStyle={{ fill: '#1C1C1E', stroke: 'transparent' }}
+                    style={{ fill: '#FFFFFF', fontSize: 10 }}
+                    cornerRadius={6}
+                    flyoutPadding={{ top: 6, bottom: 6, left: 10, right: 10 }}
+                  />
+                }
+              />
+            }
           >
             <VictoryAxis
               style={{

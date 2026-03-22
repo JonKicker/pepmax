@@ -32,7 +32,8 @@ import { Colors } from '../../../src/constants/theme';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { usePremium } from '../../../src/contexts/PremiumContext';
 import { signOut } from '../../../src/services/firebase/auth';
-import { deleteAllUserData } from '../../../src/services/accountService';
+import { deleteAllUserData, deleteAccount } from '../../../src/services/accountService';
+import * as Haptics from 'expo-haptics';
 import * as Application from 'expo-application';
 import * as StoreReview from 'expo-store-review';
 import * as MailComposer from 'expo-mail-composer';
@@ -107,6 +108,7 @@ export default function SettingsScreen() {
   const [restoringPurchases, setRestoringPurchases] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [deletingData, setDeletingData] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   // Guard: profile not yet loaded
   if (!userProfile) {
@@ -286,6 +288,66 @@ export default function SettingsScreen() {
         ]);
       }},
     ]);
+  }
+
+  async function runDeleteAccount() {
+    setDeletingAccount(true);
+    try {
+      const result = await deleteAccount();
+      if (result.error) {
+        // Surface the service's message directly — it is already user-friendly
+        // (e.g. 'For security, please sign out and sign back in before deleting your account.')
+        Alert.alert('Could not delete account', result.error.message);
+        return;
+      }
+      // On success: AuthGuard detects currentUser → null and redirects to welcome.
+    } catch {
+      Alert.alert('Error', 'Could not delete your account. Please try again.');
+    } finally {
+      setDeletingAccount(false);
+    }
+  }
+
+  function handleDeleteAccount() {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    Alert.alert(
+      'Delete My Account',
+      'This will permanently delete your account and all your data. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          style: 'destructive',
+          onPress: () => {
+            if (Platform.OS === 'ios') {
+              // iOS: require typed email to confirm — Alert.prompt is iOS-only
+              Alert.prompt(
+                'Confirm Account Deletion',
+                `Type your email address to confirm:\n${currentUser?.email ?? ''}`,
+                async (input) => {
+                  if ((input ?? '').trim().toLowerCase() !== (currentUser?.email ?? '').toLowerCase()) {
+                    Alert.alert('Email does not match', 'Please type your exact email address to confirm.');
+                    return;
+                  }
+                  await runDeleteAccount();
+                },
+                'plain-text',
+              );
+            } else {
+              // Android: Alert.prompt is unavailable — require a second explicit confirmation
+              Alert.alert(
+                'Are you absolutely sure?',
+                `This will permanently delete your account (${currentUser?.email ?? ''}) and all your data. This cannot be reversed.`,
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Yes, Delete My Account', style: 'destructive', onPress: runDeleteAccount },
+                ],
+              );
+            }
+          },
+        },
+      ],
+    );
   }
 
   async function handleRateApp() {
@@ -662,6 +724,14 @@ export default function SettingsScreen() {
           label="Delete All Data"
           rightElement={deletingData ? <ActivityIndicator size="small" color={Colors.error} /> : undefined}
           onPress={handleDeleteData}
+          dangerous
+          separator
+        />
+        <SettingsRow
+          icon="person-remove-outline"
+          label="Delete My Account"
+          rightElement={deletingAccount ? <ActivityIndicator size="small" color={Colors.error} /> : undefined}
+          onPress={handleDeleteAccount}
           dangerous
         />
       </SettingsSection>

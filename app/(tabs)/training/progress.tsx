@@ -19,6 +19,8 @@ import {
   VictoryBar,
   VictoryAxis,
   VictoryScatter,
+  VictoryVoronoiContainer,
+  VictoryTooltip,
 } from 'victory-native';
 import * as Haptics from 'expo-haptics';
 import { Timestamp } from 'firebase/firestore';
@@ -485,6 +487,25 @@ export default function ProgressScreen() {
             width={CHART_WIDTH}
             height={220}
             padding={{ top: 10, bottom: 40, left: 50, right: 20 }}
+            containerComponent={
+              <VictoryVoronoiContainer
+                voronoiDimension="x"
+                labels={({ datum }: { datum: { x: Date; y: number } }) => {
+                  const dateStr = datum.x instanceof Date
+                    ? datum.x.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    : String(datum.x);
+                  return `${dateStr}\n${Math.round(datum.y)}`;
+                }}
+                labelComponent={
+                  <VictoryTooltip
+                    flyoutStyle={{ fill: '#1C1C1E', stroke: 'transparent' }}
+                    style={{ fill: '#FFFFFF', fontSize: 10 }}
+                    cornerRadius={6}
+                    flyoutPadding={{ top: 6, bottom: 6, left: 10, right: 10 }}
+                  />
+                }
+              />
+            }
           >
             <VictoryAxis
               dependentAxis
@@ -506,6 +527,7 @@ export default function ProgressScreen() {
             <VictoryLine
               data={strengthData}
               style={{ data: { stroke: Colors.gym, strokeWidth: 2 } }}
+              interpolation="monotoneX"
             />
             <VictoryScatter
               data={strengthData}

@@ -166,7 +166,7 @@ function TDEESection({ colors }: { colors: Theme['colors'] }) {
   const [showActivityPicker, setShowActivityPicker] = useState(false);
 
   const [calculatedTDEE, setCalculatedTDEE] = useState<number | null>(null);
-  const [goalOffset, setGoalOffset] = useState<-500 | 0 | 500>(0);
+  const [goalOffset, setGoalOffset] = useState<-500 | 0 | 250 | 500>(0);
   const [customOffset, setCustomOffset] = useState('');
   const [useCustomOffset, setUseCustomOffset] = useState(false);
 
@@ -394,9 +394,10 @@ function TDEESection({ colors }: { colors: Theme['colors'] }) {
             <Text style={[styles.subLabel, { color: colors.textSecondary }]}>GOAL ADJUSTMENT</Text>
             <View style={styles.goalRow}>
               {([
-                { label: 'Lose Weight', offset: -500 as const },
+                { label: 'Cut', offset: -500 as const },
                 { label: 'Maintain', offset: 0 as const },
-                { label: 'Gain Weight', offset: 500 as const },
+                { label: 'Lean Bulk', offset: 250 as const },
+                { label: 'Bulk', offset: 500 as const },
               ] as const).map(({ label, offset }) => (
                 <TouchableOpacity
                   key={label}

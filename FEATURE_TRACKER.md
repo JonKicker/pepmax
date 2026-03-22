@@ -1,6 +1,82 @@
 # PepMax Feature Tracker
 
-## Active Branch: `feature/build-all-priorities`
+## Active Branch: `feature/m22-analytics-sentry-settings`
+
+---
+
+## UI Polish — Stagger Animations, Screen Transitions, Cardio FAB, Chart Polish
+
+**Status:** ✅ Ray-approved (one conditional round resolved)
+**Date:** 2026-03-22
+**Commit:** f866ab4
+
+### Features included
+
+#### Dashboard Card Stagger Animations
+- `app/(tabs)/dashboard/index.tsx` — `AnimatedCard` wrapper component (Reanimated 4): each card fades in + slides up (`opacity: 0→1`, `translateY: 20→0`) with `withDelay(index * 100, ...)`, 100ms stagger per card. Skeleton cards also staggered. Mount-only animation (intentional `[]` dep with ESLint suppression comment).
+
+#### Screen Slide Transitions
+- `app/(tabs)/dashboard/_layout.tsx` — `animation: 'slide_from_right'` added to `screenOptions`
+- `app/(tabs)/nutrition/_layout.tsx` — same
+- `app/(tabs)/training/_layout.tsx` — same
+- `app/(tabs)/peptides/_layout.tsx` — same
+- `app/(tabs)/cardio/_layout.tsx` — same
+
+#### Cardio FAB
+- `app/(tabs)/cardio/index.tsx` — Floating `+` button (`Colors.cardio`, `bottom: 72`, `right: 24`) navigates to `start-session`. `paddingBottom: 148` on scroll list ensures last card clears FAB + footer.
+
+#### Chart Polish
+- `src/components/cardio/HeartRateChart.tsx` — `VictoryVoronoiContainer` + `VictoryTooltip` (shows time + bpm on touch)
+- `app/(tabs)/cardio/progress.tsx` — Voronoi tooltip on pace trend chart (date + pace/unit label)
+- `app/(tabs)/training/progress.tsx` — `interpolation="monotoneX"` on strength VictoryLine + Voronoi tooltip
+- `src/components/body/MeasurementTrendChart.tsx` — `interpolation="monotoneX"` on both VictoryLine + VictoryArea
+
+### Ray Review Notes
+
+**Status:** APPROVED (after one conditional round)
+
+**Fixes applied:**
+1. ✅ `paddingBottom` on cardio scroll list: 16 → 148 (FAB was obscuring last activity card's Start button)
+2. ✅ `AnimatedCard` `useEffect` — `eslint-disable-next-line react-hooks/exhaustive-deps` with rationale comment added
+
+**Tracked observations (non-blocking):**
+- Strength tooltip missing unit label (`lbs`/`kg`) — future pass should pull from `userProfile`
+- `HeartRateChart` axis colors still hardcoded — pre-existing; component has no `colors` prop; deferred
+
+---
+
+## Milestone 22 — Analytics Wiring, Sentry API Breadcrumbs & Settings Completion
+
+**Status:** ✅ Ray-approved (one conditional round resolved — commit 02ef207)
+**Date:** 2026-03-22
+
+### Features included
+
+#### Analytics Events (7 previously defined-but-never-called)
+- `app/(tabs)/peptides/peptide-form.tsx` — PEPTIDE_ADDED on save, guarded to add-only path (`!isEditing`)
+- `app/(tabs)/peptides/log-dose.tsx` — DOSE_LOGGED after successful `addDose`; REMINDER_SET inside `if (intervalHours !== undefined)` block after `scheduleDoseReminder`
+- `src/components/peptides/LogSideEffectModal.tsx` — SIDE_EFFECT_REPORTED after successful `addSideEffect`
+- `app/(tabs)/dashboard/photo-comparison.tsx` — PHOTO_COMPARISON_VIEWED via `useFocusEffect`; PHOTO_SHARED in `handleShare` after `Share.share()` resolves
+- `app/_layout.tsx` — SCREEN_VIEWED via `useEffect` on `segments` changes (gated on `navigationState?.key`)
+- `app/_layout.tsx` — `modules_active: userProfile.goals` added to `setUserProperties` block
+- `app/_layout.tsx` — `PremiumSync` component added inside PremiumProvider; calls `setUserProperties({ plan_type })` when plan changes
+
+#### Sentry API Breadcrumbs
+- `src/services/usdaService.ts` — `addBreadcrumb('api', 'usda_food_search')` before food search fetch; `addBreadcrumb('api', 'usda_barcode_search')` before barcode fetch
+- `src/services/aiInsightService.ts` — `addBreadcrumb('api', 'ai_insight_request')` before Claude API fetch
+
+#### Settings Screen: Delete Account
+- `app/(tabs)/profile/index.tsx` — "Delete My Account" SettingsRow added below "Delete All Data" in Data & Privacy section
+- Handler: haptic warning → Alert.alert → Alert.prompt (email confirmation) → case-insensitive email match → `deleteAccount()` from accountService → `auth/requires-recent-login` surfaced specifically → AuthGuard handles redirect on success
+
+#### Nutrition Settings: Lean Bulk
+- `app/(tabs)/nutrition/settings.tsx` — goal adjustment type widened to `<-500 | 0 | 250 | 500>`; options renamed Cut / Maintain / Lean Bulk (+250) / Bulk (+500)
+
+### Architecture decisions
+- `PremiumSync` renders null and lives inside PremiumProvider — cleanest way to access `usePremium()` from within `_layout.tsx` without restructuring provider hierarchy
+- REMINDER_SET fires only when `intervalHours !== undefined` — matches existing fire-and-forget pattern; no tracking for compounds with no scheduled frequency
+- PHOTO_SHARED fires after `Share.share()` resolves — user may have cancelled the share sheet; this is intentional (sheet was shown = intent to share)
+- Delete Account does not call `analytics.reset()` explicitly — `auth/requires-recent-login` path aborts before deletion; on success, AuthGuard detects `currentUser → null` and the prevUidRef effect in `_layout.tsx` calls `analytics.reset()` + `sentrySetUser(null)` automatically
 
 ---
 

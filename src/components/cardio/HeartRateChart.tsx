@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
-import { VictoryChart, VictoryLine, VictoryAxis } from 'victory-native';
+import { VictoryChart, VictoryLine, VictoryAxis, VictoryVoronoiContainer, VictoryTooltip } from 'victory-native';
 import type { HeartRatePoint, HeartRateZone } from '../../types/cardio';
 
 const CHART_WIDTH = Dimensions.get('window').width - 64;
@@ -32,6 +32,24 @@ export default function HeartRateChart({ hrData, zones, maxHR }: Props) {
         height={160}
         padding={{ top: 8, bottom: 30, left: 44, right: 8 }}
         domain={{ y: domainY }}
+        containerComponent={
+          <VictoryVoronoiContainer
+            voronoiDimension="x"
+            labels={({ datum }: { datum: { x: number; y: number } }) => {
+              const mins = Math.floor(datum.x / 60);
+              const secs = Math.floor(datum.x % 60);
+              return `${mins}:${String(secs).padStart(2, '0')}\n${datum.y} bpm`;
+            }}
+            labelComponent={
+              <VictoryTooltip
+                flyoutStyle={{ fill: '#1C1C1E', stroke: 'transparent' }}
+                style={{ fill: '#FFFFFF', fontSize: 10 }}
+                cornerRadius={6}
+                flyoutPadding={{ top: 6, bottom: 6, left: 10, right: 10 }}
+              />
+            }
+          />
+        }
       >
         <VictoryAxis
           style={{
