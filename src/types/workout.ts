@@ -1,5 +1,5 @@
 import { Timestamp } from 'firebase/firestore';
-import type { MuscleGroup } from './exercise';
+import type { MuscleGroup, ExerciseCategory } from './exercise';
 
 // ─── Live Session types ──────────────────────────────────────────────────────
 
@@ -20,6 +20,7 @@ export type SessionExercise = {
   exerciseId: string;
   exerciseName: string;
   primaryMuscle: MuscleGroup;
+  category?: ExerciseCategory;
   order: number;
   supersetGroup: number | null;
   sets: SessionSet[];

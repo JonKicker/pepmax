@@ -18,6 +18,7 @@ import {
   COLLECTIONS,
 } from './firebase/firestore';
 import { writeNutrition } from './healthKitService';
+import { computeAndSaveBodyModel } from './bodyModelService';
 import { toLocalDateKey, sanitizeOFFProduct } from '../utils/nutrition';
 import { searchUSDA, getUSDAFoodByBarcode } from './usdaService';
 import type {
@@ -65,6 +66,7 @@ export async function logFood(data: FoodLogInput): Promise<ServiceResult<string>
   const result = await addDocument(COLLECTIONS.FOOD_LOG, data as any);
   if (result.data) {
     const docId = result.data;
+    computeAndSaveBodyModel(data.date).catch(() => {});
     writeNutrition({
       calories: data.calories,
       protein: data.protein,
@@ -346,7 +348,19 @@ export async function searchFood(
     return { data: null, error: abortErr };
   }
 
-  const merged = [...usdaData, ...offData];
+  const DATA_TYPE_PRIORITY: Record<string, number> = {
+    'Foundation': 1,
+    'SR Legacy': 2,
+  };
+
+  const sortedUSDA = [...usdaData].sort((a, b) => {
+    const at = DATA_TYPE_PRIORITY[a.usdaDataType ?? ''] ?? 99;
+    const bt = DATA_TYPE_PRIORITY[b.usdaDataType ?? ''] ?? 99;
+    if (at !== bt) return at - bt;
+    return relevanceScore(b.name, query) - relevanceScore(a.name, query);
+  });
+
+  const merged = [...sortedUSDA, ...offData];
 
   // Only cache when neither source errored. If either source failed (e.g. USDA
   // temporarily down), the merged result is incomplete. Caching it would serve

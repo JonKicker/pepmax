@@ -15,6 +15,8 @@ import {
 import { cacheSessionState, clearCachedSession, getCachedSession } from '../utils/cardioCache';
 import { analytics, AnalyticsEvent } from '../services/analytics';
 import { writeCardioWorkout } from '../services/healthKitService';
+import { computeAndSaveBodyModel } from '../services/bodyModelService';
+import { toLocalDateKey } from '../utils/nutrition';
 
 export function useCardioSession(
   sessionId: string,
@@ -368,6 +370,7 @@ export function useCardioSession(
       }).catch(() => {});
     }
 
+    computeAndSaveBodyModel(toLocalDateKey()).catch(() => {});
     await clearCachedSession();
     analytics.track(AnalyticsEvent.CARDIO_SESSION_COMPLETED, {
       activity_type: sessionRef.current?.activityType ?? 'unknown',

@@ -22,6 +22,9 @@ import type { MusculoskeletalZone, SystemZone } from '../types/bodyModel';
 /** Neutral recovery multiplier — used when the user has no check-in for the target date. */
 export const DEFAULT_RECOVERY_MULTIPLIER = 1.0;
 
+/** Extra fatigue applied to compound exercises (multi-joint, high systemic demand). */
+export const COMPOUND_EXERCISE_MODIFIER = 1.2;
+
 // ─── Lookback windows ─────────────────────────────────────────────────────────
 
 /** Days of workout history to include in fatigue accumulation. */

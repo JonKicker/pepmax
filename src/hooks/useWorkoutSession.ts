@@ -23,6 +23,8 @@ import { exerciseLibrary } from '../data/exerciseLibrary';
 import { setLastWeight } from '../utils/weightMemory';
 import { consumePendingBareMinimum } from '../utils/sessionPreviewStore';
 import { analytics, AnalyticsEvent } from '../services/analytics';
+import { computeAndSaveBodyModel } from '../services/bodyModelService';
+import { toLocalDateKey } from '../utils/nutrition';
 import type { Exercise } from '../types/exercise';
 import type {
   WorkoutSession,
@@ -169,6 +171,7 @@ export function useWorkoutSession(): WorkoutSessionHook {
             exerciseId: te.exerciseId,
             exerciseName: te.exerciseName,
             primaryMuscle: libExercise?.primaryMuscles[0] ?? 'Chest',
+            category: libExercise?.category,
             order: te.order,
             supersetGroup: te.supersetGroup ?? null,
             sets: Array.from({ length: te.targetSets }, (_, i) => ({
@@ -433,6 +436,7 @@ export function useWorkoutSession(): WorkoutSessionHook {
         exerciseId: exercise.id,
         exerciseName: exercise.name,
         primaryMuscle: exercise.primaryMuscles[0] ?? 'Chest',
+        category: exercise.category,
         order: s.exercises.length,
         supersetGroup: null,
         restSeconds: 90, // default for ad-hoc exercises added mid-session
@@ -486,6 +490,7 @@ export function useWorkoutSession(): WorkoutSessionHook {
         exerciseId: newExercise.id,
         exerciseName: newExercise.name,
         primaryMuscle: newExercise.primaryMuscles[0] ?? 'Chest',
+        category: newExercise.category,
         order: original.order,
         supersetGroup: original.supersetGroup,
         notes: '',
@@ -557,6 +562,7 @@ export function useWorkoutSession(): WorkoutSessionHook {
       };
 
       await updateSession(s.id, update);
+      computeAndSaveBodyModel(toLocalDateKey()).catch(() => {});
       await clearCache();
 
       analytics.track(AnalyticsEvent.WORKOUT_COMPLETED, {

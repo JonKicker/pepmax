@@ -7,6 +7,7 @@ import { serverTimestamp } from 'firebase/firestore';
 import { setDocument, getDocument, COLLECTIONS } from './firebase/firestore';
 import { toLocalDateKey } from '../utils/nutrition';
 import { calculateRecoveryMultiplier } from '../utils/recoveryCalc';
+import { computeAndSaveBodyModel } from './bodyModelService';
 import type { RecoveryInput } from '../types/recovery';
 import type { ServiceResult } from '../types/service';
 
@@ -58,7 +59,7 @@ export async function saveRecovery(input: {
 
   const healthKitSynced = !!(input.restingHR != null || input.hrv != null);
 
-  return setDocument(COLLECTIONS.RECOVERY_LOG, date, {
+  const result = await setDocument(COLLECTIONS.RECOVERY_LOG, date, {
     sleepHours: input.sleepHours,
     sleepQuality: input.sleepQuality,
     soreness: input.soreness,
@@ -72,6 +73,8 @@ export async function saveRecovery(input: {
     timestamp: serverTimestamp(),
     date,
   });
+  if (!result.error) computeAndSaveBodyModel(date).catch(() => {});
+  return result;
 }
 
 /**

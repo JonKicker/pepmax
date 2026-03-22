@@ -33,6 +33,7 @@ import {
   DEFAULT_RECOVERY_MULTIPLIER,
   FATIGUE_LOOKBACK_DAYS,
   ZONE_WEIGHTS,
+  COMPOUND_EXERCISE_MODIFIER,
 } from '../constants/bodyModel';
 
 // ─── RPE multiplier ───────────────────────────────────────────────────────────
@@ -82,7 +83,8 @@ function buildFatigueEvents(
 
       for (const set of ex.sets) {
         if (!set.completed) continue;
-        const drop = BASE_FATIGUE_PER_SET * rpeMultiplier(set.rpe) * zoneContrib.weight;
+        const compoundMod = ex.category === 'Compound' ? COMPOUND_EXERCISE_MODIFIER : 1.0;
+        const drop = BASE_FATIGUE_PER_SET * rpeMultiplier(set.rpe) * zoneContrib.weight * compoundMod;
         events.push({ trainedAt: sessionDate, fatigueDrop: drop });
       }
     }

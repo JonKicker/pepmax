@@ -13,7 +13,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-// expo-image-picker is not yet installed; photo picker is stubbed
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { useUnits } from '../../../src/hooks/useUnits';
 import { Colors } from '../../../src/constants/theme';
@@ -46,11 +46,18 @@ export default function LogMeasurementScreen() {
   const [saving, setSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
-  const handlePickPhoto = () => {
-    Alert.alert(
-      'Photo attachment',
-      'Install expo-image-picker to enable photo attachments.',
-    );
+  const handlePickPhoto = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        setPhotoUri(result.assets[0].uri);
+      }
+    } catch {
+      Alert.alert('Photo unavailable', 'Could not access photo library.');
+    }
   };
 
   const handleSave = async () => {

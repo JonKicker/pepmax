@@ -4,6 +4,48 @@
 
 ---
 
+## Milestone 21 — Deferred Items Completion
+
+**Status:** ✅ Ray-approved (one conditional round resolved)
+**Date:** 2026-03-22
+
+### Features included
+
+#### Body Model Trigger Wiring
+- `src/hooks/useWorkoutSession.ts` — fire-and-forget `computeAndSaveBodyModel(toLocalDateKey())` after `updateSession` in `finishWorkout`
+- `src/hooks/useCardioSession.ts` — fire-and-forget `computeAndSaveBodyModel(toLocalDateKey())` before `clearCachedSession` in `stop`
+- `src/services/recoveryService.ts` — fire-and-forget `computeAndSaveBodyModel(date)` on success path of `saveRecovery`
+- `src/services/nutritionService.ts` — fire-and-forget `computeAndSaveBodyModel(data.date)` inside `if (result.data)` in `logFood`
+
+#### Photo Picker (Body Measurements)
+- `expo-image-picker` installed (SDK 54.0.0 compatible)
+- `app/(tabs)/training/log-measurement.tsx` — `handlePickPhoto` stub replaced with real `launchImageLibraryAsync` call. Upload/compression/preview/Firebase Storage were already wired.
+
+#### Compound Exercise Modifier
+- `src/constants/bodyModel.ts` — `COMPOUND_EXERCISE_MODIFIER = 1.2` constant added
+- `src/types/workout.ts` — `category?: ExerciseCategory` added to `SessionExercise` (optional, backward-compatible)
+- `src/hooks/useWorkoutSession.ts` — `category` captured from exercise library at 3 build points: template load, `addExercise`, `swapExercise`
+- `src/utils/bodyModelCalc.ts` — `buildFatigueEvents` applies `COMPOUND_EXERCISE_MODIFIER` when `ex.category === 'Compound'`
+
+### Ray Review Notes
+
+**Status:** APPROVED (after one conditional round)
+
+**Fix applied:**
+1. ✅ `handlePickPhoto` wrapped in try/catch — `launchImageLibraryAsync` can throw on Android when photo library permission is permanently denied; `Alert.alert` shown on failure
+
+**Tracked observations (non-blocking):**
+- Nutrition trigger fires on every `logFood` call with no debounce — low impact at current write volumes, last-write-wins semantics are fine; debounce is a future optimization
+
+### Architecture decisions
+- All body model triggers are fire-and-forget (`.catch(() => {})`) — matching HealthKit write pattern; never surface to UI
+- `category` on `SessionExercise` is optional — Firestore sessions written before this change have `undefined`, which falls through to the `1.0` default modifier (no behavior change for old data)
+- Photo picker uses `launchImageLibraryAsync` only (no camera) — no new permission strings required beyond photo library access already granted
+
+---
+
+---
+
 ## PresetBrowser → COMPOUND_DATABASE Migration
 
 **Status:** ✅ Committed (04b84d7)
@@ -27,7 +69,7 @@
 
 ## Milestone 20 — Body Model Scoring Engine
 
-**Status:** ⏳ Built — Awaiting Ray review
+**Status:** ✅ Ray-approved (one conditional round resolved)
 **Date:** 2026-03-20
 
 ### Features included
@@ -56,7 +98,14 @@
 
 ### Ray Review Notes
 
-**Status:** ⏳ Awaiting first review
+**Status:** APPROVED (after one conditional round)
+
+**Fixes applied:**
+1. ✅ `recovery?.stress` → `recovery?.stressLevel` — stress field name mismatch; CNS/immune scores now use actual logged stress
+2. ✅ `s.totalSets ?? 0` guards in `computeCNSScore` and `computeAcuteChronicRatio` — prevents NaN propagation from missing fields
+3. ✅ `s.duration ?? 0` guards in `computeCardiovascularScore` and `computeAcuteChronicRatio` — same NaN protection
+4. ✅ `!isNaN(referenceDate.getTime())` guard added post-date-parse (Ray tracked item)
+5. ✅ Future-timestamp bounds (`daysAgo >= 0`) added to `hasConsistencyBonus` and `computeAcuteChronicRatio` filters (Ray tracked item)
 
 ---
 
