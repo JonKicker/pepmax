@@ -4,9 +4,50 @@
 
 ---
 
+## UI Polish — Stagger Animations, Screen Transitions, Cardio FAB, Chart Polish
+
+**Status:** ✅ Ray-approved (one conditional round resolved)
+**Date:** 2026-03-22
+**Commit:** f866ab4
+
+### Features included
+
+#### Dashboard Card Stagger Animations
+- `app/(tabs)/dashboard/index.tsx` — `AnimatedCard` wrapper component (Reanimated 4): each card fades in + slides up (`opacity: 0→1`, `translateY: 20→0`) with `withDelay(index * 100, ...)`, 100ms stagger per card. Skeleton cards also staggered. Mount-only animation (intentional `[]` dep with ESLint suppression comment).
+
+#### Screen Slide Transitions
+- `app/(tabs)/dashboard/_layout.tsx` — `animation: 'slide_from_right'` added to `screenOptions`
+- `app/(tabs)/nutrition/_layout.tsx` — same
+- `app/(tabs)/training/_layout.tsx` — same
+- `app/(tabs)/peptides/_layout.tsx` — same
+- `app/(tabs)/cardio/_layout.tsx` — same
+
+#### Cardio FAB
+- `app/(tabs)/cardio/index.tsx` — Floating `+` button (`Colors.cardio`, `bottom: 72`, `right: 24`) navigates to `start-session`. `paddingBottom: 148` on scroll list ensures last card clears FAB + footer.
+
+#### Chart Polish
+- `src/components/cardio/HeartRateChart.tsx` — `VictoryVoronoiContainer` + `VictoryTooltip` (shows time + bpm on touch)
+- `app/(tabs)/cardio/progress.tsx` — Voronoi tooltip on pace trend chart (date + pace/unit label)
+- `app/(tabs)/training/progress.tsx` — `interpolation="monotoneX"` on strength VictoryLine + Voronoi tooltip
+- `src/components/body/MeasurementTrendChart.tsx` — `interpolation="monotoneX"` on both VictoryLine + VictoryArea
+
+### Ray Review Notes
+
+**Status:** APPROVED (after one conditional round)
+
+**Fixes applied:**
+1. ✅ `paddingBottom` on cardio scroll list: 16 → 148 (FAB was obscuring last activity card's Start button)
+2. ✅ `AnimatedCard` `useEffect` — `eslint-disable-next-line react-hooks/exhaustive-deps` with rationale comment added
+
+**Tracked observations (non-blocking):**
+- Strength tooltip missing unit label (`lbs`/`kg`) — future pass should pull from `userProfile`
+- `HeartRateChart` axis colors still hardcoded — pre-existing; component has no `colors` prop; deferred
+
+---
+
 ## Milestone 22 — Analytics Wiring, Sentry API Breadcrumbs & Settings Completion
 
-**Status:** ✅ Committed (e2bdd98) — Ready for Ray's review
+**Status:** ✅ Ray-approved (one conditional round resolved — commit 02ef207)
 **Date:** 2026-03-22
 
 ### Features included
