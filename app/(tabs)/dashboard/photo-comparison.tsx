@@ -5,6 +5,7 @@
  * react-native-view-shot and system Share API.
  */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   View,
   Text,
@@ -25,6 +26,7 @@ import { useAuth } from '../../../src/contexts/AuthContext';
 import { getPhotoDates, getPhotoEntry } from '../../../src/services/progressPhotoService';
 import { kgToLbs } from '../../../src/utils/tdee';
 import type { ProgressPhotoEntry, PhotoPose } from '../../../src/types/bodyTracking';
+import { analytics, AnalyticsEvent } from '../../../src/services/analytics';
 
 const POSES: PhotoPose[] = ['front', 'side', 'back'];
 
@@ -63,6 +65,11 @@ export default function PhotoComparisonScreen() {
 
   const [selectedPose, setSelectedPose] = useState<PhotoPose>('front');
   const [sharing, setSharing] = useState(false);
+
+  // Track when user opens this screen
+  useFocusEffect(useCallback(() => {
+    analytics.track(AnalyticsEvent.PHOTO_COMPARISON_VIEWED, {});
+  }, []));
 
   // Load available dates
   useEffect(() => {
@@ -105,6 +112,7 @@ export default function PhotoComparisonScreen() {
     try {
       const uri = await viewShotRef.current.capture!();
       await Share.share({ url: uri, title: 'Progress Comparison' });
+      analytics.track(AnalyticsEvent.PHOTO_SHARED, {});
     } catch {
       Alert.alert('Share failed', 'Could not generate the comparison image.');
     }

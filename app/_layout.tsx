@@ -17,7 +17,7 @@ import { Stack, useRouter, useSegments, useRootNavigationState } from 'expo-rout
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { ThemeProvider, useThemeContext } from '../src/contexts/ThemeContext';
-import { PremiumProvider } from '../src/contexts/PremiumContext';
+import { PremiumProvider, usePremium } from '../src/contexts/PremiumContext';
 import ErrorBoundary from '../src/components/ErrorBoundary';
 import { initSentry, sentryWrap, setUser as sentrySetUser } from '../src/services/errorReporting';
 import { analytics, AnalyticsEvent } from '../src/services/analytics';
@@ -67,8 +67,16 @@ function AuthGuard() {
       join_date: userProfile.quizCompletedAt
         ? userProfile.quizCompletedAt.toDate().toISOString().slice(0, 10)
         : '',
+      modules_active: userProfile.goals ?? [],
     });
   }, [currentUser, userProfile]);
+
+  // Track screen navigation via segment changes
+  useEffect(() => {
+    if (!navigationState?.key) return;
+    const screenName = segments[segments.length - 1] ?? 'root';
+    analytics.track(AnalyticsEvent.SCREEN_VIEWED, { screen_name: screenName });
+  }, [segments, navigationState?.key]);
 
   useEffect(() => {
     if (!navigationState?.key) return; // Navigation container not mounted yet — router.replace would be dropped
@@ -103,6 +111,16 @@ function ThemedStatusBar() {
   return <StatusBar style={theme.dark ? 'light' : 'dark'} />;
 }
 
+// Syncs subscription plan_type to Mixpanel user properties.
+// Lives inside PremiumProvider so it has access to the plan value.
+function PremiumSync() {
+  const { plan } = usePremium();
+  useEffect(() => {
+    analytics.setUserProperties({ plan_type: plan ?? 'free' });
+  }, [plan]);
+  return null;
+}
+
 function RootLayout() {
   useEffect(() => {
     analytics.track(AnalyticsEvent.APP_OPENED);
@@ -118,6 +136,7 @@ function RootLayout() {
       <ThemedStatusBar />
       <ErrorBoundary>
         <PremiumProvider>
+          <PremiumSync />
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="index" />
             <Stack.Screen name="(auth)" />

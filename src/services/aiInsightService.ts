@@ -20,6 +20,7 @@ import { getRecentSessions } from './workoutSessionService';
 import { getRecentSessions as getRecentCardio } from './cardioService';
 import { getWeightHistory } from './bodyWeightService';
 import type { ServiceResult } from '../types/service';
+import { addBreadcrumb } from './errorReporting';
 
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
@@ -168,6 +169,7 @@ export async function getWeeklyInsight(
     if (signal.aborted) return { data: null, error: new Error('Cancelled') };
 
     // ── 4. Call Claude API ────────────────────────────────────────────────
+    addBreadcrumb('api', 'ai_insight_request', {});
     const response = await fetch(API_URL, {
       method: 'POST',
       signal,
