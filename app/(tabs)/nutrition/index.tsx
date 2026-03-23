@@ -25,10 +25,19 @@ import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors, Theme } from '../../../src/constants/theme';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { getTodaysLog, deleteFood, getLogForDate, copyMealsFromDate } from '../../../src/services/nutritionService';
+import {
+  getAdaptiveCoachingData,
+  runWeeklyCheckIn,
+  acceptCheckIn,
+  dismissCheckIn,
+} from '../../../src/services/adaptiveCoachingService';
+import { daysUntilNextCheckIn } from '../../../src/utils/expenditureAlgorithm';
 import { toLocalDateKey } from '../../../src/utils/nutrition';
 import { DEFAULT_MEAL_SLOTS } from '../../../src/types/nutrition';
 import type { FoodLogEntry, MealSlotConfig } from '../../../src/types/nutrition';
-import ProBadge from '../../../src/components/premium/ProBadge';
+import type { AdaptiveTargets, AdaptiveTDEEResult, DataReadiness } from '../../../src/types/adaptiveCoaching';
+import WeeklyCheckInModal from '../../../src/components/nutrition/WeeklyCheckInModal';
+import { pushNutritionToWatch } from '../../../src/utils/watchSync';
 
 // ─── Calorie Ring ─────────────────────────────────────────────────────────────
 
@@ -497,13 +506,18 @@ function CopyMealsModal({
 export default function NutritionScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { userProfile } = useAuth();
+  const { userProfile, refreshProfile } = useAuth();
 
   const [entries, setEntries] = useState<FoodLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showCopyModal, setShowCopyModal] = useState(false);
+
+  // Adaptive coaching check-in state
+  const [showCheckIn, setShowCheckIn] = useState(false);
+  const [checkInData, setCheckInData] = useState<{ result: AdaptiveTDEEResult; targets: AdaptiveTargets } | null>(null);
+  const [checkInReadiness, setCheckInReadiness] = useState<DataReadiness | null>(null);
 
   const targets = {
     calories: userProfile?.calorieTarget ?? 2000,
@@ -520,13 +534,47 @@ export default function NutritionScreen() {
       console.error('[NutritionScreen] load error:', result.error);
       setLoadError('Failed to load today\'s log. Pull down to retry.');
     } else {
-      setEntries(result.data ?? []);
+      const loaded = result.data ?? [];
+      setEntries(loaded);
+      pushNutritionToWatch(loaded, targets);
     }
     setLoading(false);
     setRefreshing(false);
   };
 
-  useFocusEffect(useCallback(() => { load(); }, []));
+  useFocusEffect(useCallback(() => {
+    load();
+
+    // Check if a weekly adaptive coaching check-in is due
+    const adaptive = userProfile?.adaptiveCoaching;
+    if (!adaptive?.enabled) return;
+
+    const daysUntil = daysUntilNextCheckIn(
+      adaptive.lastCheckInDate,
+      adaptive.checkInIntervalDays ?? 7,
+    );
+    if (daysUntil > 0) return;
+
+    // Check-in is due — fetch data and decide which modal state to show
+    (async () => {
+      const coachingResult = await getAdaptiveCoachingData();
+      if (coachingResult.error) return;
+
+      const coachingData = coachingResult.data!;
+      setCheckInReadiness(coachingData.readiness);
+
+      if (coachingData.readiness.ready && userProfile) {
+        // Pass already-fetched data to avoid a redundant Firestore read
+        const checkIn = await runWeeklyCheckIn(userProfile, coachingData);
+        if (!checkIn.error && checkIn.data) {
+          setCheckInData({ result: checkIn.data.result, targets: checkIn.data.targets });
+        }
+      }
+
+      setShowCheckIn(true);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile?.adaptiveCoaching?.lastCheckInDate, userProfile?.adaptiveCoaching?.enabled]));
 
   const totals = entries.reduce(
     (acc, e) => ({
@@ -579,6 +627,41 @@ export default function NutritionScreen() {
     router.push({ pathname: '/(tabs)/nutrition/add-food', params: { mealSlot: slotId } });
   };
 
+  const handleAcceptCheckIn = async (targets: AdaptiveTargets) => {
+    if (!checkInData || !userProfile?.adaptiveCoaching) return;
+    const result = await acceptCheckIn(
+      checkInData.result,
+      targets,
+      userProfile.adaptiveCoaching,
+    );
+    if (result.error) {
+      Alert.alert('Error', 'Could not update targets. Please try again.');
+      return;
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setShowCheckIn(false);
+    setCheckInData(null);
+    // Refresh profile so CalorieRing and macro bars reflect the new targets immediately
+    await refreshProfile();
+  };
+
+  const handleDismissCheckIn = async () => {
+    if (!checkInData) {
+      setShowCheckIn(false);
+      return;
+    }
+    if (userProfile?.adaptiveCoaching) {
+      await dismissCheckIn(
+        userProfile.adaptiveCoaching,
+        checkInData.result.estimatedTDEE,
+        checkInData.targets.calorieTarget,
+        checkInData.result.weightChangeKgPerWeek,
+      );
+    }
+    setShowCheckIn(false);
+    setCheckInData(null);
+  };
+
   if (loading) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
@@ -610,6 +693,13 @@ export default function NutritionScreen() {
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Ionicons name="calendar-outline" size={22} color={Colors.nutrition} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => router.push('/(tabs)/nutrition/weight-log')}
+                style={{ marginLeft: 14 }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="scale-outline" size={22} color={Colors.nutrition} />
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => setShowCopyModal(true)}
@@ -658,6 +748,32 @@ export default function NutritionScreen() {
           <MacroBar label="Fat" consumed={totals.fat} target={targets.fat} color={Colors.error} colors={colors} />
         </View>
 
+        {/* Adaptive coaching info card */}
+        {userProfile?.adaptiveCoaching?.enabled && (
+          <TouchableOpacity
+            style={[styles.adaptiveCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={() => router.push('/(tabs)/nutrition/weight-log')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="analytics-outline" size={16} color={Colors.nutrition} />
+            {userProfile.adaptiveCoaching.estimatedTDEE ? (
+              <>
+                <Text style={[styles.adaptiveText, { color: colors.textPrimary }]}>
+                  Est. TDEE: {userProfile.adaptiveCoaching.estimatedTDEE.toLocaleString()} kcal
+                </Text>
+                <View style={styles.adaptiveBadge}>
+                  <Text style={styles.adaptiveBadgeText}>Based on your data</Text>
+                </View>
+              </>
+            ) : (
+              <Text style={[styles.adaptiveText, { color: colors.textSecondary }]}>
+                Adaptive Coaching: {checkInReadiness?.daysWithBothData ?? 0}/7 days tracked
+              </Text>
+            )}
+            <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} style={{ marginLeft: 'auto' }} />
+          </TouchableOpacity>
+        )}
+
         {/* Micronutrients shortcut */}
         <TouchableOpacity
           style={[styles.microsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
@@ -666,7 +782,6 @@ export default function NutritionScreen() {
         >
           <Ionicons name="flask-outline" size={20} color={Colors.nutrition} />
           <Text style={[styles.microsLabel, { color: colors.textPrimary }]}>Micronutrients</Text>
-          <ProBadge style={{ marginLeft: 6 }} />
           <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} style={{ marginLeft: 'auto' }} />
         </TouchableOpacity>
 
@@ -703,6 +818,20 @@ export default function NutritionScreen() {
         onCopied={() => { setShowCopyModal(false); load(); }}
         colors={colors}
         activeSlots={activeSlots}
+      />
+
+      <WeeklyCheckInModal
+        visible={showCheckIn}
+        onDismiss={handleDismissCheckIn}
+        onAccept={handleAcceptCheckIn}
+        checkInData={checkInData}
+        readiness={checkInReadiness}
+        currentTargets={{
+          calorieTarget: targets.calories,
+          proteinG: targets.protein,
+          carbsG: targets.carbs,
+          fatG: targets.fat,
+        }}
       />
     </>
   );
@@ -761,6 +890,26 @@ const styles = StyleSheet.create({
     gap: 14,
     marginBottom: 12,
   },
+  adaptiveCard: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  adaptiveText: { fontSize: 13, fontWeight: '500' },
+  adaptiveBadge: {
+    backgroundColor: Colors.nutrition + '22',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  adaptiveBadgeText: { fontSize: 11, color: Colors.nutrition, fontWeight: '600' },
+
   microsCard: {
     marginHorizontal: 16,
     borderRadius: 14,

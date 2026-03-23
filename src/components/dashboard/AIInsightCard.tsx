@@ -1,8 +1,6 @@
 /**
  * AIInsightCard — live AI weekly insight powered by Claude.
  *
- * Only fetches when the user is premium (PremiumGate renders the component even
- * for non-premium users, so we guard the API call explicitly here).
  * Tap-to-refresh bypasses the 7-day Firestore cache.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -10,7 +8,6 @@ import { ActivityIndicator, Text, StyleSheet, TouchableOpacity, View } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { DashboardCard } from './DashboardCard';
 import { Colors } from '../../constants/theme';
-import { usePremium } from '../../contexts/PremiumContext';
 import { getWeeklyInsight } from '../../services/aiInsightService';
 import type { Theme } from '../../constants/theme';
 
@@ -19,7 +16,6 @@ type Props = {
 };
 
 export function AIInsightCard({ colors }: Props) {
-  const { isPremium } = usePremium();
   const [insight, setInsight] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +27,6 @@ export function AIInsightCard({ colors }: Props) {
   }, []);
 
   const fetchInsight = useCallback(async (forceRefresh = false) => {
-    if (!isPremium) return;
     setLoading(true);
     setError(null);
 
@@ -49,27 +44,11 @@ export function AIInsightCard({ colors }: Props) {
     if (result.data) {
       setInsight(result.data);
     }
-  }, [isPremium]);
+  }, []);
 
   useEffect(() => {
     fetchInsight();
   }, [fetchInsight]);
-
-  if (!isPremium) {
-    // Fallback content shown blurred under PremiumGate overlay
-    return (
-      <DashboardCard
-        title="AI Weekly Insight"
-        icon="sparkles-outline"
-        iconColor={Colors.gold}
-        colors={colors}
-      >
-        <Text style={[styles.body, { color: colors.textSecondary }]}>
-          Personalized weekly analysis of your training, nutrition, and recovery patterns.
-        </Text>
-      </DashboardCard>
-    );
-  }
 
   return (
     <DashboardCard

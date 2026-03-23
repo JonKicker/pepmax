@@ -28,7 +28,7 @@ import { RecoveryCard } from '../../../src/components/dashboard/RecoveryCard';
 import { LogWeightModal } from '../../../src/components/dashboard/LogWeightModal';
 import { RecoveryCheckInModal } from '../../../src/components/dashboard/RecoveryCheckInModal';
 import { OnboardingChecklist } from '../../../src/components/dashboard/OnboardingChecklist';
-import PremiumGate from '../../../src/components/premium/PremiumGate';
+
 import { useSmartInsights } from '../../../src/hooks/useSmartInsights';
 import { toLocalDateKey } from '../../../src/utils/nutrition';
 import type { DashboardCardId } from '../../../src/types/dashboard';
@@ -194,9 +194,7 @@ export default function DashboardScreen() {
         );
       case 'aiInsight':
         return (
-          <PremiumGate key={cardId} mode="blur">
-            <AIInsightCard colors={colors} />
-          </PremiumGate>
+          <AIInsightCard key={cardId} colors={colors} />
         );
       default:
         return null;
