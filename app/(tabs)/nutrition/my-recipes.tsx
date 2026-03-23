@@ -16,11 +16,12 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors } from '../../../src/constants/theme';
+import { useAuth } from '../../../src/contexts/AuthContext';
 import { getRecipes, deleteRecipe, logRecipeAsFood } from '../../../src/services/recipeService';
-import { MEAL_SLOTS, MEAL_SLOT_LABELS } from '../../../src/types/nutrition';
+import { DEFAULT_MEAL_SLOTS, getSlotLabel } from '../../../src/types/nutrition';
 import { SERVING_FRACTIONS } from '../../../src/types/recipe';
 import type { Recipe } from '../../../src/types/recipe';
-import type { MealSlot } from '../../../src/types/nutrition';
+import type { MealSlotConfig } from '../../../src/types/nutrition';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
@@ -52,7 +53,9 @@ function LogRecipeModal({
   onLogged: () => void;
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
-  const [mealSlot, setMealSlot] = useState<MealSlot>('breakfast');
+  const { userProfile } = useAuth();
+  const activeSlots: MealSlotConfig[] = userProfile?.mealSlots ?? DEFAULT_MEAL_SLOTS;
+  const [mealSlot, setMealSlot] = useState<string>(activeSlots[0]?.id ?? 'breakfast');
   const [showSlotPicker, setShowSlotPicker] = useState(false);
   const [fraction, setFraction] = useState(1);
   const [customFraction, setCustomFraction] = useState('');
@@ -103,21 +106,21 @@ function LogRecipeModal({
           style={[styles.slotBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
           onPress={() => setShowSlotPicker((v) => !v)}
         >
-          <Text style={[styles.slotBtnText, { color: colors.textPrimary }]}>{MEAL_SLOT_LABELS[mealSlot]}</Text>
+          <Text style={[styles.slotBtnText, { color: colors.textPrimary }]}>{getSlotLabel(mealSlot, activeSlots)}</Text>
           <Ionicons name={showSlotPicker ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textSecondary} />
         </TouchableOpacity>
         {showSlotPicker && (
           <View style={[styles.slotDropdown, { backgroundColor: colors.background, borderColor: colors.border }]}>
-            {MEAL_SLOTS.map((s) => (
+            {activeSlots.map((slot) => (
               <TouchableOpacity
-                key={s}
+                key={slot.id}
                 style={[styles.slotItem, { borderBottomColor: colors.border }]}
-                onPress={() => { setMealSlot(s); setShowSlotPicker(false); }}
+                onPress={() => { setMealSlot(slot.id); setShowSlotPicker(false); }}
               >
-                <Text style={[styles.slotItemText, { color: s === mealSlot ? Colors.nutrition : colors.textPrimary }]}>
-                  {MEAL_SLOT_LABELS[s]}
+                <Text style={[styles.slotItemText, { color: slot.id === mealSlot ? Colors.nutrition : colors.textPrimary }]}>
+                  {slot.label}
                 </Text>
-                {s === mealSlot && <Ionicons name="checkmark" size={16} color={Colors.nutrition} />}
+                {slot.id === mealSlot && <Ionicons name="checkmark" size={16} color={Colors.nutrition} />}
               </TouchableOpacity>
             ))}
           </View>

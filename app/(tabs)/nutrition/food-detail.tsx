@@ -19,11 +19,12 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors, Theme } from '../../../src/constants/theme';
+import { useAuth } from '../../../src/contexts/AuthContext';
 import { logFood, addFavorite, removeFavorite, getFavorites } from '../../../src/services/nutritionService';
 import { toLocalDateKey, recalculateMacros, recalculateMicronutrients, getRDAPercent, getTrafficLight } from '../../../src/utils/nutrition';
-import { MEAL_SLOTS, MEAL_SLOT_LABELS } from '../../../src/types/nutrition';
+import { DEFAULT_MEAL_SLOTS, getSlotLabel } from '../../../src/types/nutrition';
 import { MICRONUTRIENT_LABELS, MICRONUTRIENT_UNITS } from '../../../src/constants/nutrition';
-import type { FoodNavPayload, MealSlot, Micronutrients } from '../../../src/types/nutrition';
+import type { FoodNavPayload, Micronutrients, MealSlotConfig } from '../../../src/types/nutrition';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
@@ -144,12 +145,14 @@ function SourceBadge({ source }: { source: 'usda' | 'off' | undefined }) {
 export default function FoodDetailScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const { userProfile } = useAuth();
   const { foodData: rawFoodData, mealSlot: paramSlot, fromScan, mode } = useLocalSearchParams<{
     foodData: string;
-    mealSlot?: MealSlot;
+    mealSlot?: string;
     fromScan?: string;
     mode?: string;
   }>();
+  const activeSlots: MealSlotConfig[] = userProfile?.mealSlots ?? DEFAULT_MEAL_SLOTS;
 
   const isIngredientMode = mode === 'ingredient';
 
@@ -158,9 +161,19 @@ export default function FoodDetailScreen() {
     try { return JSON.parse(rawFoodData ?? ''); } catch { return null; }
   })();
 
-  const [mealSlot, setMealSlot] = useState<MealSlot>(
-    (MEAL_SLOTS.includes(paramSlot as MealSlot) ? paramSlot : 'breakfast') as MealSlot
+  const [mealSlot, setMealSlot] = useState<string>(
+    activeSlots.some((s) => s.id === paramSlot) ? (paramSlot as string) : (activeSlots[0]?.id ?? 'breakfast')
   );
+
+  // Sync mealSlot once userProfile loads — catches the case where userProfile was null on
+  // first render (so DEFAULT_MEAL_SLOTS was used) but paramSlot is valid in the loaded slots.
+  useEffect(() => {
+    if (paramSlot && activeSlots.some((s) => s.id === paramSlot)) {
+      setMealSlot(paramSlot);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile]);
+
   const [showSlotPicker, setShowSlotPicker] = useState(false);
   const [microExpanded, setMicroExpanded] = useState(false);
 
@@ -520,21 +533,21 @@ export default function FoodDetailScreen() {
                 style={[styles.slotBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
                 onPress={() => setShowSlotPicker((v) => !v)}
               >
-                <Text style={[styles.slotBtnText, { color: colors.textPrimary }]}>{MEAL_SLOT_LABELS[mealSlot]}</Text>
+                <Text style={[styles.slotBtnText, { color: colors.textPrimary }]}>{getSlotLabel(mealSlot, activeSlots)}</Text>
                 <Ionicons name={showSlotPicker ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textSecondary} />
               </TouchableOpacity>
               {showSlotPicker && (
                 <View style={[styles.slotDropdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  {MEAL_SLOTS.map((s) => (
+                  {activeSlots.map((slot) => (
                     <TouchableOpacity
-                      key={s}
+                      key={slot.id}
                       style={[styles.slotItem, { borderBottomColor: colors.border }]}
-                      onPress={() => { setMealSlot(s); setShowSlotPicker(false); }}
+                      onPress={() => { setMealSlot(slot.id); setShowSlotPicker(false); }}
                     >
-                      <Text style={[styles.slotItemText, { color: s === mealSlot ? Colors.nutrition : colors.textPrimary }]}>
-                        {MEAL_SLOT_LABELS[s]}
+                      <Text style={[styles.slotItemText, { color: slot.id === mealSlot ? Colors.nutrition : colors.textPrimary }]}>
+                        {slot.label}
                       </Text>
-                      {s === mealSlot && <Ionicons name="checkmark" size={16} color={Colors.nutrition} />}
+                      {slot.id === mealSlot && <Ionicons name="checkmark" size={16} color={Colors.nutrition} />}
                     </TouchableOpacity>
                   ))}
                 </View>

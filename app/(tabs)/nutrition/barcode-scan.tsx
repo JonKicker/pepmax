@@ -12,11 +12,9 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../../src/constants/theme';
 import { getFoodByBarcode } from '../../../src/services/nutritionService';
-import type { MealSlot } from '../../../src/types/nutrition';
-
 export default function BarcodeScanScreen() {
   const router = useRouter();
-  const { mealSlot } = useLocalSearchParams<{ mealSlot?: MealSlot }>();
+  const { mealSlot } = useLocalSearchParams<{ mealSlot?: string }>();
   const [permission, requestPermission] = useCameraPermissions();
   const [lookingUp, setLookingUp] = useState(false);
   const scanned = useRef(false);

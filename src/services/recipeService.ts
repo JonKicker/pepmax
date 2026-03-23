@@ -11,7 +11,6 @@ import {
 import { logFood } from './nutritionService';
 import { toLocalDateKey } from '../utils/nutrition';
 import type { Recipe, RecipeInput } from '../types/recipe';
-import type { MealSlot } from '../types/nutrition';
 import type { ServiceResult } from '../types/service';
 
 export async function saveRecipe(data: RecipeInput): Promise<ServiceResult<string>> {
@@ -40,7 +39,7 @@ export async function getRecipe(id: string): Promise<ServiceResult<Recipe | null
  */
 export async function logRecipeAsFood(
   recipe: Recipe,
-  mealSlot: MealSlot,
+  mealSlot: string,
   fraction: number = 1
 ): Promise<ServiceResult<string>> {
   const ps = recipe.perServingNutrition;

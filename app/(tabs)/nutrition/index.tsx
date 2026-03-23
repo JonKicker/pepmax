@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Animated,
   PanResponder,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,7 +24,8 @@ import Reanimated, {
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors, Theme } from '../../../src/constants/theme';
 import { useAuth } from '../../../src/contexts/AuthContext';
-import { getTodaysLog, deleteFood } from '../../../src/services/nutritionService';
+import { getTodaysLog, deleteFood, getLogForDate, copyMealsFromDate } from '../../../src/services/nutritionService';
+import { toLocalDateKey } from '../../../src/utils/nutrition';
 import { DEFAULT_MEAL_SLOTS } from '../../../src/types/nutrition';
 import type { FoodLogEntry, MealSlotConfig } from '../../../src/types/nutrition';
 import ProBadge from '../../../src/components/premium/ProBadge';
@@ -316,6 +318,180 @@ function MealSection({
   );
 }
 
+// ─── Copy Meals Modal ─────────────────────────────────────────────────────────
+
+function CopyMealsModal({
+  visible,
+  onDismiss,
+  onCopied,
+  colors,
+  activeSlots,
+}: {
+  visible: boolean;
+  onDismiss: () => void;
+  onCopied: () => void;
+  colors: Theme['colors'];
+  activeSlots: MealSlotConfig[];
+}) {
+  const [loading, setLoading] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [entries, setEntries] = useState<FoodLogEntry[]>([]);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set());
+
+  // Stable for the lifetime of the modal — "yesterday" relative to when the modal mounts.
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayKey = toLocalDateKey(yesterday);
+
+  useEffect(() => {
+    if (!visible) return;
+    setLoading(true);
+    setFetchError(null);
+    getLogForDate(yesterdayKey).then((result) => {
+      setLoading(false);
+      if (result.error) {
+        setFetchError('Failed to load yesterday\'s meals.');
+        return;
+      }
+      const data = result.data ?? [];
+      setEntries(data);
+      // Pre-select all slots that have entries
+      const slotIds = new Set(data.map((e) => e.mealSlot));
+      setSelectedSlots(slotIds);
+    });
+  }, [visible, yesterdayKey]);
+
+  const toggleSlot = (slotId: string) => {
+    setSelectedSlots((prev) => {
+      const next = new Set(prev);
+      if (next.has(slotId)) next.delete(slotId);
+      else next.add(slotId);
+      return next;
+    });
+  };
+
+  const handleCopy = async () => {
+    if (selectedSlots.size === 0) return;
+    setCopying(true);
+    const todayKey = toLocalDateKey();
+    const result = await copyMealsFromDate(yesterdayKey, todayKey, Array.from(selectedSlots));
+    setCopying(false);
+    if (result.error) {
+      Alert.alert('Error', 'Failed to copy meals. Please try again.');
+      return;
+    }
+    const total = entries.filter((e) => selectedSlots.has(e.mealSlot)).length;
+    const copied = result.data ?? 0;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (copied < total) {
+      Alert.alert('Partially copied', `Copied ${copied} of ${total} items.`);
+    }
+    onCopied();
+  };
+
+  // Group entries by slot for display
+  const bySlot: Record<string, FoodLogEntry[]> = {};
+  for (const e of entries) {
+    if (!bySlot[e.mealSlot]) bySlot[e.mealSlot] = [];
+    bySlot[e.mealSlot].push(e);
+  }
+  // Slots that have entries, ordered by activeSlots order then unknown slots at end
+  const slotsWithEntries = [
+    ...activeSlots.filter((s) => bySlot[s.id]),
+    ...Object.keys(bySlot)
+      .filter((id) => !activeSlots.some((s) => s.id === id))
+      .map((id) => ({ id, label: id })),
+  ];
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onDismiss}>
+      <View style={copyStyles.backdrop}>
+        <View style={[copyStyles.sheet, { backgroundColor: colors.surface }]}>
+          {/* Handle */}
+          <View style={[copyStyles.handle, { backgroundColor: colors.border }]} />
+
+          {/* Header */}
+          <View style={[copyStyles.header, { borderBottomColor: colors.border }]}>
+            <Text style={[copyStyles.headerTitle, { color: colors.textPrimary }]}>Copy Yesterday's Meals</Text>
+            <TouchableOpacity onPress={onDismiss} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close" size={24} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Body */}
+          {loading ? (
+            <View style={copyStyles.feedback}>
+              <ActivityIndicator color={Colors.nutrition} />
+            </View>
+          ) : fetchError ? (
+            <View style={copyStyles.feedback}>
+              <Text style={[copyStyles.feedbackText, { color: colors.textSecondary }]}>{fetchError}</Text>
+            </View>
+          ) : slotsWithEntries.length === 0 ? (
+            <View style={copyStyles.feedback}>
+              <Ionicons name="restaurant-outline" size={36} color={colors.textSecondary} style={{ opacity: 0.3 }} />
+              <Text style={[copyStyles.feedbackText, { color: colors.textSecondary }]}>
+                No meals logged yesterday.
+              </Text>
+            </View>
+          ) : (
+            <ScrollView style={copyStyles.list} keyboardShouldPersistTaps="handled">
+              {slotsWithEntries.map((slot) => {
+                const slotEntries = bySlot[slot.id] ?? [];
+                const totalCal = slotEntries.reduce((sum, e) => sum + e.calories, 0);
+                const checked = selectedSlots.has(slot.id);
+                return (
+                  <TouchableOpacity
+                    key={slot.id}
+                    style={[copyStyles.slotRow, { borderBottomColor: colors.border }]}
+                    onPress={() => toggleSlot(slot.id)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name={checked ? 'checkbox' : 'square-outline'}
+                      size={22}
+                      color={checked ? Colors.nutrition : colors.textSecondary}
+                    />
+                    <View style={copyStyles.slotInfo}>
+                      <Text style={[copyStyles.slotLabel, { color: colors.textPrimary }]}>{slot.label}</Text>
+                      <Text style={[copyStyles.slotSub, { color: colors.textSecondary }]}>
+                        {slotEntries.length} item{slotEntries.length !== 1 ? 's' : ''} · {Math.round(totalCal)} kcal
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+
+          {/* Footer */}
+          {slotsWithEntries.length > 0 && !fetchError && (
+            <View style={[copyStyles.footer, { borderTopColor: colors.border }]}>
+              <TouchableOpacity
+                style={[
+                  copyStyles.copyBtn,
+                  { backgroundColor: selectedSlots.size === 0 ? colors.border : Colors.nutrition },
+                ]}
+                onPress={handleCopy}
+                disabled={copying || selectedSlots.size === 0}
+              >
+                {copying ? (
+                  <ActivityIndicator color="white" size="small" />
+                ) : (
+                  <Text style={copyStyles.copyBtnText}>
+                    Copy Selected{selectedSlots.size > 0 ? ` (${selectedSlots.size})` : ''}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function NutritionScreen() {
@@ -327,6 +503,7 @@ export default function NutritionScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [showCopyModal, setShowCopyModal] = useState(false);
 
   const targets = {
     calories: userProfile?.calorieTarget ?? 2000,
@@ -435,6 +612,13 @@ export default function NutritionScreen() {
                 <Ionicons name="calendar-outline" size={22} color={Colors.nutrition} />
               </TouchableOpacity>
               <TouchableOpacity
+                onPress={() => setShowCopyModal(true)}
+                style={{ marginLeft: 14 }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="copy-outline" size={22} color={Colors.nutrition} />
+              </TouchableOpacity>
+              <TouchableOpacity
                 onPress={() => router.push('/(tabs)/nutrition/my-recipes')}
                 style={{ marginLeft: 14 }}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -512,6 +696,14 @@ export default function NutritionScreen() {
           )}
         </View>
       </ScrollView>
+
+      <CopyMealsModal
+        visible={showCopyModal}
+        onDismiss={() => setShowCopyModal(false)}
+        onCopied={() => { setShowCopyModal(false); load(); }}
+        colors={colors}
+        activeSlots={activeSlots}
+      />
     </>
   );
 }
@@ -643,4 +835,41 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   addFoodBtnText: { fontSize: 13, fontWeight: '600' },
+});
+
+const copyStyles = StyleSheet.create({
+  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
+  sheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '75%',
+    paddingBottom: 34,
+  },
+  handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 10, marginBottom: 4 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerTitle: { fontSize: 16, fontWeight: '700' },
+  feedback: { alignItems: 'center', paddingVertical: 40, gap: 12, paddingHorizontal: 32 },
+  feedbackText: { fontSize: 14, textAlign: 'center' },
+  list: { maxHeight: 360 },
+  slotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    gap: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  slotInfo: { flex: 1 },
+  slotLabel: { fontSize: 15, fontWeight: '600' },
+  slotSub: { fontSize: 12, marginTop: 2 },
+  footer: { paddingHorizontal: 18, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth },
+  copyBtn: { borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  copyBtnText: { color: 'white', fontSize: 15, fontWeight: '700' },
 });
