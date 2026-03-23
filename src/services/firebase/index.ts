@@ -14,6 +14,7 @@ const { getReactNativePersistence } = require('firebase/auth') as {
 };
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { getFunctions } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -45,5 +46,7 @@ export const auth = (() => {
 export const db = getFirestore(app);
 
 export const storage = getStorage(app);
+
+export const functions = getFunctions(app);
 
 export default app;

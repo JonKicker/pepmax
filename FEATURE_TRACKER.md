@@ -4,9 +4,82 @@
 
 ---
 
+## Safety Beacon — Cardio Live Location Sharing
+
+**Status:** ✅ Ray-approved (conditional — mandatory follow-up applied 2026-03-23)
+**Date:** 2026-03-23
+**Branch:** `feature/recovery-readiness-score`
+
+### What's been built
+
+**Client — Types & Service Layer**
+- `src/types/beacon.ts` — `SafetyContact`, `SafetyContactInput`, `BeaconLocation`, `ActiveBeacon`, `ActiveBeaconInput` (uid omitted — always set by service)
+- `src/services/beaconService.ts` — Safety contact CRUD + `createActiveBeacon` / `updateBeaconLocation` / `deactivateBeacon` + `triggerBeaconSms` Cloud Function callable
+- `src/services/analytics.ts` — 4 new events: `BEACON_ACTIVATED`, `BEACON_DEACTIVATED`, `BEACON_CONTACT_ADDED`, `BEACON_CONTACT_REMOVED`
+
+**Client — Hooks**
+- `src/hooks/useSafetyContacts.ts` — Fetch/add/remove contacts, E.164 validation, max-3 enforcement
+- `src/hooks/useBeaconSession.ts` — Session-scoped lifecycle: `activate` → 15s throttled `updateLocation` → `deactivate`
+
+**Client — UI Components**
+- `src/components/cardio/SafetyContactsManager.tsx` — Contact list + inline add form + delete; masked phone display
+- `src/components/cardio/BeaconToggle.tsx` — Toggle (outdoor sessions only, requires ≥1 contact)
+- `src/components/cardio/BeaconIndicator.tsx` — Green "Beacon Active" pill on active-session screen
+
+**Client — Screen Integration**
+- `app/(tabs)/cardio/settings.tsx` — "SAFETY BEACON" section with `SafetyContactsManager`
+- `app/(tabs)/cardio/start-session.tsx` — `BeaconToggle` + contacts serialized as JSON router param (eliminates race condition)
+- `app/(tabs)/cardio/active-session.tsx` — Beacon activate/update/deactivate wired to GPS lifecycle
+
+**Firestore**
+- `firestore.rules` — `activeBeacons/{tokenId}`: owner-write only; `allow read: if false` (Admin SDK bypasses)
+- `src/services/firebase/firestore.ts` — Added `SAFETY_CONTACTS` collection key
+- `src/services/firebase/index.ts` — Added `getFunctions` + `functions` export
+
+**Cloud Functions**
+- `functions/src/sendBeaconSms.ts` — `onCall` v2; verifies `caller.uid === beacon.uid`; Twilio SMS to each contact; phone PII masked in logs
+- `functions/src/beaconTrackingPage.ts` — `onRequest` v2; HTML + JSON endpoint; `escapeHtml` + `Number.isFinite` guards; 15s AJAX poll; "Workout completed" overlay
+- `functions/src/cleanupBeacons.ts` — `onSchedule` daily; deletes beacons where `active === false && endedAt < 24h ago`
+- `functions/src/index.ts` — Exports `sendBeaconSms`, `beaconTrackingPage`, `cleanupBeacons`
+- `firebase.json` — Hosting rewrite `/beacon/**` → `beaconTrackingPage`
+- `functions/package.json` — Added `twilio ^5.0.0`
+- `functions/tsconfig.json` — Target/lib updated to `es2020`
+
+### Architecture decisions
+- `activeBeacons/{shareToken}` — token IS the doc ID; O(1) Cloud Function lookup, no query
+- `uid` absent from `ActiveBeaconInput` — service is sole authority; prevents caller-supplied uid bypass
+- Contacts serialized as JSON router param in `start-session` — synchronous parse in `active-session` via `useMemo`; eliminates async race condition
+- GPS piggybacking via `useEffect([route.length])` — no changes to `useCardioSession.ts`
+- 15s Firestore throttle lives in `useBeaconSession.updateLocation` via `lastUpdateRef`
+
+### Ray Review Fixes Applied
+
+**Blocking (all resolved):**
+1. ✅ Dead code (`formatDuration`, `formatDistance`, `hasLocation`) removed from `beaconTrackingPage.ts`
+2. ✅ Race condition eliminated — contacts passed via serialized router param, not async re-fetch
+3. ✅ lat/lng JS injection fixed — `Number.isFinite()` validation with SF fallback coordinates
+4. ✅ Phone PII masked in Cloud Function logs — `phone.slice(0, 3) + '•••' + phone.slice(-4)`
+5. ✅ `uid: ''` code smell removed — `uid` deleted from `ActiveBeaconInput` type entirely
+
+**Mandatory follow-up (resolved):**
+6. ✅ `triggerCompletionSms` dead callable deleted from `beaconService.ts` — never wired; removed to prevent confusion and unintentional invocation
+
+### Pre-deploy manual steps (required before public release)
+```
+[ ] cd functions && npm install
+[ ] firebase functions:secrets:set TWILIO_ACCOUNT_SID
+[ ] firebase functions:secrets:set TWILIO_AUTH_TOKEN
+[ ] firebase functions:secrets:set TWILIO_PHONE_NUMBER
+[ ] firebase functions:secrets:set GOOGLE_MAPS_API_KEY
+[ ] firebase functions:secrets:set APP_BASE_URL
+[ ] firebase deploy --only functions,hosting,firestore:rules
+```
+
+---
+
 ## Phase 8.3 — Apple Watch Gym Module
 
-**Status:** 🔄 Ray review pending
+**Status:** ✅ Ray-approved (2026-03-23)
 **Date:** 2026-03-23
 **Branch:** `feature/recovery-readiness-score`
 
@@ -34,11 +107,23 @@
 - **Real-time channel (`sendToWatch`) for ACTIVE_WORKOUT** — `updateApplicationContext` (background) would overwrite the GYM glance data; `sendToWatch` (real-time) preserves both
 - **Weight in lbs only (Phase 1)** — Digital Crown in 5 lb increments; unit support deferred to Phase 2
 
+### Ray Review Fixes Applied
+
+**Blocking (all resolved):**
+1. ✅ `WorkoutSummaryView` — `@State private var isSaving = false` guard; "Save Workout" button disables + shows "Saving..." after first tap; prevents double-tap from sending duplicate `GYM_WORKOUT_COMPLETE` to phone
+2. ✅ `active-session.tsx` GYM_SET_LOGGED handler — added `typeof` + bounds validation on `exerciseIndex`, `setIndex`, `weight`, `reps` before calling `completeSet()`; silently returns if watch/phone session arrays have diverged
+3. ✅ `RestTimerView` — `nextExerciseName` now only shown when `isLastSet` is true; mid-exercise rest now shows "Next: Set X" instead of incorrectly showing next exercise name
+
+**Non-blocking (all resolved):**
+4. ✅ `WatchWorkoutManager` — `private init()` added; singleton enforced; previews that used `WatchWorkoutManager()` are unaffected (Swift allows `private init` to be called from within the class itself via `static let shared`)
+5. ✅ Timer RunLoop mode — both `startRestTimer` and `startElapsedTimer` now use `Timer(timeInterval:repeats:)` + `RunLoop.main.add(timer, forMode: .common)` instead of `Timer.scheduledTimer`; timers fire during Digital Crown scroll events
+6. ✅ `pushActiveWorkoutToWatch` — now accepts optional `templateTargetReps: number[]`; `startSession()` builds this array from `sourceExercises.map(te => parseInt(te.targetReps, 10) || 0)` while template data is in scope; watch now prefills correct target reps from the plan
+
 ---
 
 ## Community Protocol Templates
 
-**Status:** 🔄 Conditional approval — mandatory fixes applied, awaiting Ray re-check
+**Status:** ✅ Ray-approved (2026-03-23, conditional → all fixes confirmed)
 **Date:** 2026-03-23
 **Branch:** `feature/recovery-readiness-score`
 
@@ -114,7 +199,7 @@
 
 ## Recovery Readiness Score
 
-**Status:** 🔄 Ray review pending
+**Status:** ✅ Ray-approved (2026-03-23)
 **Date:** 2026-03-23
 **Branch:** `feature/recovery-readiness-score`
 

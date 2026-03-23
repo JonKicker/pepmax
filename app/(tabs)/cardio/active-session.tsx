@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -20,7 +20,9 @@ import { useCardioSession } from '../../../src/hooks/useCardioSession';
 import { useAudioCues } from '../../../src/hooks/useAudioCues';
 import { useHeartRateMonitor } from '../../../src/hooks/useHeartRateMonitor';
 import { useHeartRateZones } from '../../../src/hooks/useHeartRateZones';
+import { useBeaconSession } from '../../../src/hooks/useBeaconSession';
 import HeartRateBar from '../../../src/components/cardio/HeartRateBar';
+import BeaconIndicator from '../../../src/components/cardio/BeaconIndicator';
 import {
   formatDuration,
   formatDistance,
@@ -75,7 +77,11 @@ function SplitRow({ split, unit, colors }: { split: Split; unit: 'mi' | 'km'; co
 export default function ActiveSessionScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
+  const { sessionId, beaconOn, beaconContacts } = useLocalSearchParams<{
+    sessionId: string;
+    beaconOn?: string;
+    beaconContacts?: string;
+  }>();
   const { userProfile } = useAuth();
   const { settings } = useCardioSettings();
 
@@ -84,6 +90,7 @@ export default function ActiveSessionScreen() {
 
   const {
     session,
+    route,
     status,
     elapsedActive,
     distance,
@@ -101,14 +108,41 @@ export default function ActiveSessionScreen() {
     addHeartRatePoint,
   } = useCardioSession(sessionId, weightKg, settings, distanceUnit);
 
+  const beacon = useBeaconSession();
+  // Contacts are passed from start-session as a serialized JSON param — no second
+  // Firestore fetch, no race condition with async contact loading.
+  const beaconContactList = useMemo(() => {
+    if (!beaconContacts) return [];
+    try {
+      return JSON.parse(beaconContacts) as import('../../../src/types/beacon').SafetyContact[];
+    } catch {
+      return [];
+    }
+  }, [beaconContacts]);
+
   // Option A: call start() only after session loads (Ray's required fix)
   const hasStartedRef = useRef(false);
   useEffect(() => {
     if (session && !hasStartedRef.current) {
       hasStartedRef.current = true;
       start();
+      // Contacts are already available synchronously (parsed from router param)
+      if (beaconOn === '1' && beaconContactList.length > 0) {
+        beacon.activate(
+          userProfile?.firstName ?? 'Someone',
+          session.activityType,
+          beaconContactList,
+        );
+      }
     }
-  }, [session]);
+  }, [session]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Piggyback beacon location updates on GPS route changes (throttled to 15s inside hook)
+  useEffect(() => {
+    if (!beacon.isActive || route.length === 0) return;
+    const last = route[route.length - 1];
+    beacon.updateLocation(last.latitude, last.longitude, last.timestamp, distance, elapsedActive);
+  }, [route.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Audio cues — returns announceZoneChange
   const { announceZoneChange } = useAudioCues(distance, elapsedActive, currentPace, distanceUnit);
@@ -139,6 +173,7 @@ export default function ActiveSessionScreen() {
   const handleStop = async () => {
     setStopModalVisible(false);
     setStopping(true);
+    if (beacon.isActive) await beacon.deactivate();
     await stop();
     setStopping(false);
     router.replace({
@@ -157,6 +192,7 @@ export default function ActiveSessionScreen() {
           text: 'Abandon',
           style: 'destructive',
           onPress: async () => {
+            if (beacon.isActive) await beacon.deactivate();
             await abandon();
             router.replace('/(tabs)/cardio');
           },
@@ -189,6 +225,9 @@ export default function ActiveSessionScreen() {
           </Text>
         </View>
       )}
+
+      {/* Beacon active indicator */}
+      {beacon.isActive && <BeaconIndicator contactCount={beaconContactList.length} />}
 
       <ScrollView contentContainerStyle={styles.content}>
         {/* Primary stat */}

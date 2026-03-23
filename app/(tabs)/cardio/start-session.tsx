@@ -18,6 +18,8 @@ import { Colors } from '../../../src/constants/theme';
 import { createCardioSession } from '../../../src/services/cardioService';
 import { requestLocationPermission } from '../../../src/utils/locationPermission';
 import { Timestamp } from 'firebase/firestore';
+import { useSafetyContacts } from '../../../src/hooks/useSafetyContacts';
+import BeaconToggle from '../../../src/components/cardio/BeaconToggle';
 import type { ActivityType, GoalType, PoolLength, SessionGoal } from '../../../src/types/cardio';
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
@@ -110,9 +112,13 @@ export default function StartSessionScreen() {
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [permissionNeedsSettings, setPermissionNeedsSettings] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [beaconOn, setBeaconOn] = useState(false);
+
+  const { contacts } = useSafetyContacts();
 
   const isSwim = activityType === 'swim';
   const showIndoor = activityType === 'run' || activityType === 'cycle';
+  const showBeacon = !isSwim && !indoorMode && contacts.length > 0;
 
   const buildGoal = (): SessionGoal | null => {
     if (goalType === 'none') return null;
@@ -182,7 +188,13 @@ export default function StartSessionScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.replace({
       pathname: '/(tabs)/cardio/active-session',
-      params: { sessionId: result.data },
+      params: {
+        sessionId: result.data,
+        beaconOn: beaconOn ? '1' : '0',
+        // Pass contact phones so active-session doesn't need a second Firestore fetch.
+        // JSON-serialized array of { id, name, phone } objects.
+        beaconContacts: beaconOn ? JSON.stringify(contacts) : '',
+      },
     });
   };
 
@@ -284,6 +296,22 @@ export default function StartSessionScreen() {
               onChangeText={setCustomPoolLength}
             />
           )}
+        </>
+      )}
+
+      {/* Safety Beacon toggle — outdoor sessions only */}
+      {showBeacon && (
+        <>
+          <SectionLabel text="SAFETY" colors={colors} />
+          <BeaconToggle
+            value={beaconOn}
+            onToggle={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setBeaconOn((v) => !v);
+            }}
+            contactCount={contacts.length}
+            colors={colors}
+          />
         </>
       )}
 

@@ -17,6 +17,7 @@ import { useHeartRateMonitor } from '../../../src/hooks/useHeartRateMonitor';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { estimateMaxHR } from '../../../src/utils/cardio';
 import type { AudioCueFrequency, AudioCueContent, DistanceUnit } from '../../../src/types/cardio';
+import SafetyContactsManager from '../../../src/components/cardio/SafetyContactsManager';
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
@@ -322,6 +323,12 @@ export default function CardioSettingsScreen() {
         )}
       </View>
 
+      <SectionHeader title="SAFETY BEACON" colors={colors} />
+      <Text style={[styles.beaconDesc, { color: colors.textSecondary }]}>
+        Contacts receive a text with a live tracking link when you enable Beacon before a workout.
+      </Text>
+      <SafetyContactsManager colors={colors} />
+
       <Text style={[styles.footer, { color: colors.textSecondary }]}>
         Settings are saved automatically.
       </Text>
@@ -379,6 +386,7 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 13, fontWeight: '600' },
 
   footer: { fontSize: 12, textAlign: 'center', marginTop: 24 },
+  beaconDesc: { fontSize: 13, marginBottom: 10, lineHeight: 18 },
 
   settingSubLabel: { fontSize: 11, marginTop: 2 },
   maxHRInputWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
