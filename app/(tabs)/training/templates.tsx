@@ -20,9 +20,6 @@ import {
   deleteTemplate,
   seedStarterTemplates,
 } from '../../../src/services/templateService';
-import { usePremiumGate } from '../../../src/hooks/usePremiumGate';
-import ProBadge from '../../../src/components/premium/ProBadge';
-import { FREE_LIMITS } from '../../../src/constants/premium';
 import type { WorkoutTemplate } from '../../../src/types/template';
 
 const DELETE_WIDTH = 80;
@@ -156,7 +153,6 @@ function SwipeableTemplateCard({
 export default function TemplatesScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { isPremium, gate } = usePremiumGate();
   const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const seeded = useRef(false);
@@ -217,24 +213,16 @@ export default function TemplatesScreen() {
         data={templates}
         keyExtractor={(item) => item.id}
         contentContainerStyle={[styles.list, templates.length === 0 && styles.listEmpty]}
-        renderItem={({ item, index }) => {
-          const isLocked = !isPremium && index >= FREE_LIMITS.WORKOUT_TEMPLATES;
-          return (
-            <View style={styles.templateRow}>
-              <SwipeableTemplateCard
-                template={item}
-                onDelete={isLocked ? () => {} : handleDelete}
-                onPress={isLocked ? () => gate() : handlePress}
-                colors={colors}
-              />
-              {isLocked && (
-                <View style={styles.proRowBadge}>
-                  <ProBadge />
-                </View>
-              )}
-            </View>
-          );
-        }}
+        renderItem={({ item }) => (
+          <View style={styles.templateRow}>
+            <SwipeableTemplateCard
+              template={item}
+              onDelete={handleDelete}
+              onPress={handlePress}
+              colors={colors}
+            />
+          </View>
+        )}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <View style={[styles.emptyIconWrap, { backgroundColor: Colors.gym + '1A' }]}>
@@ -252,10 +240,6 @@ export default function TemplatesScreen() {
         style={[styles.fab, { backgroundColor: Colors.gym }]}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          if (!isPremium && templates.length >= FREE_LIMITS.WORKOUT_TEMPLATES) {
-            gate();
-            return;
-          }
           router.push('/(tabs)/training/template-builder');
         }}
         activeOpacity={0.85}
@@ -273,7 +257,7 @@ const styles = StyleSheet.create({
   listEmpty: { flex: 1 },
 
   templateRow: { position: 'relative' },
-  proRowBadge: { position: 'absolute', top: 12, right: 16, zIndex: 10 },
+
 
   swipeWrapper: { marginBottom: 10, borderRadius: 12, overflow: 'hidden' },
   deleteBackground: {

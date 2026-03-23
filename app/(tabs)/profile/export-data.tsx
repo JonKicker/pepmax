@@ -1,10 +1,9 @@
 /**
  * Export My Data screen.
  *
- * Lets premium users export all their health data as JSON or a CSV zip.
- * Non-premium users are redirected to the paywall immediately.
+ * Lets users export all their health data as JSON or a CSV zip.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -13,29 +12,16 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors } from '../../../src/constants/theme';
-import { usePremium } from '../../../src/contexts/PremiumContext';
 import { exportUserDataAsJSON, exportUserDataAsCSV } from '../../../src/services/dataExportService';
 
 export default function ExportDataScreen() {
   const { colors } = useTheme();
-  const { isPremium } = usePremium();
-  const router = useRouter();
 
   const [loading, setLoading] = useState(false);
   const [loadingFormat, setLoadingFormat] = useState<'json' | 'csv' | null>(null);
-
-  // Redirect non-premium users to paywall — in useEffect to avoid calling navigation during render
-  useEffect(() => {
-    if (!isPremium) {
-      router.replace('/paywall');
-    }
-  }, [isPremium]);
-
-  if (!isPremium) return null;
 
   async function handleExport(format: 'json' | 'csv') {
     setLoading(true);

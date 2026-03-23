@@ -1,21 +1,15 @@
-/** Free tier limits — premium users bypass these. */
-export const FREE_LIMITS = {
-  PROGRESS_PHOTOS: 3,
-  WORKOUT_TEMPLATES: 2,
-};
-
-/** Pro features listed in the Go Pro comparison screen. */
-export const PRO_FEATURES: { id: string; label: string; freeAvailable: boolean }[] = [
-  { id: 'logging',         label: 'Workout & nutrition logging',  freeAvailable: true },
-  { id: 'programs',        label: 'Training programs',            freeAvailable: true },
-  { id: 'recipes',         label: 'Recipe tracking',              freeAvailable: true },
-  { id: 'history',         label: 'Dose & workout history',       freeAvailable: true },
-  { id: 'barcode',         label: 'Barcode food scanner',         freeAvailable: true },
-  { id: 'recon',           label: 'Recon calculator',             freeAvailable: true },
-  { id: 'half_life',       label: 'Half-life blood level graphs', freeAvailable: false },
-  { id: 'ai_insights',     label: 'AI training insights',         freeAvailable: false },
-  { id: 'bare_minimum',    label: 'Bare Minimum workout mode',    freeAvailable: false },
-  { id: 'effort_analysis', label: 'Effort & progress analysis',   freeAvailable: false },
-  { id: 'micro_dashboard', label: 'Micronutrient dashboard',      freeAvailable: false },
-  { id: 'adv_trends',      label: 'Advanced measurement trends',  freeAvailable: false },
+/** Features listed in the Go Pro screen. All included during trial and after purchase. */
+export const PRO_FEATURES: { id: string; label: string }[] = [
+  { id: 'logging',         label: 'Workout & nutrition logging' },
+  { id: 'programs',        label: 'Training programs' },
+  { id: 'recipes',         label: 'Recipe tracking' },
+  { id: 'history',         label: 'Dose & workout history' },
+  { id: 'barcode',         label: 'Barcode food scanner' },
+  { id: 'recon',           label: 'Recon calculator' },
+  { id: 'half_life',       label: 'Half-life blood level graphs' },
+  { id: 'ai_insights',     label: 'AI training insights' },
+  { id: 'bare_minimum',    label: 'Bare Minimum workout mode' },
+  { id: 'effort_analysis', label: 'Effort & progress analysis' },
+  { id: 'micro_dashboard', label: 'Micronutrient dashboard' },
+  { id: 'adv_trends',      label: 'Advanced measurement trends' },
 ];

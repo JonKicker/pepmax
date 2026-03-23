@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import PremiumGate from '../../../src/components/premium/PremiumGate';
+
 import {
   View,
   Text,
@@ -171,7 +171,6 @@ export default function ProgressScreen() {
     : 0;
 
   return (
-    <PremiumGate mode="blur" fullScreen>
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
@@ -382,7 +381,6 @@ export default function ProgressScreen() {
         </View>
       )}
     </ScrollView>
-    </PremiumGate>
   );
 }
 

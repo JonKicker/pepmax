@@ -102,15 +102,10 @@ export default function GoProScreen() {
         </View>
       )}
 
-      {/* Feature comparison table */}
+      {/* Feature list — all included */}
       <View style={[styles.tableCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        {/* Table header */}
         <View style={[styles.tableHeader, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.tableHeaderLabel, { color: colors.textSecondary }]}>Feature</Text>
-          <View style={styles.tableHeaderCols}>
-            <Text style={[styles.tableHeaderCol, { color: colors.textSecondary }]}>Free</Text>
-            <Text style={[styles.tableHeaderCol, { color: Colors.gold }]}>Pro</Text>
-          </View>
+          <Text style={[styles.tableHeaderLabel, { color: colors.textSecondary }]}>Everything included</Text>
         </View>
 
         {PRO_FEATURES.map((feature, index) => (
@@ -122,21 +117,10 @@ export default function GoProScreen() {
               index === PRO_FEATURES.length - 1 && styles.tableRowLast,
             ]}
           >
+            <Ionicons name="checkmark-circle" size={18} color={Colors.gold} />
             <Text style={[styles.featureLabel, { color: colors.textPrimary }]} numberOfLines={1}>
               {feature.label}
             </Text>
-            <View style={styles.tableCheckCols}>
-              <View style={styles.tableCheck}>
-                {feature.freeAvailable ? (
-                  <Ionicons name="checkmark" size={16} color={colors.success} />
-                ) : (
-                  <Ionicons name="close" size={16} color={colors.textSecondary} />
-                )}
-              </View>
-              <View style={styles.tableCheck}>
-                <Ionicons name="checkmark" size={16} color={Colors.gold} />
-              </View>
-            </View>
           </View>
         ))}
       </View>
@@ -238,21 +222,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   tableHeaderLabel: { fontSize: 12, fontWeight: '600', flex: 1 },
-  tableHeaderCols: { flexDirection: 'row', gap: 0 },
-  tableHeaderCol: { width: 48, textAlign: 'center', fontSize: 12, fontWeight: '700' },
-
   tableRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 11,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 10,
   },
   tableRowLast: { borderBottomWidth: 0 },
-  featureLabel: { flex: 1, fontSize: 13, paddingRight: 8 },
-  tableCheckCols: { flexDirection: 'row' },
-  tableCheck: { width: 48, alignItems: 'center' },
+  featureLabel: { flex: 1, fontSize: 13 },
 
   trialBtn: {
     flexDirection: 'row',

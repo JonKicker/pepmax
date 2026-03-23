@@ -12,7 +12,7 @@ import {
   findPersonalBests,
 } from '../../../src/utils/bodyMeasurementUtils';
 import MeasurementTrendChart from '../../../src/components/body/MeasurementTrendChart';
-import PremiumGate from '../../../src/components/premium/PremiumGate';
+
 import type { BodyMeasurement } from '../../../src/types/bodyMeasurement';
 import type { TimeRange } from '../../../src/types/bodyTracking';
 
@@ -99,7 +99,6 @@ export default function MeasurementTrendsScreen() {
   const bests = findPersonalBests(allEntries);
 
   return (
-    <PremiumGate mode="blur" fullScreen>
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
@@ -189,7 +188,6 @@ export default function MeasurementTrendsScreen() {
         </View>
       )}
     </ScrollView>
-    </PremiumGate>
   );
 }
 
