@@ -26,7 +26,6 @@ import type {
   FavoriteFood,
   DailyTotals,
   FoodSearchResult,
-  MealSlot,
   Micronutrients,
 } from '../types/nutrition';
 import type { ServiceResult } from '../types/service';
@@ -35,7 +34,7 @@ import type { ServiceResult } from '../types/service';
 
 type FoodLogInput = {
   date: string;
-  mealSlot: MealSlot;
+  mealSlot: string;
   foodName: string;
   brand?: string;
   calories: number;
@@ -192,6 +191,49 @@ export async function getDailyTotals(date: string): Promise<ServiceResult<DailyT
   );
 
   return { data: totals, error: null };
+}
+
+/**
+ * Copies food log entries from one date to another.
+ * Optionally filters to specific slot IDs. Returns the count of successfully
+ * copied items. Sequential logFood calls are intentional — avoids flooding
+ * HealthKit with parallel writes.
+ */
+export async function copyMealsFromDate(
+  fromDate: string,
+  toDate: string,
+  slotFilter?: string[],
+): Promise<ServiceResult<number>> {
+  const source = await getLogForDate(fromDate);
+  if (source.error) return { data: null, error: source.error };
+
+  let entries = source.data ?? [];
+  if (slotFilter && slotFilter.length > 0) {
+    entries = entries.filter((e) => slotFilter.includes(e.mealSlot));
+  }
+
+  if (entries.length === 0) return { data: 0, error: null };
+
+  let copied = 0;
+  for (const entry of entries) {
+    const result = await logFood({
+      date: toDate,
+      mealSlot: entry.mealSlot,
+      foodName: entry.foodName,
+      brand: entry.brand,
+      calories: entry.calories,
+      protein: entry.protein,
+      carbs: entry.carbs,
+      fat: entry.fat,
+      servingSize: entry.servingSize,
+      servingUnit: entry.servingUnit,
+      barcode: entry.barcode,
+      micronutrients: entry.micronutrients,
+    });
+    if (!result.error) copied++;
+  }
+
+  return { data: copied, error: null };
 }
 
 // ─── Favorites ───────────────────────────────────────────────────────────────

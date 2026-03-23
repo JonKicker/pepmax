@@ -26,6 +26,7 @@ import * as Haptics from 'expo-haptics';
 import { Timestamp } from 'firebase/firestore';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors } from '../../../src/constants/theme';
+import { useAuth } from '../../../src/contexts/AuthContext';
 import { getCompletedSessions } from '../../../src/services/workoutSessionService';
 import { getAllPersonalRecords } from '../../../src/services/personalRecordService';
 import {
@@ -228,6 +229,8 @@ const emptyStyles = StyleSheet.create({
 
 export default function ProgressScreen() {
   const { colors } = useTheme();
+  const { userProfile } = useAuth();
+  const weightUnit = userProfile?.units === 'imperial' ? 'lbs' : 'kg';
 
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [allPRs, setAllPRs] = useState<PersonalRecord[]>([]);
@@ -494,7 +497,7 @@ export default function ProgressScreen() {
                   const dateStr = datum.x instanceof Date
                     ? datum.x.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                     : String(datum.x);
-                  return `${dateStr}\n${Math.round(datum.y)}`;
+                  return `${dateStr}\n${Math.round(datum.y)} ${weightUnit}`;
                 }}
                 labelComponent={
                   <VictoryTooltip

@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors, Theme } from '../../../src/constants/theme';
+import { useAuth } from '../../../src/contexts/AuthContext';
 import {
   searchFood,
   getRecentFoods,
@@ -24,8 +25,8 @@ import {
   removeFavorite,
 } from '../../../src/services/nutritionService';
 import { getRecipes, logRecipeAsFood } from '../../../src/services/recipeService';
-import type { FoodSearchResult, FavoriteFood, FoodLogEntry, MealSlot, FoodNavPayload } from '../../../src/types/nutrition';
-import { MEAL_SLOTS, MEAL_SLOT_LABELS } from '../../../src/types/nutrition';
+import type { FoodSearchResult, FavoriteFood, FoodLogEntry, FoodNavPayload, MealSlotConfig } from '../../../src/types/nutrition';
+import { DEFAULT_MEAL_SLOTS, getSlotLabel } from '../../../src/types/nutrition';
 import type { Recipe } from '../../../src/types/recipe';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -145,6 +146,11 @@ function SearchResultRow({
           </Text>
           <SourceBadge source={item.foodSource} />
         </View>
+        {!!item.usdaFullDescription && item.usdaFullDescription !== item.name && (
+          <Text style={[styles.resultSubtitle, { color: colors.textSecondary }]} numberOfLines={2}>
+            {item.usdaFullDescription}
+          </Text>
+        )}
         {!!item.brand && (
           <Text style={[styles.resultBrand, { color: colors.textSecondary }]} numberOfLines={1}>
             {item.brand}
@@ -226,14 +232,26 @@ type Tab = 'search' | 'recent' | 'favorites' | 'recipes';
 export default function AddFoodScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { mealSlot: paramSlot, mode } = useLocalSearchParams<{ mealSlot?: MealSlot; mode?: string }>();
+  const { userProfile } = useAuth();
+  const { mealSlot: paramSlot, mode } = useLocalSearchParams<{ mealSlot?: string; mode?: string }>();
 
   const isIngredientMode = mode === 'ingredient';
+  const activeSlots: MealSlotConfig[] = userProfile?.mealSlots ?? DEFAULT_MEAL_SLOTS;
 
   const [activeTab, setActiveTab] = useState<Tab>('search');
-  const [mealSlot, setMealSlot] = useState<MealSlot>(
-    (MEAL_SLOTS.includes(paramSlot as MealSlot) ? paramSlot : 'breakfast') as MealSlot
+  const [mealSlot, setMealSlot] = useState<string>(
+    activeSlots.some((s) => s.id === paramSlot) ? (paramSlot as string) : (activeSlots[0]?.id ?? 'breakfast')
   );
+
+  // Sync mealSlot once userProfile loads — catches the case where userProfile was null on
+  // first render (so DEFAULT_MEAL_SLOTS was used) but paramSlot is valid in the loaded slots.
+  useEffect(() => {
+    if (paramSlot && activeSlots.some((s) => s.id === paramSlot)) {
+      setMealSlot(paramSlot);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile]);
+
   const [showSlotPicker, setShowSlotPicker] = useState(false);
 
   // Recipes tab state
@@ -258,7 +276,7 @@ export default function AddFoodScreen() {
   const [favorites, setFavorites] = useState<FavoriteFood[]>([]);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
 
-  // ─── Debounced search (400ms as required by Ray) ──────────────────────────
+  // ─── Debounced search (500ms) ─────────────────────────────────────────────
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (query.trim().length < 2) {
@@ -268,14 +286,15 @@ export default function AddFoodScreen() {
       setSearchLoading(false);
       return;
     }
+    // Show spinner immediately — before the debounce fires
+    setSearchLoading(true);
+    setSearchError(null);
     debounceRef.current = setTimeout(async () => {
       // Abort any in-flight request before starting a new one
       searchAbortRef.current?.abort();
       searchAbortRef.current = new AbortController();
       const signal = searchAbortRef.current.signal;
 
-      setSearchLoading(true);
-      setSearchError(null);
       setSearchDone(false);
       const result = await searchFood(query, signal);
 
@@ -285,7 +304,11 @@ export default function AddFoodScreen() {
       setSearchLoading(false);
       setSearchDone(true);
       if (result.error) {
-        setSearchError('Search unavailable. Try manual entry.');
+        if (result.error.message === 'Request timed out') {
+          setSearchError('Search timed out — try a simpler term.');
+        } else {
+          setSearchError('Search unavailable. Try manual entry.');
+        }
         setSearchResults([]);
       } else {
         setSearchResults(result.data ?? []);
@@ -294,7 +317,7 @@ export default function AddFoodScreen() {
           results_count: result.data?.length ?? 0,
         });
       }
-    }, 400);
+    }, 500);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
@@ -594,23 +617,23 @@ export default function AddFoodScreen() {
               onPress={() => setShowSlotPicker((v) => !v)}
             >
               <Text style={[styles.slotBtnText, { color: colors.textPrimary }]}>
-                {MEAL_SLOT_LABELS[mealSlot]}
+                {getSlotLabel(mealSlot, activeSlots)}
               </Text>
               <Ionicons name={showSlotPicker ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
           {showSlotPicker && (
             <View style={[styles.slotDropdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              {MEAL_SLOTS.map((s) => (
+              {activeSlots.map((slot) => (
                 <TouchableOpacity
-                  key={s}
+                  key={slot.id}
                   style={[styles.slotItem, { borderBottomColor: colors.border }]}
-                  onPress={() => { setMealSlot(s); setShowSlotPicker(false); }}
+                  onPress={() => { setMealSlot(slot.id); setShowSlotPicker(false); }}
                 >
-                  <Text style={[styles.slotItemText, { color: s === mealSlot ? Colors.nutrition : colors.textPrimary }]}>
-                    {MEAL_SLOT_LABELS[s]}
+                  <Text style={[styles.slotItemText, { color: slot.id === mealSlot ? Colors.nutrition : colors.textPrimary }]}>
+                    {slot.label}
                   </Text>
-                  {s === mealSlot && <Ionicons name="checkmark" size={16} color={Colors.nutrition} />}
+                  {slot.id === mealSlot && <Ionicons name="checkmark" size={16} color={Colors.nutrition} />}
                 </TouchableOpacity>
               ))}
             </View>
@@ -736,6 +759,7 @@ const styles = StyleSheet.create({
   resultBody: { flex: 1 },
   resultNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   resultName: { fontSize: 14, fontWeight: '600' },
+  resultSubtitle: { fontSize: 11, marginTop: 1, fontStyle: 'italic' },
   resultBrand: { fontSize: 12, marginTop: 1 },
   resultMacros: { fontSize: 12, marginTop: 3 },
   resultRight: { alignItems: 'flex-end', marginLeft: 12 },

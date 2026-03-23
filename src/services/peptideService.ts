@@ -59,12 +59,12 @@ type DoseInput = {
 
 // ─── Preset mapping helpers ──────────────────────────────────────────────────
 
-export function parseRoute(routeStr: string): Route {
+export function parseRoute(routeStr: string): Route | null {
   for (const part of routeStr.split(', ')) {
     const match = ROUTES.find((r) => r.toLowerCase() === part.trim().toLowerCase());
     if (match) return match;
   }
-  return 'SubQ';
+  return null;
 }
 
 export function parseUnit(unitStr: string): Unit {
@@ -133,7 +133,7 @@ export async function addPeptideFromPreset(
     notes: compound.notesForUsers,
     category: mapGroupToCategory(compound.group),
     halfLifeHours: compound.halfLifeHours,
-    route: parseRoute(compound.route),
+    route: parseRoute(compound.route) ?? 'SubQ',
     storageTemp: compound.storage,
     isPreset: true,
     presetId: compound.id,

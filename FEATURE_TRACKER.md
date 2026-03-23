@@ -1,6 +1,51 @@
 # PepMax Feature Tracker
 
-## Active Branch: `feature/m22-analytics-sentry-settings`
+## Active Branch: `feature/m22-tracked-cleanup`
+
+---
+
+## M22 Tracked Cleanup — Non-Blocking Observations Resolved
+
+**Status:** ✅ Ray-approved (conditional → fixes applied)
+**Date:** 2026-03-22
+**Branch:** `feature/m22-tracked-cleanup`
+
+### Fixes applied
+
+1. **Strength tooltip unit label** (`training/progress.tsx`) — `useAuth` + `userProfile?.units` → `'lbs'` or `'kg'` (defaults `'kg'` when profile unloaded); appended to est. 1RM tooltip text
+2. **HeartRateChart hardcoded axis colors** (`components/cardio/HeartRateChart.tsx` + `cardio/session-detail.tsx`) — `colors` prop added (typed `ReturnType<typeof useTheme>['colors']`); `'#ccc'`/`'#888'`/`'#eee'` replaced with `colors.border`/`colors.textSecondary`
+3. **Dark mode badge contrast** (`components/peptides/PresetBrowser.tsx`) — `statusBadgeProps(status, isDark)` now takes dark flag; dark-mode variants: FDA `#1B5E20`/`#A5D6A7`, Research `#BF360C`/`#FFCCBC`, Compounded `#424242`/`#E0E0E0`
+4. **`parseRoute` fallback audit** (`services/peptideService.ts`) — returns `Route | null` instead of always `'SubQ'`; `addPeptideFromPreset` uses `?? 'SubQ'`; `if (r) setRoute(r)` in `peptide-form.tsx` now has meaning
+5. **FlatList → .map() in recon calculator** (`peptides/recon-calculator.tsx`) — compound picker dropdown replaced with `.map()`; `FlatList` removed from imports
+
+---
+
+## Milestone 22 — Custom Meal Slots + Copy Yesterday's Meals
+
+**Status:** ✅ Ray-approved (conditional → fixes applied)
+**Date:** 2026-03-22
+
+### Features included
+
+#### Custom Meal Slots in Add-Food Flow
+- `src/types/nutrition.ts` — `FoodLogEntry.mealSlot: string` (widened from `MealSlot` union); `getSlotLabel(slotId, slots)` helper added after `DEFAULT_MEAL_SLOTS`
+- `src/services/nutritionService.ts` — `FoodLogInput.mealSlot: string`; removed `MealSlot` import
+- `src/services/recipeService.ts` — `logRecipeAsFood` param `mealSlot: string`; removed `MealSlot` import
+- `app/(tabs)/nutrition/add-food.tsx` — imports `useAuth`, loads `activeSlots` from `userProfile?.mealSlots ?? DEFAULT_MEAL_SLOTS`, slot state widened to `string`, slot picker iterates `activeSlots`; `useEffect([userProfile])` syncs `mealSlot` when profile loads after first render
+- `app/(tabs)/nutrition/food-detail.tsx` — same pattern: `useAuth`, `activeSlots`, `string` state, dynamic picker; `useEffect([userProfile])` sync fix applied
+- `app/(tabs)/nutrition/manual-entry.tsx` — same pattern
+- `app/(tabs)/nutrition/my-recipes.tsx` — `LogRecipeModal` gets `useAuth` + `activeSlots` directly; same picker overhaul
+- `app/(tabs)/nutrition/barcode-scan.tsx` — route param type `string`, `MealSlot` import removed
+
+#### Copy Yesterday's Meals
+- `src/services/nutritionService.ts` — `copyMealsFromDate(fromDate, toDate, slotFilter?)` — fetches source entries, sequential `logFood` calls (avoids HealthKit flooding), returns copied count
+- `app/(tabs)/nutrition/index.tsx` — `CopyMealsModal` component: slide-up sheet, per-slot checkboxes with item count + kcal, all pre-selected, "Copy Selected (N)" button, loading/error/empty states; copy icon added to header (between calendar and recipes); `showCopyModal` state; `onCopied` refreshes today's log; `yesterdayKey` computed at body level and included in `useEffect` deps (ESLint fix)
+
+### Architecture decisions
+- `MealSlot` union type kept as-is — still useful as documentation for the 4 defaults; `MEAL_SLOTS` and `MEAL_SLOT_LABELS` unchanged (used by settings screen for default slot management)
+- `FoodLogEntry.mealSlot` widened to `string` — Firestore never enforced the union at runtime; this brings the type contract in line with reality
+- Sequential `logFood` in `copyMealsFromDate` — intentional to avoid parallel HealthKit writes; each copy triggers body model recompute (fire-and-forget, last-write-wins acceptable)
+- `CopyMealsModal` fetches yesterday's data on every open (not eagerly on focus) — avoids unnecessary Firestore reads when user never opens the modal
 
 ---
 

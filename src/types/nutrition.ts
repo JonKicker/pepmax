@@ -26,6 +26,10 @@ export const DEFAULT_MEAL_SLOTS: MealSlotConfig[] = [
   { id: 'snacks', label: 'Snacks', isDefault: true },
 ];
 
+export function getSlotLabel(slotId: string, slots: MealSlotConfig[]): string {
+  return slots.find((s) => s.id === slotId)?.label ?? slotId;
+}
+
 export type NutritionTargets = {
   calorieTarget: number;
   proteinG: number;
@@ -36,7 +40,7 @@ export type NutritionTargets = {
 export type FoodLogEntry = {
   id: string;
   date: string;           // YYYY-MM-DD in local timezone (see toLocalDateKey)
-  mealSlot: MealSlot;
+  mealSlot: string;
   foodName: string;
   brand?: string;
   calories: number;
@@ -145,4 +149,6 @@ export type FoodSearchResult = {
   foodSource?: FoodSource;
   micronutrients100g?: Micronutrients;
   portions?: FoodPortion[];
+  usdaFullDescription?: string;  // original USDA verbose string (for subtitle)
+  usdaDataType?: string;         // 'Foundation' | 'SR Legacy' | etc.
 };
