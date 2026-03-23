@@ -200,6 +200,75 @@ export async function fetchHRV(date: string): Promise<number | null> {
   }
 }
 
+// ─── Read: HRV History (multi-day) ──────────────────────────────────────────
+
+/**
+ * Fetch the last N days of daily HRV samples from HealthKit.
+ * Returns one value per day (latest sample for that day). Used to bootstrap
+ * the 30-day HRV baseline on first recovery score computation.
+ */
+export async function fetchHRVHistory(
+  days: number,
+): Promise<Array<{ date: string; value: number }> | null> {
+  if (!HK) return null;
+  try {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - days);
+
+    const samples = await HK.queryQuantitySamples(
+      'HKQuantityTypeIdentifierHeartRateVariabilitySDNN',
+      { limit: 0, ascending: false, filter: { date: { startDate: start, endDate: end } } },
+    );
+    if (!samples || samples.length === 0) return null;
+
+    // Group by date, keep latest per day
+    const byDate = new Map<string, number>();
+    for (const s of samples) {
+      const d = new Date(s.endDate).toISOString().slice(0, 10);
+      if (!byDate.has(d)) byDate.set(d, Math.round(s.quantity));
+    }
+    return Array.from(byDate, ([date, value]) => ({ date, value }));
+  } catch (e) {
+    addBreadcrumb('healthKit', 'fetchHRVHistory failed', { error: String(e) });
+    return null;
+  }
+}
+
+// ─── Read: RHR History (multi-day) ──────────────────────────────────────────
+
+/**
+ * Fetch the last N days of daily resting heart rate samples from HealthKit.
+ * Returns one value per day (latest sample for that day). Used to bootstrap
+ * the 30-day RHR baseline on first recovery score computation.
+ */
+export async function fetchRHRHistory(
+  days: number,
+): Promise<Array<{ date: string; value: number }> | null> {
+  if (!HK) return null;
+  try {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - days);
+
+    const samples = await HK.queryQuantitySamples(
+      'HKQuantityTypeIdentifierRestingHeartRate',
+      { limit: 0, ascending: false, filter: { date: { startDate: start, endDate: end } } },
+    );
+    if (!samples || samples.length === 0) return null;
+
+    const byDate = new Map<string, number>();
+    for (const s of samples) {
+      const d = new Date(s.endDate).toISOString().slice(0, 10);
+      if (!byDate.has(d)) byDate.set(d, Math.round(s.quantity));
+    }
+    return Array.from(byDate, ([date, value]) => ({ date, value }));
+  } catch (e) {
+    addBreadcrumb('healthKit', 'fetchRHRHistory failed', { error: String(e) });
+    return null;
+  }
+}
+
 // ─── Read: Step Count ────────────────────────────────────────────────────────
 
 export async function fetchStepCount(date: string): Promise<number | null> {

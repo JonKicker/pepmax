@@ -18,6 +18,10 @@ export default function DashboardLayout() {
       <Stack.Screen name="progress-camera" options={{ title: 'Progress Photos', headerShown: false }} />
       <Stack.Screen name="photo-comparison" options={{ title: 'Compare' }} />
       <Stack.Screen name="photo-detail" options={{ title: 'Photo' }} />
+      <Stack.Screen name="morning-check-in" options={{ title: 'Morning Check-In' }} />
+      <Stack.Screen name="recovery-detail" options={{ title: 'Recovery Score' }} />
+      <Stack.Screen name="community" options={{ title: 'Community Library' }} />
+      <Stack.Screen name="template-detail" options={{ title: 'Template' }} />
     </Stack>
   );
 }

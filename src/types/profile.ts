@@ -1,5 +1,6 @@
 import { Timestamp } from 'firebase/firestore';
 import type { MealSlotConfig } from './nutrition';
+import type { AdaptiveCoachingState } from './adaptiveCoaching';
 
 export type Goal = 'peptides' | 'nutrition' | 'training' | 'cardio';
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
@@ -63,7 +64,13 @@ export type UserProfile = {
   notificationPrefs?: {
     doseReminders: boolean;
     workoutReminders: boolean;
+    recoveryCheckIn?: boolean;
+    recoveryCheckInHour?: number;   // 0–23, default 7
+    recoveryCheckInMinute?: number; // 0–59, default 0
   };
+
+  // Adaptive calorie coaching — optional; absent means feature not yet enabled
+  adaptiveCoaching?: AdaptiveCoachingState;
 
   // Meta
   onboardingComplete?: boolean;

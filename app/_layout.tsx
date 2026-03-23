@@ -15,6 +15,7 @@
 import { useEffect, useRef } from 'react';
 import { Stack, useRouter, useSegments, useRootNavigationState } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as Notifications from 'expo-notifications';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { ThemeProvider, useThemeContext } from '../src/contexts/ThemeContext';
 import { PremiumProvider, usePremium } from '../src/contexts/PremiumContext';
@@ -102,6 +103,17 @@ function AuthGuard() {
       if (!inTabs) router.replace('/(tabs)/dashboard');
     }
   }, [currentUser, userProfile, isLoading, profileLoading, segments, navigationState?.key]);
+
+  // Deep-link from push notifications (e.g. morning recovery check-in reminder)
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const screen = response.notification.request.content.data?.screen;
+      if (screen === 'morning-check-in' && currentUser) {
+        router.push('/(tabs)/dashboard/morning-check-in');
+      }
+    });
+    return () => sub.remove();
+  }, [router, currentUser]);
 
   return null;
 }

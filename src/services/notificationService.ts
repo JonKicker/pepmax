@@ -177,6 +177,56 @@ export async function cancelAllLowStockNotifications(): Promise<void> {
   }
 }
 
+// ─── Recovery check-in reminder ─────────────────────────────────────────────
+
+const RECOVERY_ID_KEY = 'pepmax:notif:recovery';
+
+/**
+ * Schedule a daily repeating recovery check-in reminder at the given time.
+ * Cancels any existing reminder before scheduling.
+ * Data payload includes `screen` for deep-link routing.
+ */
+export async function scheduleRecoveryReminder(
+  hour: number,
+  minute: number,
+): Promise<void> {
+  try {
+    await cancelRecoveryReminder();
+
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'PepMax — Morning Check-In',
+        body: 'How are you feeling? Tap to log your recovery.',
+        sound: true,
+        data: { screen: 'morning-check-in' },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
+        hour,
+        minute,
+        repeats: true,
+      },
+    });
+
+    await AsyncStorage.setItem(RECOVERY_ID_KEY, id);
+  } catch {
+    // Best-effort — scheduling failure should not block the app
+  }
+}
+
+/** Cancel the daily recovery check-in reminder. */
+export async function cancelRecoveryReminder(): Promise<void> {
+  try {
+    const id = await AsyncStorage.getItem(RECOVERY_ID_KEY);
+    if (id) {
+      await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
+      await AsyncStorage.removeItem(RECOVERY_ID_KEY);
+    }
+  } catch {
+    // Non-fatal
+  }
+}
+
 /** Cancel ALL dose reminders (e.g. when user disables the global toggle). */
 export async function cancelAllDoseReminders(): Promise<void> {
   try {

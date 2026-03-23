@@ -26,11 +26,20 @@ export const AnalyticsEvent = {
   DOSE_LOGGED: 'dose_logged',
   REMINDER_SET: 'reminder_set',
   SIDE_EFFECT_REPORTED: 'side_effect_reported',
+  SITE_MAP_OPENED: 'site_map_opened',
+  SITE_SELECTED_FROM_MAP: 'site_selected_from_map',
 
   // Nutrition
   FOOD_LOGGED: 'food_logged',
   FOOD_SEARCH_PERFORMED: 'food_search_performed',
   FAVORITE_FOOD_SAVED: 'favorite_food_saved',
+
+  // Adaptive calorie coaching
+  ADAPTIVE_COACHING_ENABLED: 'adaptive_coaching_enabled',
+  ADAPTIVE_COACHING_DISABLED: 'adaptive_coaching_disabled',
+  ADAPTIVE_CHECKIN_SHOWN: 'adaptive_checkin_shown',
+  ADAPTIVE_CHECKIN_ACCEPTED: 'adaptive_checkin_accepted',
+  ADAPTIVE_CHECKIN_DISMISSED: 'adaptive_checkin_dismissed',
 
   // Gym
   WORKOUT_STARTED: 'workout_started',
@@ -41,6 +50,10 @@ export const AnalyticsEvent = {
   // Cardio
   CARDIO_SESSION_STARTED: 'cardio_session_started',
   CARDIO_SESSION_COMPLETED: 'cardio_session_completed',
+  BEACON_ACTIVATED: 'beacon_activated',
+  BEACON_DEACTIVATED: 'beacon_deactivated',
+  BEACON_CONTACT_ADDED: 'beacon_contact_added',
+  BEACON_CONTACT_REMOVED: 'beacon_contact_removed',
 
   // Body tracking
   WEIGHT_LOGGED: 'weight_logged',
@@ -52,6 +65,20 @@ export const AnalyticsEvent = {
   PAYWALL_VIEWED: 'paywall_viewed',
   SUBSCRIPTION_STARTED: 'subscription_started',
   SUBSCRIPTION_RESTORED: 'subscription_restored',
+
+  // Recovery
+  RECOVERY_SCORE_COMPUTED: 'recovery_score_computed',
+  RECOVERY_CHECK_IN_COMPLETED: 'recovery_check_in_completed',
+  RECOVERY_CHECK_IN_SKIPPED: 'recovery_check_in_skipped',
+  RECOVERY_DETAIL_VIEWED: 'recovery_detail_viewed',
+  RECOVERY_REMINDER_CONFIGURED: 'recovery_reminder_configured',
+
+  // Community templates
+  COMMUNITY_LIBRARY_OPENED: 'community_library_opened',
+  TEMPLATE_PUBLISHED: 'template_published',
+  TEMPLATE_IMPORTED: 'template_imported',
+  TEMPLATE_REVIEWED: 'template_reviewed',
+  TEMPLATE_REPORTED: 'template_reported',
 
   // General
   APP_OPENED: 'app_opened',

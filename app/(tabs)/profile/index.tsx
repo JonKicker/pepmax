@@ -42,7 +42,10 @@ import { updateDocument, COLLECTIONS } from '../../../src/services/firebase/fire
 import {
   requestPermissions,
   cancelAllDoseReminders,
+  scheduleRecoveryReminder,
+  cancelRecoveryReminder,
 } from '../../../src/services/notificationService';
+import { analytics, AnalyticsEvent } from '../../../src/services/analytics';
 import { calculateTDEE, calculateMacros, ACTIVITY_LEVELS, feetInchesToCm, cmToFeetInches, kgToLbs, lbsToKg } from '../../../src/utils/tdee';
 import type { Units, Sex } from '../../../src/types/profile';
 import { SettingsSection } from '../../../src/components/settings/SettingsSection';
@@ -212,17 +215,27 @@ export default function SettingsScreen() {
     if (!result.error) updateProfile({ units: newUnits });
   }
 
-  async function handleNotifToggle(key: 'doseReminders' | 'workoutReminders', value: boolean) {
+  async function handleNotifToggle(key: 'doseReminders' | 'workoutReminders' | 'recoveryCheckIn', value: boolean) {
     const newPrefs = { ...notifPrefs, [key]: value };
     const result = await updateDocument(COLLECTIONS.PROFILE, 'data', { notificationPrefs: newPrefs });
     if (!result.error) {
       updateProfile({ notificationPrefs: newPrefs });
-      // Wire system notification permissions / cancellation additively (does not affect Firestore save)
       if (key === 'doseReminders') {
         if (value) {
-          requestPermissions().catch(() => {}); // prompt if not yet granted
+          requestPermissions().catch(() => {});
         } else {
-          cancelAllDoseReminders().catch(() => {}); // cancel all scheduled dose reminders
+          cancelAllDoseReminders().catch(() => {});
+        }
+      } else if (key === 'recoveryCheckIn') {
+        if (value) {
+          requestPermissions().catch(() => {});
+          const hour = notifPrefs.recoveryCheckInHour ?? 7;
+          const minute = notifPrefs.recoveryCheckInMinute ?? 0;
+          scheduleRecoveryReminder(hour, minute).catch(() => {});
+          analytics.track(AnalyticsEvent.RECOVERY_REMINDER_CONFIGURED, { enabled: true, hour, minute });
+        } else {
+          cancelRecoveryReminder().catch(() => {});
+          analytics.track(AnalyticsEvent.RECOVERY_REMINDER_CONFIGURED, { enabled: false });
         }
       }
     }
@@ -535,6 +548,18 @@ export default function SettingsScreen() {
               trackColor={{ true: Colors.accent }}
             />
           }
+          separator
+        />
+        <SettingsRow
+          icon="bed-outline"
+          label="Recovery Check-In (7:00 AM)"
+          rightElement={
+            <Switch
+              value={notifPrefs.recoveryCheckIn ?? false}
+              onValueChange={(v) => handleNotifToggle('recoveryCheckIn', v)}
+              trackColor={{ true: Colors.accent }}
+            />
+          }
         />
       </SettingsSection>
 
@@ -710,6 +735,12 @@ export default function SettingsScreen() {
           icon="shield-checkmark-outline"
           label="Privacy & Data"
           onPress={() => router.push('/(tabs)/profile/privacy')}
+          separator
+        />
+        <SettingsRow
+          icon="people-outline"
+          label="My Templates"
+          onPress={() => router.push('/(tabs)/profile/my-templates')}
           separator
         />
         <SettingsRow

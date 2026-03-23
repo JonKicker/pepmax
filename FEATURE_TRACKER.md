@@ -1,5 +1,418 @@
 # PepMax Feature Tracker
 
+## Active Branch: `feature/recovery-readiness-score`
+
+---
+
+## Phase 8.3 — Apple Watch Gym Module
+
+**Status:** 🔄 Ray review pending
+**Date:** 2026-03-23
+**Branch:** `feature/recovery-readiness-score`
+
+### What's been built
+
+- `ios-native/PepMaxWatch Watch App/WatchDataModels.swift` — Added `WatchLoggedSet`, `WatchWorkoutExercise`, `WatchActiveWorkout` structs for live workout state
+- `ios-native/PepMaxWatch Watch App/WatchWorkoutManager.swift` — New singleton `ObservableObject` state machine: `.idle`/`.exercising`/`.resting`/`.summary` phases; `startWorkout()`, `logSet()`, `skipRest()`, `skipExercise()`, `finishWorkout()`, `reset()`; internal rest timer (haptic at zero) + elapsed timer; sends `GYM_SET_LOGGED` per set and `GYM_WORKOUT_COMPLETE` on save via `WatchSessionManager.shared.sendMessageToPhone()`
+- `ios-native/PepMaxWatch Watch App/Views/GymTabView.swift` — Full rewrite: `NavigationStack` + `navigationDestination(isPresented:)` for active workout; 4 states: awaiting sync / rest day (checkmark + weekly volume) / active-in-progress (Resume button) / scheduled workout (Start Workout button + exercise count); builds local `WatchActiveWorkout` from synced gym glance data as fallback
+- `ios-native/PepMaxWatch Watch App/Views/ActiveWorkoutView.swift` — Set-by-set logging: exercise name (bold), "Set X of Y", Digital Crown weight (5 lb increments), +/- reps (44pt targets), "Log Set" button; `.sheet(isPresented:)` for rest timer; `navigationDestination(isPresented:)` for summary; `onChange(of: phase)` drives all navigation transitions
+- `ios-native/PepMaxWatch Watch App/Views/RestTimerView.swift` — `Circle().trim` depleting ring + remaining seconds (large); next exercise preview; "Skip Rest" button (44pt); parent sheet dismissed via `phase → .exercising` `onChange`
+- `ios-native/PepMaxWatch Watch App/Views/WorkoutSummaryView.swift` — Duration / volume / sets completed vs planned; "Save Workout" button calls `finishWorkout()` (sends `GYM_WORKOUT_COMPLETE` to phone) then `reset()` after 0.5s (triggers nav pop via `showActiveWorkout = false`)
+- `ios-native/PepMaxWatch Watch App/PepMaxWatchApp.swift` — Added `WatchWorkoutManager.shared` as `@StateObject`; injected as `.environmentObject`; `onContextParsed` now handles `"ACTIVE_WORKOUT"` type → decodes with `millisecondsSince1970` → calls `workoutManager.startWorkout()` if idle
+- `ios-native/PepMaxWatch Watch App/ContentView.swift` — Added `workoutManager` environment object, passed to `GymTabView`
+- `ios-native/PepMaxWatch Watch App/WatchSessionManager.swift` — Added `"ACTIVE_WORKOUT"` to forwarding switch case
+- `src/utils/watchSync.ts` — Added `pushActiveWorkoutToWatch(session)`: maps `SessionExercise[]` to watch format, calls `sendToWatch('WORKOUT_UPDATE', { type: 'ACTIVE_WORKOUT', ... })` fire-and-forget
+- `src/types/watchConnectivity.ts` — Added `'GYM_SET_LOGGED'` and `'GYM_WORKOUT_COMPLETE'` to `WatchMessageType`
+- `src/hooks/useWorkoutSession.ts` — Calls `pushActiveWorkoutToWatch(newSession)` after session created in `startSession()`
+- `app/(tabs)/training/active-session.tsx` — Added `onWatchMessage` listener: `GYM_SET_LOGGED` → `completeSet()`; `GYM_WORKOUT_COMPLETE` → navigate to session-summary
+
+### Architecture decisions
+
+- **WatchWorkoutManager is a singleton** — consistent with `WatchStateManager` / `WatchSessionManager`; allows `PepMaxWatchApp.onContextParsed` callback to call `startWorkout()` without capturing a `@StateObject`
+- **LocalFallback for watch-initiated workouts** — if ACTIVE_WORKOUT payload arrives before the watch tab is opened, `PepMaxWatchApp.onContextParsed` starts the workout. If the user taps "Start Workout" before the phone sends the payload, `GymTabView.startLocalWorkout()` builds a workout from the synced glance data with `sessionId: "local"` (phone will reconcile on `GYM_WORKOUT_COMPLETE`)
+- **Sheet for rest timer** — cleaner than push navigation; naturally overlays; dismissed when `phase → .exercising`
+- **Real-time channel (`sendToWatch`) for ACTIVE_WORKOUT** — `updateApplicationContext` (background) would overwrite the GYM glance data; `sendToWatch` (real-time) preserves both
+- **Weight in lbs only (Phase 1)** — Digital Crown in 5 lb increments; unit support deferred to Phase 2
+
+---
+
+## Community Protocol Templates
+
+**Status:** 🔄 Conditional approval — mandatory fixes applied, awaiting Ray re-check
+**Date:** 2026-03-23
+**Branch:** `feature/recovery-readiness-score`
+
+### What's been built
+
+**Phase 1 — Foundation**
+- `src/types/communityTemplate.ts` — all community types: `CommunityTemplate`, `TemplateReview`, `TemplateReport`, `ImportedTemplate`, `ProtocolData` discriminated union, `PeptideCycleProtocol`, `WorkoutProtocol`, `NutritionProtocol`
+- `src/utils/anonymousId.ts` — SHA-256 hashing of uid via `expo-crypto` with app salt
+- `src/services/firebase/communityFirestore.ts` — top-level collection CRUD: `addGlobalDocument`, `getGlobalDocument`, `queryGlobalDocuments`, `updateGlobalDocument`, `addSubDocument`, `querySubDocuments`, `incrementField`
+- `firestore.rules` — rules for `/templates`, `/templates/{id}/reviews`, `/reports`, `/bannedUsers`
+
+**Phase 2 — Publish Flow**
+- `src/services/communityTemplateService.ts` — full service: publish, query, import, review, report, aggregate recompute
+- `src/components/community/PublishTemplateModal.tsx` — bottom-sheet: preview → title/desc/tags → disclaimer → publish
+- `app/(tabs)/peptides/cycle-planner.tsx` — "Share as Community Template" button on Step 4 (Review)
+- `app/(tabs)/training/templates.tsx` — share icon on each template card
+
+**Phase 3 — Library Browser**
+- `src/components/community/StarRating.tsx` — display + interactive star component
+- `src/components/community/CategoryTabs.tsx` — horizontal chip filter
+- `src/components/community/TemplateCard.tsx` — compact library card
+- `src/hooks/useCommunityTemplates.ts` — paginated data hook with category/sort/search
+- `app/(tabs)/dashboard/community.tsx` — library screen with search, filter, sort, infinite scroll
+- `app/(tabs)/dashboard/_layout.tsx` — registered community + template-detail screens
+- `app/(tabs)/dashboard/index.tsx` — Community Library entry card
+
+**Phase 4 — Template Detail + Import + Reviews + Reports**
+- `src/components/community/ProtocolView.tsx` — category-switched protocol renderer
+- `src/components/community/ReviewCard.tsx` — review display
+- `src/components/community/ReviewModal.tsx` — write review bottom sheet
+- `src/components/community/ReportModal.tsx` — report bottom sheet
+- `src/components/community/ImportConfirmModal.tsx` — import confirmation with rename
+- `app/(tabs)/dashboard/template-detail.tsx` — full detail screen with sticky import button
+
+**Phase 5 — Cloud Functions**
+- `functions/src/index.ts` — entry point
+- `functions/src/onReviewWrite.ts` — recompute averageRating/reviewCount on review write
+- `functions/src/onReportCreate.ts` — auto-flag at 3+ reports
+- `functions/package.json` + `tsconfig.json` — Functions project setup
+- `firebase.json` — Functions + emulators config
+
+**Phase 6 — Polish**
+- `src/components/community/EmptyState.tsx` — reusable empty state
+- `app/(tabs)/profile/my-templates.tsx` — My Published Templates screen
+- `app/(tabs)/profile/_layout.tsx` — registered my-templates screen
+- `app/(tabs)/profile/index.tsx` — My Templates SettingsRow
+- `src/services/analytics.ts` — 5 new community events
+- `src/services/firebase/firestore.ts` — added `IMPORTED_TEMPLATES` collection key
+
+### Architecture decisions
+- `/templates` is top-level (not under `users/{uid}/`) — first cross-user collection
+- `anonymousId` = SHA-256(uid + APP_SALT) via expo-crypto — consistent, not reversible casually
+- `communityFirestore.ts` is a separate module from `firestore.ts` — top-level vs user-scoped
+- Client-side aggregate stopgap until Cloud Functions deployed (recomputeAverageRating)
+- Import creates true deep copy via existing CRUD (no reference to community template)
+- `importedTemplates` tracked under `users/{uid}/importedTemplates/` via existing addDocument
+
+### Security flags
+
+**Addressed (Ray CONDITIONAL APPROVAL — 2026-03-23)**
+1. **Template update rule — known vandalism risk**: The `allow update` rule only prevents changing `anonymousAuthorId`. Any authenticated user can update any template's content (title, description, protocolData, status) by preserving the publicly-readable hash. Comment updated in `firestore.rules`. Server-side authorship enforcement requires Cloud Functions (Phase 5).
+2. **Banned users could post reviews**: Fixed — added `!exists(bannedUsers/uid)` ban check to review `allow create` rule in `firestore.rules`.
+3. **onReviewWrite NaN vulnerability**: Fixed — `onReviewWrite.ts` now validates `typeof r.rating === 'number' && isFinite(r.rating)` before summing.
+4. **importTemplate unknown-category silent no-op**: Fixed — explicit `else` branch returns an error for unrecognized categories.
+
+**Tracked known risks (post-MVP)**
+5. **Duplicate import inflation**: No server-side check against re-importing the same template. Move enforcement to Cloud Function if abused.
+6. **Client-side flagging race condition**: `reportTemplate()` has a read-after-write race — concurrent callers may fail to trigger auto-flag. Documented in code. Cloud Function `onReportCreate` (Phase 5) is the fix.
+7. **`incrementField` field injection**: Helper takes arbitrary `field: string`. Currently only called with hardcoded names. Never pass user-controlled input to this helper. Documented in code.
+8. One-review-per-user enforced client-side + Cloud Function only. Firestore rules can't check subcollection uniqueness.
+
+---
+
+## Recovery Readiness Score
+
+**Status:** 🔄 Ray review pending
+**Date:** 2026-03-23
+**Branch:** `feature/recovery-readiness-score`
+
+### What's been built
+
+#### Types & Pure Scoring Engine
+- `src/types/recoveryScore.ts` — `RecoveryZone`, `RecoverySubScores`, `RecoverySubScoreWeights`, `RecoveryScoreResult`, `MorningCheckInInput`, `RecoveryScoreInputs`, `RecoveryScoreDoc`, `ScoreBreakdownEntry`
+- `src/utils/recoveryScore.ts` — Pure scoring functions: `computeSleepSubScore` (7-9h=100, <6h=30, deep sleep bonus), `computeHrvSubScore` (vs 30-day avg, 70/30 HRV/RHR blend), `computeTrainingLoadSubScore` (acute:chronic ratio), `computeNutritionSubScore` (protein+calorie adherence), `computeSubjectiveSubScore` (1-5 → 0-100 + stress penalty), `redistributeWeights` (proportional scaling when sources unavailable), `calculateRecoveryScore` (main orchestrator), zone/label/color/multiplier helpers, `getRecommendations` (zone-specific + driver-specific)
+
+#### Service Layer
+- `src/services/recoveryScoreService.ts` — `computeAndSaveRecoveryScore(checkIn, profile)` orchestrates HealthKit + Firestore + nutrition + training data; `getTodayRecoveryScore()`; `getRecoveryScoreHistory(days)`. Includes HRV/RHR baseline bootstrap (30-day HealthKit history) and EMA update (alpha=0.1).
+- `src/services/healthKitService.ts` — Added `fetchHRVHistory(days)` and `fetchRHRHistory(days)` for multi-day HealthKit queries
+- `src/services/notificationService.ts` — Added `scheduleRecoveryReminder(hour, minute)` (daily CALENDAR trigger with deep-link data) and `cancelRecoveryReminder()`
+- `src/services/analytics.ts` — 5 new events: `RECOVERY_SCORE_COMPUTED`, `RECOVERY_CHECK_IN_COMPLETED`, `RECOVERY_CHECK_IN_SKIPPED`, `RECOVERY_DETAIL_VIEWED`, `RECOVERY_REMINDER_CONFIGURED`
+- `src/types/profile.ts` — Added `recoveryCheckIn?`, `recoveryCheckInHour?`, `recoveryCheckInMinute?` to `notificationPrefs`
+
+#### Components
+- `src/components/recovery/ScoreGauge.tsx` — Circular SVG arc (react-native-svg), zone-colored, center score text, label below
+- `src/components/recovery/SubScoreBar.tsx` — Horizontal progress bar per sub-score, colored by quality (green >70, yellow 50-70, red <50)
+- `src/components/recovery/RecoveryTrendChart.tsx` — 7-day Victory-native sparkline with area fill and touch tooltips
+- `src/components/dashboard/RecoveryScoreCard.tsx` — Replaces old RecoveryCard. Three states: new score (gauge + zone + recommendation), legacy multiplier (backward compat), no score (CTA button)
+
+#### Screens & Wiring
+- `app/(tabs)/dashboard/morning-check-in.tsx` — Simplified check-in: 5 emoji feeling buttons (1-5) + optional stress pills (Low/Med/High) + optional notes. Auto-fetches HealthKit sleep, shows Apple Health badge. Submit → compute score → brief result display → navigate back.
+- `app/(tabs)/dashboard/recovery-detail.tsx` — Full breakdown: large ScoreGauge, primary recommendation, 5 SubScoreBar components with weight percentages, full recommendations list, 7-day RecoveryTrendChart, Redo Check-In button.
+- `app/(tabs)/dashboard/_layout.tsx` — Registered `morning-check-in` and `recovery-detail` screens
+- `app/(tabs)/dashboard/index.tsx` — Swapped `RecoveryCard` → `RecoveryScoreCard`, removed `RecoveryCheckInModal` + auto-trigger useEffect, navigation to new screens
+- `src/services/dashboardService.ts` — Switched from `getRecovery()` to `getTodayRecoveryScore()`
+- `src/types/dashboard.ts` — Changed `recovery` field from `RecoveryInput` to `RecoveryScoreDoc`
+- `app/_layout.tsx` — Added `Notifications.addNotificationResponseReceivedListener` for deep-link from recovery reminder → morning-check-in screen
+- `app/(tabs)/profile/index.tsx` — Added "Recovery Check-In (7:00 AM)" toggle in Notifications section
+
+### Architecture decisions
+- **Evolves, not replaces**: Same `RECOVERY_LOG/{date}` Firestore collection. New fields added alongside old ones. `recoveryMultiplier` derived from score (0.5 + score/100) for Body Model backward compat.
+- **Weight redistribution**: When data sources are unavailable (no HealthKit, no nutrition), weights are proportionally redistributed to remaining sources. Always computes a score if at least subjective input is available.
+- **4-zone system**: green (80-100) "High Recovery", yellow (60-79) "Moderate", orange (40-59) "Below Baseline", red (0-39) "Low Recovery"
+- **HRV/RHR baselines**: EMA (alpha=0.1) stored in recovery doc. Bootstrapped from 30-day HealthKit history on first use. Today's value as fallback if no history.
+- **Training load reuse**: Imports `computeAcuteChronicRatio` from `bodyModelCalc.ts` — no duplication
+- **Screen over modal**: Morning check-in is a navigable screen (not modal) for push notification deep-link support
+- **Fire-and-forget Body Model**: `computeAndSaveBodyModel(date)` fires after score save, same pattern as old recovery service
+
+### Ray Review Fixes Applied
+
+**Blocking (all resolved):**
+1. `validateCheckIn()` added to `recoveryScoreService.ts` — validates `feelingRating` (integer 1-5) and `stress` (integer 1-3 if present) at system boundary before any computation
+2. `submittingRef` guard added to `morning-check-in.tsx` `handleSubmit` — prevents double-tap race condition; `navTimerRef` cleanup on unmount prevents state update on unmounted component
+3. `getRecoveryScoreHistory` now filters `where('date', '>=', startDateKey)` — skips pre-upgrade docs that lack `recoveryScore`, ensures N valid days returned
+
+**Non-blocking (resolved):**
+4. Dead `useAuth` import removed from `recovery-detail.tsx`
+5. `navTimerRef` cleanup on unmount added (fixed alongside #2)
+
+**Non-blocking (tracked for next pass):**
+6. `hkBadge` dark-mode hardcoded colors — same as M22 tracked observation
+7. Legacy multiplier branch in RecoveryScoreCard not tappable — polish item
+8. Nutrition sub-score "50/100" UX label when only one target is set — polish item
+
+### Security considerations
+- No new external API calls
+- HealthKit read-only (no new write permissions)
+- Firestore writes scoped to user's own RECOVERY_LOG
+- Notification data payload contains only screen route name (no PII)
+- Notes truncated to 500 chars (same as existing)
+
+---
+
+## "What If" Dose Simulator
+
+**Status:** ✅ Ray-approved (conditional → all 3 blocking fixes applied)
+**Date:** 2026-03-23
+**Branch:** `feature/dose-simulator`
+
+### What's been built
+
+- `src/utils/pharmacokinetics.ts` — Pure utility: `generateProjectedDoses` (synthetic future doses from frequency), `computeCurveStats` (peak/trough/steady-state from decay curve), `computeVialDurationWeeks` (parses compound DB strings), `frequencyToIntervalHours`, `SimFrequency` type (extends `InjectionFrequency` with `'every2Weeks'`), frequency mappers (`mapSimFreqToPeptideFreq`, `mapPeptideFreqToSimFreq`), `computeSimWindowMs` (auto-extends for long half-lives)
+- `src/hooks/useDoseSimulator.ts` — Data hook: fetches peptides + doses, generates baseline curve (actual doses) + simulated curve (projected doses) via `generateCompoundCurve()`, computes `ProtocolStats` for both, filters to peptides with `halfLifeHours > 0`, adaptive time window
+- `src/components/peptides/DoseSimulatorChart.tsx` — Victory-native dual-curve chart: baseline (blue #2E86C1, solid) + simulated (orange #E8722A, dashed), vertical "now" marker, legend, VictoryVoronoi tooltips, empty/no-baseline states
+- `src/components/peptides/ComparisonStatsTable.tsx` — Side-by-side stats table: peak level, trough level, steady-state time, weekly usage, doses/week, vial duration
+- `app/(tabs)/peptides/dose-simulator.tsx` — Main screen: compound picker (dropdown), dose stepper (+/−), frequency pill buttons, Calendar date picker, chart, stats table, disclaimer, Apply/Discard buttons. Apply updates `Peptide` doc + matching active `Cycle` if exists
+- `app/(tabs)/peptides/half-life-timeline.tsx` — Added "Simulate" pill button (flask icon) below chart, navigates to dose-simulator
+- `app/(tabs)/peptides/_layout.tsx` — Registered `dose-simulator` route
+
+### Architecture decisions
+
+- Reuses existing `generateCompoundCurve()` from `halfLifeDecay.ts` for both curves — no duplication of pharmacokinetic math
+- New `pharmacokinetics.ts` keeps simulator-specific math separate from the existing decay engine
+- Adaptive time window: `max(30d, ceil(5 × halfLifeHours × 2 / 24)d)` ensures steady-state visible for semaglutide (168h → ~70d)
+- Compound picker shows only user's saved peptides with `halfLifeHours > 0` (not full COMPOUND_DATABASE)
+- Apply updates `Peptide.defaultDose` + `Peptide.frequency`; also updates matching active `Cycle` if one exists (non-critical failure)
+- All simulation is client-side, in-memory — no Firestore writes until Apply confirmed
+- `SimFrequency` extends `InjectionFrequency` with `'every2Weeks'` per prompt requirement
+
+### Ray Review Fixes Applied
+
+**Blocking (all resolved):**
+1. ✅ `buildStats` now passes `compound.concentrationAfterRecon` as first arg (was passing `typicalVialSize` twice)
+2. ✅ `computeVialDurationWeeks` normalizes both vial and weekly usage to mg — dead `vialMg` variable eliminated
+3. ✅ `ComparisonStatsTable` header border uses `colors.border` via inline style — dark mode safe
+
+**Non-blocking (tracked):**
+4. `2xWeek` → `3xPerWeek` lossy frequency mapping — consider adding `2xPerWeek` to `Frequency` type before public release
+
+---
+
+## Injection Site Rotation Map
+
+**Status:** ✅ Ray-approved (2 rounds — blocking animation fix + 3 import cleanups applied)
+**Date:** 2026-03-23
+**Branch:** `main`
+
+### What's been built
+
+- `src/utils/siteRotation.ts` — Pure utility: `BodyMapZone`, `SiteStats`, `computeSiteStats`, `suggestNextSite`, `getSiteStatus`, `getSiteColor`, `daysSince`, `BODY_MAP_ZONES` (10 zones → 8 InjectionSite values), `SITE_STATUS_COLORS`
+- `src/components/peptides/BodyMapSVG.tsx` — SVG body outline (react-native-svg) with 10 tappable color-coded zones; front/back views; selected zone gets 2px Colors.peptide highlight
+- `src/components/peptides/SiteDetailSheet.tsx` — Animated slide-up bottom sheet; shows site name, status badge, last used date + days, total injection count, "Select This Site" button
+- `src/components/peptides/InjectionSiteMap.tsx` — Full modal: suggestion banner, front/back toggle pill, BodyMapSVG, SiteDetailSheet; loads dose history via getDoses() on each open
+- `src/components/peptides/SiteRotationThumbnail.tsx` — Small (68×100) front-only body mini-map with color-coded dots; loads its own stats on mount
+- `app/(tabs)/peptides/log-dose.tsx` — Site grid replaced with "Select Injection Site" button (body-outline icon + label); opens InjectionSiteMap modal; site state type unchanged
+- `app/(tabs)/peptides/index.tsx` — "Site Map" quick-action button added; InjectionSiteMap modal in view-only mode
+- `src/services/analytics.ts` — `SITE_MAP_OPENED` and `SITE_SELECTED_FROM_MAP` events added
+
+### Architecture decisions
+- **No new Firestore collection** — rotation stats derived entirely from existing `doses` collection via `getDoses()`; `computeSiteStats` groups client-side
+- **10 visual zones → 8 InjectionSite values** — front/back thighs both map to `leftQuad`/`rightQuad`; no type changes, full backward compatibility with existing dose records
+- **Modal pattern** — consistent with existing peptide modals (animationType="slide", transparent backdrop, borderTopLeftRadius: 20)
+- **Stats cache cleared on each open** — ensures fresh rotation data after a new dose is logged
+- Color thresholds: red ≤ 2 days, yellow 3–6 days, green 7+ days, gray = never used
+
+---
+
+## Adaptive Calorie Coaching
+
+**Status:** ✅ Ray-approved (conditional → all 5 blocking + 5 non-blocking fixes applied)
+**Date:** 2026-03-23
+**Branch:** `feature/m22-tracked-cleanup`
+
+### Features included
+
+- `src/types/adaptiveCoaching.ts` — `AdaptiveCoachingState`, `WeightTrendPoint`, `AdaptiveTDEEResult`, `AdaptiveTargets`, `DataReadiness`
+- `src/types/profile.ts` — `adaptiveCoaching?: AdaptiveCoachingState` added to `UserProfile`
+- `src/utils/expenditureAlgorithm.ts` — pure: `smoothWeight` (EMA α=0.1), `calculateAdaptiveTDEE`, `generateTargets` (sex-based calorie floors), `daysUntilNextCheckIn`, `hasEnoughData`
+- `src/services/adaptiveCoachingService.ts` — `getAdaptiveCoachingData`, `runWeeklyCheckIn`, `acceptCheckIn`, `dismissCheckIn`, `enableAdaptiveCoaching`, `disableAdaptiveCoaching`
+- `app/(tabs)/nutrition/weight-log.tsx` — quick daily weight entry, 30-day trend chart with EMA overlay, opt-in card
+- `src/components/nutrition/WeeklyCheckInModal.tsx` — ready/progress states, floor guardrail warning, "How it works" collapsible
+- `app/(tabs)/nutrition/index.tsx` — scale icon, TDEE info card, `useFocusEffect` check-in trigger, modal
+- `app/(tabs)/nutrition/settings.tsx` — `AdaptiveCoachingSection` toggle with status display
+- `src/components/body/WeightChart.tsx` — optional `smoothedData` EMA overlay prop
+- `src/services/analytics.ts` — 5 new events
+
+### Ray Review Fixes Applied
+
+**Blocking (all resolved):**
+1. ✅ `dismissCheckIn` now writes full `AdaptiveCoachingState` — prevents nested map clobber
+2. ✅ `acceptCheckIn` now takes `existing: AdaptiveCoachingState` — preserves `dataStartDate`
+3. ✅ `daysUntilNextCheckIn` uses local date arithmetic — fixes UTC-vs-local parsing bug
+4. ✅ `trendLabel` conditionally converts only for imperial users — metric users see correct kg values
+5. ✅ `todayKey` moved inside component body — no stale date if app left open overnight
+
+**Non-blocking (all resolved):**
+6. ✅ No double Firestore fetch — `runWeeklyCheckIn` now accepts pre-fetched `AdaptiveCoachingData`
+7. ✅ `refreshProfile()` called after `acceptCheckIn` — CalorieRing updates immediately
+8. ✅ Dead `smoothWeight` import removed from `weight-log.tsx`
+9. ✅ Duplicate `adaptiveCoachingService` import merged into one
+10. ✅ Dead `maxDeficitTarget`/`MAX_DEFICIT` removed from `generateTargets`
+
+---
+
+## Phase 8.2 — Watch Navigation, Data Models & State Manager
+
+**Status:** ✅ Ray-approved (conditional → blocking fix applied)
+**Date:** 2026-03-23
+**Branch:** `feature/phase8-watch`
+
+### What's been built
+
+- `ios-native/PepMaxWatch Watch App/WatchDataModels.swift` — 5 Codable+Equatable structs: `WatchNutritionState`, `WatchPeptideState`, `WatchGymState` (with `WatchGymExercise`), `WatchCardioState`, `WatchReadinessState`. Each has `static let empty` default.
+- `ios-native/PepMaxWatch Watch App/WatchStateManager.swift` — Singleton `ObservableObject`; `@Published` for all 5 module states + `lastSyncTime` + `hasSynced`; `handleParsedContext(type:context:)` decodes `[String:Any]` → Codable via JSONSerialization; persists to `UserDefaults(suiteName: "group.com.pepmax.watchapp")` for future WidgetKit complications.
+- `ios-native/PepMaxWatch Watch App/WatchSessionManager.swift` — Patched: `onContextParsed` callback added; `parseContext` expanded with `"PEPTIDE"`, `"GYM"`, `"CARDIO"`, `"READINESS"` cases; forwarding call at end of switch. Existing nutrition `@Published` properties unchanged.
+- `ios-native/PepMaxWatch Watch App/Utilities/Color+Hex.swift` — `Color.init(hex:)` extension.
+- `ios-native/PepMaxWatch Watch App/Views/ReadinessTabView.swift` — red accent, `heart.circle.fill`, readiness score or placeholder
+- `ios-native/PepMaxWatch Watch App/Views/PeptideTabView.swift` — #7B2D8E accent, `syringe.fill`, compound name or placeholder
+- `ios-native/PepMaxWatch Watch App/Views/GymTabView.swift` — #E67E22 accent, `dumbbell.fill`, workout name / rest day / placeholder
+- `ios-native/PepMaxWatch Watch App/Views/NutritionTabView.swift` — #27AE60 accent; wraps existing `NutritionGlanceView` + `MacroBarView` + `NutritionEmptyView` (moved from ContentView.swift)
+- `ios-native/PepMaxWatch Watch App/Views/CardioTabView.swift` — #2980B9 accent, `figure.run`, weekly miles or placeholder
+- `ios-native/PepMaxWatch Watch App/ContentView.swift` — Rewritten as 5-page vertical `TabView` (`.tabViewStyle(.verticalPage)`). NutritionGlanceView/MacroBarView/EmptyStateView moved to NutritionTabView.swift.
+- `ios-native/PepMaxWatch Watch App/PepMaxWatchApp.swift` — Added `WatchStateManager` `@StateObject`; wires `onContextParsed` callback in `init()`; injects both environment objects.
+
+### Ray Review Fixes Applied
+
+**Blocking (resolved):**
+1. ✅ `GymTabView` rest day logic fixed — condition now gates on `hasSynced` alone; shows "Rest Day" / "No workout logged" / workout name correctly
+
+**Non-blocking (all resolved):**
+2. ✅ `decodeFromDict` now logs serialization and decode failures via `NSLog` with type name + error description
+3. ✅ `decoder.dateDecodingStrategy = .millisecondsSince1970` — handles JS `Date.now()` for `WatchPeptideState.nextDoseTime`
+4. ✅ `NutritionTabView` + `NutritionGlanceView` migrated to `WatchStateManager.nutrition` — dual `hasSynced` eliminated; `ContentView` no longer references `sessionManager`
+5. ✅ `NutritionEmptyView` gets `.tint(accent)` from `NutritionTabView`
+
+### Architecture decisions
+- `WatchStateManager` composes alongside `WatchSessionManager` (does not own WCSession) — forwarding callback keeps session ownership clean
+- All 5 tab views read exclusively from `WatchStateManager` — single source of truth on watch
+- `decodeFromDict<T>` bridges `[String:Any]` → Codable via JSON serialization — avoids manual key mapping
+- Complications deferred to dedicated prompt (requires Widget Extension Xcode target + App Group entitlements)
+
+### Required manual step (macOS Xcode)
+- Add `group.com.pepmax.watchapp` App Group entitlement to the watch target for `UserDefaults` suite to work (falls back to `.standard` otherwise — functional, just not shareable with future complications)
+
+---
+
+## Phase 8.1 — Today's Macros Watch Screen
+
+**Status:** 🔄 Ray review pending
+**Date:** 2026-03-23
+**Branch:** `feature/phase8-watch`
+
+### What's been built
+
+- `src/utils/watchSync.ts` — `pushNutritionToWatch(entries, targets)` fire-and-forget helper; computes totals from entries, calls `updateWatchState` with nutrition payload including consumed + target values + timestamp
+- `app/(tabs)/nutrition/index.tsx` — imports `pushNutritionToWatch`, calls it after `setEntries` in `load()` with loaded entries and user targets
+- `ios-native/PepMaxWatch Watch App/WatchSessionManager.swift` — typed `@Published` properties for calories, protein, carbs, fat (consumed + targets), `lastSyncTime`, `hasSynced`; `parseContext()` method routes by `type` field and populates typed properties
+- `ios-native/PepMaxWatch Watch App/ContentView.swift` — `NutritionGlanceView` (calorie ring + 3 macro progress bars + sync time label), `EmptyStateView` ("Open PepMax on your iPhone to sync"), `MacroBarView` component; SwiftUI preview with simulated data
+
+### Architecture decisions
+- Payload includes both consumed AND targets so watch renders independently (no profile fetch)
+- `pushNutritionToWatch` is a standalone utility, not inlined in the component — reusable from manual-entry, food-detail, etc.
+- `parseContext` is `type`-switched so future watch screens (peptides, workouts) add cases without restructuring
+- Fire-and-forget pattern: no await, `.catch(() => {})`, mirrors HealthKit write pattern
+
+---
+
+## Phase 8 — Apple Watch Companion App (Foundation Layer)
+
+**Status:** ✅ Ray-approved (conditional — observations resolved)
+**Date:** 2026-03-23
+**Branch:** `feature/phase8-watch`
+
+### What's been built
+
+#### TypeScript Layer (complete)
+- `src/types/watchConnectivity.ts` — `WatchMessageType`, `WatchMessage`, `WatchState` types
+- `src/services/watchConnectivity.ts` — Lazy native module wrapper (mirrors `healthKitService.ts` pattern): `sendToWatch`, `updateWatchState`, `isPaired`, `isReachable`, `onWatchMessage`
+- `src/hooks/useWatchConnectivity.ts` — React hook with paired/reachable state + message subscription
+
+#### Native Code — Staged in `ios-native/` (copy to `ios/` after prebuild)
+- `ios-native/PepMax/PepMax-Bridging-Header.h` — Swift/ObjC interop
+- `ios-native/PepMax/WatchSessionManager.swift` — Phone-side WCSession singleton (activate, sendMessage, updateApplicationContext, transferUserInfo, delegate callbacks)
+- `ios-native/PepMax/WatchConnectivityModule.swift` — RN bridge module (`RCTEventEmitter`), activates WCSession on init, emits `onWatchMessage` events to JS
+- `ios-native/PepMax/WatchConnectivityModule.m` — ObjC bridge macros
+- `ios-native/PepMaxWatch Watch App/WatchSessionManager.swift` — Watch-side WCSession singleton (ObservableObject, @Published state)
+- `ios-native/PepMaxWatch Watch App/PepMaxWatchApp.swift` — Watch app entry point
+- `ios-native/PepMaxWatch Watch App/ContentView.swift` — "Hello PepMax" view with connection status
+
+#### Expo Config Plugin
+- `plugins/withWatchConnectivity.js` — Copies phone-side files from `ios-native/` into `ios/PepMax/`, registers with Xcode project, sets bridging header build setting, links `WatchConnectivity.framework`
+
+#### app.json changes
+- Added `"bundleIdentifier": "com.pepmax.app"` under `expo.ios`
+- Added `"./plugins/withWatchConnectivity"` to plugins array
+
+### Required manual steps (macOS only)
+
+1. **Run prebuild on macOS:**
+   ```
+   npx expo prebuild --platform ios
+   ```
+
+2. **Open Xcode:** `ios/PepMax.xcodeproj`
+
+3. **Add WatchKit target:**
+   - File → New → Target → watchOS → App
+   - Product Name: `PepMaxWatch`
+   - Bundle ID: `com.pepmax.app.watchkitapp`
+   - Interface: SwiftUI, Language: Swift, no tests
+   - Embed in: PepMax
+
+4. **Copy watch-side files** from `ios-native/PepMaxWatch Watch App/` into the new `ios/PepMaxWatch Watch App/` directory (replace the auto-generated ContentView.swift and add WatchSessionManager.swift + PepMaxWatchApp.swift)
+
+5. **Set bridging header in Xcode:** PepMax target → Build Settings → "Objective-C Bridging Header" → `PepMax/PepMax-Bridging-Header.h` (the config plugin sets this automatically, but verify)
+
+6. **Build both targets** to paired simulators
+
+### Architecture decisions
+- Watch NEVER talks to Firebase — phone relays all data
+- WCSession activates in `WatchConnectivityModule.init()` — no AppDelegate changes needed
+- Three WatchConnectivity channels: `sendMessage` (real-time), `updateApplicationContext` (latest-state), `transferUserInfo` (queued background)
+- Lazy native module load with `NativeModules.WatchConnectivityModule` — safe for Expo Go (no crash, all functions no-op)
+- `NativeEventEmitter` for watch→phone messages — new pattern in this codebase, standard RN mechanism
+
+### Verification checklist
+- [ ] `ios/` directory generated by prebuild
+- [ ] Both PepMax + PepMaxWatch schemes visible in Xcode
+- [ ] Watch simulator shows "Hello PepMax" + connection status
+- [ ] Phone app builds without errors
+- [ ] `NativeModules.WatchConnectivityModule` is defined in JS (not undefined)
+- [ ] `sendToWatch('SYNC_STATE', { test: true })` arrives in watch Xcode console
+
+---
+
 ## Active Branch: `feature/m22-tracked-cleanup`
 
 ---

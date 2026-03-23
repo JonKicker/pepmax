@@ -5,11 +5,10 @@
  * consistency tracking, body weight sparkline, and card visibility preferences.
  */
 import React, { useState, useEffect } from 'react';
-import { ScrollView, RefreshControl, StyleSheet, TouchableOpacity } from 'react-native';
+import { ScrollView, RefreshControl, StyleSheet, TouchableOpacity, View, Text } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withDelay, withTiming, withSpring } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors } from '../../../src/constants/theme';
 import { useAuth } from '../../../src/contexts/AuthContext';
@@ -24,13 +23,11 @@ import { BodyWeightCard } from '../../../src/components/dashboard/BodyWeightCard
 import { AIInsightCard } from '../../../src/components/dashboard/AIInsightCard';
 import { SmartInsightsCard } from '../../../src/components/dashboard/SmartInsightsCard';
 import { ConsistencyCard } from '../../../src/components/dashboard/ConsistencyCard';
-import { RecoveryCard } from '../../../src/components/dashboard/RecoveryCard';
+import { RecoveryScoreCard } from '../../../src/components/dashboard/RecoveryScoreCard';
 import { LogWeightModal } from '../../../src/components/dashboard/LogWeightModal';
-import { RecoveryCheckInModal } from '../../../src/components/dashboard/RecoveryCheckInModal';
 import { OnboardingChecklist } from '../../../src/components/dashboard/OnboardingChecklist';
 
 import { useSmartInsights } from '../../../src/hooks/useSmartInsights';
-import { toLocalDateKey } from '../../../src/utils/nutrition';
 import type { DashboardCardId } from '../../../src/types/dashboard';
 
 function AnimatedCard({ index, children }: { index: number; children: React.ReactNode }) {
@@ -65,23 +62,12 @@ export default function DashboardScreen() {
   const dashboard = useDashboard(userProfile);
   const smartInsights = useSmartInsights(dashboard.data, userProfile);
   const [showWeightModal, setShowWeightModal] = useState(false);
-  const [showRecoveryCheckIn, setShowRecoveryCheckIn] = useState(false);
 
   const name = userProfile?.firstName ?? '';
   const greeting = name ? `${getGreeting()}, ${name}` : getGreeting();
   const units = userProfile?.units ?? 'imperial';
 
   const { data, loading, refreshing, errors, cardOrder, hiddenCards, onboardingDismissed } = dashboard;
-
-  // Auto-trigger check-in modal if no recovery today and not dismissed
-  useEffect(() => {
-    if (!data) return;
-    if (data.recovery !== null) return;
-    const dateKey = toLocalDateKey();
-    AsyncStorage.getItem(`recovery_dismissed_${dateKey}`).then((val) => {
-      if (!val) setShowRecoveryCheckIn(true);
-    });
-  }, [data?.recovery]);
 
   // Show onboarding if user has zero data and hasn't dismissed
   const showOnboarding = data && !onboardingDismissed && (
@@ -103,11 +89,12 @@ export default function DashboardScreen() {
     switch (cardId) {
       case 'recovery':
         return (
-          <RecoveryCard
+          <RecoveryScoreCard
             key={cardId}
             recovery={data?.recovery ?? null}
             colors={colors}
-            onCheckIn={() => setShowRecoveryCheckIn(true)}
+            onCheckIn={() => router.push('/(tabs)/dashboard/morning-check-in')}
+            onDetail={() => router.push('/(tabs)/dashboard/recovery-detail')}
           />
         );
       case 'consistency':
@@ -253,6 +240,24 @@ export default function DashboardScreen() {
             return <AnimatedCard key={cardId} index={i}>{card}</AnimatedCard>;
           })
         )}
+
+        {/* Community Library entry */}
+        <TouchableOpacity
+          style={[styles.communityCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          onPress={() => router.push('/(tabs)/dashboard/community')}
+          activeOpacity={0.85}
+        >
+          <View style={[styles.communityIcon, { backgroundColor: Colors.accent + '18' }]}>
+            <Ionicons name="people-outline" size={22} color={Colors.accent} />
+          </View>
+          <View style={styles.communityText}>
+            <Text style={[styles.communityTitle, { color: colors.textPrimary }]}>Community Library</Text>
+            <Text style={[styles.communitySubtitle, { color: colors.textSecondary }]}>
+              Browse & import community protocols
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+        </TouchableOpacity>
       </ScrollView>
 
       <LogWeightModal
@@ -264,12 +269,6 @@ export default function DashboardScreen() {
         updateProfile={updateProfile}
       />
 
-      <RecoveryCheckInModal
-        visible={showRecoveryCheckIn}
-        onDismiss={() => setShowRecoveryCheckIn(false)}
-        onSaved={dashboard.refresh}
-        colors={colors}
-      />
     </>
   );
 }
@@ -277,4 +276,23 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 },
   settingsBtn: { position: 'absolute', top: 16, right: 16 },
+  communityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    marginTop: 8,
+  },
+  communityIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  communityText: { flex: 1 },
+  communityTitle: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
+  communitySubtitle: { fontSize: 13 },
 });
