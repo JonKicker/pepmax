@@ -77,8 +77,8 @@ export async function requestPermissions(): Promise<boolean> {
   if (!HK) return false;
   try {
     await HK.requestAuthorization({
-      toRead: HK_READ_IDENTIFIERS,
-      toShare: HK_WRITE_IDENTIFIERS,
+      toRead: [...HK_READ_IDENTIFIERS],
+      toShare: [...HK_WRITE_IDENTIFIERS],
     });
     return true;
   } catch (e) {

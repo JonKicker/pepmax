@@ -75,6 +75,7 @@ function CompoundCard({
   onToggleDetails,
   onAdd,
   colors,
+  isDark,
 }: {
   compound: Compound;
   isExpanded: boolean;

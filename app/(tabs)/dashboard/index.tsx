@@ -4,7 +4,7 @@
  * Modular card system with skeleton loading, pull-to-refresh (5-min cache),
  * consistency tracking, body weight sparkline, and card visibility preferences.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ScrollView, RefreshControl, StyleSheet, TouchableOpacity, View, Text } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withDelay, withTiming, withSpring } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
@@ -26,8 +26,11 @@ import { ConsistencyCard } from '../../../src/components/dashboard/ConsistencyCa
 import { RecoveryScoreCard } from '../../../src/components/dashboard/RecoveryScoreCard';
 import { LogWeightModal } from '../../../src/components/dashboard/LogWeightModal';
 import { OnboardingChecklist } from '../../../src/components/dashboard/OnboardingChecklist';
+import { GamificationCard } from '../../../src/components/dashboard/GamificationCard';
 
 import { useSmartInsights } from '../../../src/hooks/useSmartInsights';
+import { useXP } from '../../../src/hooks/useXP';
+import { ACHIEVEMENT_DEFINITIONS } from '../../../src/utils/achievementDefinitions';
 import type { DashboardCardId } from '../../../src/types/dashboard';
 
 function AnimatedCard({ index, children }: { index: number; children: React.ReactNode }) {
@@ -60,14 +63,25 @@ export default function DashboardScreen() {
   const { userProfile, updateProfile } = useAuth();
   const router = useRouter();
   const dashboard = useDashboard(userProfile);
+  const { data, loading, refreshing, errors, cardOrder, hiddenCards, onboardingDismissed } = dashboard;
   const smartInsights = useSmartInsights(dashboard.data, userProfile);
+  const xp = useXP();
+
+  // Award streak milestone XP when a 7-day (or multiple-of-7) streak is hit.
+  // Uses a ref to ensure we only award once per milestone per session.
+  const lastStreakMilestoneRef = useRef(0);
+  useEffect(() => {
+    const current = data?.streak?.current ?? 0;
+    if (current > 0 && current % 7 === 0 && current > lastStreakMilestoneRef.current) {
+      lastStreakMilestoneRef.current = current;
+      xp.awardXP(100, 'streak_milestone', 'system', true).catch(() => {});
+    }
+  }, [data?.streak?.current]); // eslint-disable-line react-hooks/exhaustive-deps
   const [showWeightModal, setShowWeightModal] = useState(false);
 
   const name = userProfile?.firstName ?? '';
   const greeting = name ? `${getGreeting()}, ${name}` : getGreeting();
   const units = userProfile?.units ?? 'imperial';
-
-  const { data, loading, refreshing, errors, cardOrder, hiddenCards, onboardingDismissed } = dashboard;
 
   // Show onboarding if user has zero data and hasn't dismissed
   const showOnboarding = data && !onboardingDismissed && (
@@ -183,6 +197,24 @@ export default function DashboardScreen() {
         return (
           <AIInsightCard key={cardId} colors={colors} />
         );
+      case 'gamification': {
+        // Find the most recently unlocked achievement title for the card subtitle
+        const latestAchievement = Object.keys(xp.achievements).length > 0
+          ? ACHIEVEMENT_DEFINITIONS.find((d) => xp.achievements[d.id])?.title
+          : undefined;
+        return (
+          <GamificationCard
+            key={cardId}
+            level={xp.level}
+            levelInfo={xp.levelInfo}
+            totalXP={xp.totalXP}
+            todayXP={xp.todayXP}
+            latestAchievementTitle={latestAchievement}
+            loading={xp.loading}
+            onPress={() => router.push('/(tabs)/dashboard/xp-hub')}
+          />
+        );
+      }
       default:
         return null;
     }
@@ -240,6 +272,24 @@ export default function DashboardScreen() {
             return <AnimatedCard key={cardId} index={i}>{card}</AnimatedCard>;
           })
         )}
+
+        {/* Body Hub entry */}
+        <TouchableOpacity
+          style={[styles.communityCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          onPress={() => router.push('/(tabs)/dashboard/body-hub')}
+          activeOpacity={0.85}
+        >
+          <View style={[styles.communityIcon, { backgroundColor: '#3A7BD5' + '18' }]}>
+            <Ionicons name="body-outline" size={22} color="#3A7BD5" />
+          </View>
+          <View style={styles.communityText}>
+            <Text style={[styles.communityTitle, { color: colors.textPrimary }]}>Body Hub</Text>
+            <Text style={[styles.communitySubtitle, { color: colors.textSecondary }]}>
+              Interactive body map with all modules
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+        </TouchableOpacity>
 
         {/* Community Library entry */}
         <TouchableOpacity
