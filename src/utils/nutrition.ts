@@ -13,6 +13,10 @@
  *                      Pure function — no component state, fully testable.
  */
 
+import type { Micronutrients } from '../types/nutrition';
+import { RDA_VALUES } from '../constants/nutrition';
+import type { RecipeIngredient, MacroTotals } from '../types/recipe';
+
 // ─── Date key ─────────────────────────────────────────────────────────────────
 
 /**
@@ -120,19 +124,95 @@ export function sanitizeOFFProduct(raw: any): SanitizedOFFProduct {
   }
 
   return {
-    name: String(raw?.product_name ?? raw?.product_name_en ?? '').trim() || 'Unknown Food',
+    name: String(raw?.product_name_en ?? raw?.product_name ?? '').trim() || 'Unknown Food',
     brand: String(raw?.brands ?? '').split(',')[0].trim(),
     barcode: String(raw?.code ?? raw?._id ?? ''),
     servingSizeG: parseServingSizeG(raw?.serving_size),
     per100g: {
-      calories,
-      protein: clampNutrient(n['proteins_100g'] ?? n['protein_100g']),
-      carbs: clampNutrient(n['carbohydrates_100g'] ?? n['carbs_100g']),
-      fat: clampNutrient(n['fat_100g']),
+      calories: Math.round(calories),
+      protein: Math.round(clampNutrient(n['proteins_100g'] ?? n['protein_100g']) * 10) / 10,
+      carbs: Math.round(clampNutrient(n['carbohydrates_100g'] ?? n['carbs_100g']) * 10) / 10,
+      fat: Math.round(clampNutrient(n['fat_100g']) * 10) / 10,
       fiber: clampOptional(n['fiber_100g'] ?? n['fibers_100g']),
       sugar: clampOptional(n['sugars_100g'] ?? n['sugar_100g']),
       sodium: clampOptional(n['sodium_100g']),
     },
+  };
+}
+
+// ─── Micronutrient utilities ──────────────────────────────────────────────────
+
+/**
+ * Proportionally scale micronutrients when serving size changes.
+ * Preserves null for nutrients that were not reported.
+ */
+export function recalculateMicronutrients(
+  base: Micronutrients,
+  baseG: number,
+  targetG: number,
+): Micronutrients {
+  if (baseG <= 0 || targetG < 0) {
+    return Object.fromEntries(
+      Object.keys(base).map((k) => [k, null]),
+    ) as Micronutrients;
+  }
+  const ratio = targetG / baseG;
+  return Object.fromEntries(
+    Object.entries(base).map(([k, v]) => [
+      k,
+      v === null ? null : Math.round(v * ratio * 100) / 100,
+    ]),
+  ) as Micronutrients;
+}
+
+/**
+ * Returns the percentage of RDA for the given nutrient key.
+ * Returns null if the RDA is unknown for this nutrient.
+ */
+export function getRDAPercent(nutrientKey: string, amountPerServing: number): number | null {
+  const rda = RDA_VALUES[nutrientKey];
+  if (rda == null || rda <= 0) return null;
+  return (amountPerServing / rda) * 100;
+}
+
+/**
+ * Traffic light color tier based on % RDA.
+ * >=20% → green, >=5% → yellow, <5% → dim
+ */
+export function getTrafficLight(rdaPercent: number): 'green' | 'yellow' | 'dim' {
+  if (rdaPercent >= 20) return 'green';
+  if (rdaPercent >= 5) return 'yellow';
+  return 'dim';
+}
+
+// ─── Recipe utilities ────────────────────────────────────────────────────────
+
+/**
+ * Reduce a list of ingredients to total macro sums.
+ * Each ingredient already has calories/protein/carbs/fat scaled to amountG.
+ */
+export function computeRecipeTotals(ingredients: RecipeIngredient[]): MacroTotals {
+  return ingredients.reduce(
+    (acc, ing) => ({
+      calories: Math.round(acc.calories + ing.calories),
+      protein: Math.round((acc.protein + ing.protein) * 10) / 10,
+      carbs: Math.round((acc.carbs + ing.carbs) * 10) / 10,
+      fat: Math.round((acc.fat + ing.fat) * 10) / 10,
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  );
+}
+
+/**
+ * Divide total macros by servings to get per-serving nutrition.
+ */
+export function computePerServing(total: MacroTotals, servings: number): MacroTotals {
+  const s = servings > 0 ? servings : 1;
+  return {
+    calories: Math.round(total.calories / s),
+    protein: Math.round((total.protein / s) * 10) / 10,
+    carbs: Math.round((total.carbs / s) * 10) / 10,
+    fat: Math.round((total.fat / s) * 10) / 10,
   };
 }
 

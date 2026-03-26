@@ -10,6 +10,7 @@ import { useTheme } from '../../src/hooks/useTheme';
 import { Colors } from '../../src/constants/theme';
 import { signIn, resetPassword } from '../../src/services/firebase/auth';
 import { getAuthErrorMessage } from '../../src/constants/authErrors';
+import { analytics, AnalyticsEvent } from '../../src/services/analytics';
 
 function validate(email: string, password: string): string | null {
   if (!email.trim()) return 'Email is required.';
@@ -41,6 +42,8 @@ export default function LogInScreen() {
 
     if (result.error) {
       setError(getAuthErrorMessage(result.error));
+    } else {
+      analytics.track(AnalyticsEvent.LOGIN_COMPLETED, { method: 'email' });
     }
     // On success: AuthGuard redirects automatically
   }

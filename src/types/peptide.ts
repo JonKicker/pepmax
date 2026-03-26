@@ -1,10 +1,25 @@
 import { Timestamp } from 'firebase/firestore';
+import type { PeptideFastingWindow } from './peptideFasting';
 
 export type Unit = 'mg' | 'mcg' | 'IU';
 export const UNITS: Unit[] = ['mg', 'mcg', 'IU'];
 
-export type Frequency = 'daily' | 'everyOtherDay' | '3xPerWeek' | 'custom';
-export const FREQUENCIES: Frequency[] = ['daily', 'everyOtherDay', '3xPerWeek', 'custom'];
+export type Frequency = 'daily' | 'everyOtherDay' | '3xPerWeek' | 'weekly' | 'custom';
+export const FREQUENCIES: Frequency[] = ['daily', 'everyOtherDay', '3xPerWeek', 'weekly', 'custom'];
+
+export type PeptideCategory = 'GLP-1' | 'GH Secretagogue' | 'Healing' | 'Other';
+export const PEPTIDE_CATEGORIES: PeptideCategory[] = ['GLP-1', 'GH Secretagogue', 'Healing', 'Other'];
+
+export type Route = 'SubQ' | 'IM' | 'IV' | 'Oral' | 'Nasal';
+export const ROUTES: Route[] = ['SubQ', 'IM', 'IV', 'Oral', 'Nasal'];
+
+export const ROUTE_LABELS: Record<Route, string> = {
+  SubQ: 'Subcutaneous',
+  IM: 'Intramuscular',
+  IV: 'Intravenous',
+  Oral: 'Oral',
+  Nasal: 'Nasal',
+};
 
 export type InjectionSite =
   | 'leftDelt'
@@ -45,6 +60,7 @@ export const FREQUENCY_LABELS: Record<Frequency, string> = {
   daily: 'Daily',
   everyOtherDay: 'Every Other Day',
   '3xPerWeek': '3× / Week',
+  weekly: 'Weekly',
   custom: 'Custom',
 };
 
@@ -64,6 +80,16 @@ export type Peptide = {
   frequency: Frequency;
   customDays?: string[]; // e.g. ['Mon', 'Wed', 'Fri'] when frequency === 'custom'
   notes: string;
+  // Extended metadata fields — all optional for backward compatibility
+  category?: PeptideCategory;
+  halfLifeHours?: number;
+  route?: Route;
+  concentrationMgMl?: number;
+  storageTemp?: string;
+  isPreset?: boolean;   // true if added from the preset browser
+  presetId?: string;    // stable key linking to the preset catalog entry
+  // Per-peptide fasting guidance — optional for backward compat with existing docs
+  fastingWindow?: PeptideFastingWindow;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 };

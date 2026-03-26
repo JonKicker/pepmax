@@ -21,8 +21,12 @@ import {
   queryDocuments,
   COLLECTIONS,
 } from './firebase/firestore';
-import type { Peptide, Dose, Unit, InjectionSite, Frequency } from '../types/peptide';
+import type { Peptide, Dose, Unit, InjectionSite, Frequency, PeptideCategory, Route } from '../types/peptide';
+import { ROUTES } from '../types/peptide';
 import type { ServiceResult } from '../types/service';
+import type { Compound, CompoundCategory } from '../data/compoundDatabase';
+import type { PeptideFastingWindow } from '../types/peptideFasting';
+import { getDefaultPeptideFastingWindow } from '../utils/peptideFasting';
 
 // ─── Input types (strip server-managed fields) ──────────────────────────────
 
@@ -33,6 +37,15 @@ type PeptideInput = {
   frequency: Frequency;
   customDays?: string[];
   notes: string;
+  // Extended metadata — optional for backward compatibility
+  category?: PeptideCategory;
+  halfLifeHours?: number;
+  route?: Route;
+  concentrationMgMl?: number;
+  storageTemp?: string;
+  isPreset?: boolean;
+  presetId?: string;
+  fastingWindow?: PeptideFastingWindow;
 };
 
 type DoseInput = {
@@ -47,11 +60,50 @@ type DoseInput = {
   notes: string;
 };
 
+// ─── Preset mapping helpers ──────────────────────────────────────────────────
+
+export function parseRoute(routeStr: string): Route | null {
+  for (const part of routeStr.split(', ')) {
+    const match = ROUTES.find((r) => r.toLowerCase() === part.trim().toLowerCase());
+    if (match) return match;
+  }
+  return null;
+}
+
+export function parseUnit(unitStr: string): Unit {
+  if (unitStr === 'mcg') return 'mcg';
+  if (unitStr === 'IU') return 'IU';
+  return 'mg'; // covers 'mg' and fallback for 'mg/kg' (Macimorelin)
+}
+
+export function parseFrequency(freqStr: string): Frequency {
+  const f = freqStr.toLowerCase();
+  // Check specific multi-day patterns before the generic 'weekly' catch-all
+  if (f.includes('2x weekly') || f.includes('3x weekly')) return '3xPerWeek';
+  if (f.includes('every other') || f.includes('eod')) return 'everyOtherDay';
+  if (f.includes('weekly') || f === 'once weekly') return 'weekly';
+  if (f.includes('daily') || f.includes('nightly')) return 'daily';
+  return 'custom';
+}
+
+export function mapGroupToCategory(group: CompoundCategory): PeptideCategory {
+  if (group === 'GLP-1 / Weight Management') return 'GLP-1';
+  if (group === 'Growth Hormone / GH Secretagogues') return 'GH Secretagogue';
+  if (group === 'Healing / Recovery') return 'Healing';
+  return 'Other';
+}
+
 // ─── Peptide CRUD ────────────────────────────────────────────────────────────
 
 export async function addPeptide(data: PeptideInput): Promise<ServiceResult<string>> {
+  // Apply category-based fasting defaults when category is known and the
+  // caller did not supply an explicit window (e.g. manual add with category).
+  const withDefaults: PeptideInput =
+    data.category && data.fastingWindow === undefined
+      ? { ...data, fastingWindow: getDefaultPeptideFastingWindow(data.category) }
+      : data;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return addDocument(COLLECTIONS.PEPTIDES, data as any);
+  return addDocument(COLLECTIONS.PEPTIDES, withDefaults as any);
 }
 
 export async function updatePeptide(
@@ -72,6 +124,29 @@ export async function getPeptides(): Promise<ServiceResult<Peptide[]>> {
 
 export async function getPeptideById(id: string): Promise<ServiceResult<Peptide | null>> {
   return getDocument<Peptide>(COLLECTIONS.PEPTIDES, id);
+}
+
+/**
+ * Add a compound from COMPOUND_DATABASE to the user's personal library.
+ * Maps the catalog entry + selected dose into a PeptideInput for Firestore.
+ */
+export async function addPeptideFromPreset(
+  compound: Compound,
+  selectedDose: number,
+): Promise<ServiceResult<string>> {
+  return addPeptide({
+    name: compound.name,
+    defaultDose: selectedDose,
+    unit: parseUnit(compound.unit),
+    frequency: parseFrequency(compound.dosingFrequency),
+    notes: compound.notesForUsers,
+    category: mapGroupToCategory(compound.group),
+    halfLifeHours: compound.halfLifeHours,
+    route: parseRoute(compound.route) ?? 'SubQ',
+    storageTemp: compound.storage,
+    isPreset: true,
+    presetId: compound.id,
+  });
 }
 
 // ─── Dose CRUD ───────────────────────────────────────────────────────────────
@@ -98,10 +173,16 @@ export async function deleteDose(id: string): Promise<ServiceResult<void>> {
  */
 export async function getDoses(filters?: {
   peptideId?: string;
+  startDate?: Date;
 }): Promise<ServiceResult<Dose[]>> {
-  const result = await queryDocuments<Dose>(COLLECTIONS.DOSES, [
-    orderBy('timestamp', 'desc'),
-  ]);
+  const constraints = filters?.startDate
+    ? [
+        where('timestamp', '>=', Timestamp.fromDate(filters.startDate)),
+        orderBy('timestamp', 'desc'),
+      ]
+    : [orderBy('timestamp', 'desc')];
+
+  const result = await queryDocuments<Dose>(COLLECTIONS.DOSES, constraints);
 
   if (result.error || !filters?.peptideId) return result;
 

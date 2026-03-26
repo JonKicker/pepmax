@@ -11,7 +11,12 @@ export default function ProfileLayout() {
         headerTitleStyle: { color: colors.textPrimary },
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'Profile' }} />
+      <Stack.Screen name="index" options={{ title: 'Settings' }} />
+      <Stack.Screen name="privacy" options={{ title: 'Privacy & Data' }} />
+      <Stack.Screen name="export-data" options={{ title: 'Export My Data' }} />
+      <Stack.Screen name="choose-username" options={{ title: 'Choose Username' }} />
+      <Stack.Screen name="compare-privacy" options={{ title: 'Compare Privacy' }} />
+      <Stack.Screen name="my-templates" options={{ title: 'My Templates' }} />
     </Stack>
   );
 }

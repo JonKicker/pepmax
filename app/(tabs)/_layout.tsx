@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/theme';
 import { useTheme } from '../../src/hooks/useTheme';
+import { analytics, AnalyticsEvent } from '../../src/services/analytics';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -22,6 +23,11 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      screenListeners={{
+        tabPress: (e) => {
+          analytics.track(AnalyticsEvent.TAB_SWITCHED, { tab_name: e.target?.split('-')[0] ?? 'unknown' });
+        },
+      }}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: Colors.accent,
@@ -56,6 +62,15 @@ export default function TabLayout() {
           title: 'Training',
           tabBarIcon: ({ color, size }) => (
             <TabIcon name="barbell" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="cardio"
+        options={{
+          title: 'Cardio',
+          tabBarIcon: ({ color, size }) => (
+            <TabIcon name="bicycle" color={color} size={size} />
           ),
         }}
       />

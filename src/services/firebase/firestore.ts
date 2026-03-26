@@ -18,12 +18,14 @@ import {
   query,
   QueryConstraint,
   DocumentData,
+  DocumentReference,
   WithFieldValue,
   UpdateData,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db, auth } from './index';
 import type { ServiceResult } from '../../types/service';
+import { addBreadcrumb } from '../errorReporting';
 
 // ─── Typed collection constants ────────────────────────────────────────────
 // Use these everywhere — never pass raw strings to avoid typos.
@@ -36,6 +38,34 @@ export const COLLECTIONS = {
   NUTRITION: 'nutrition',
   WORKOUTS: 'workouts',
   PROFILE: 'profile',
+  CARDIO_SESSIONS: 'cardioSessions',
+  CUSTOM_EXERCISES: 'customExercises',
+  WORKOUT_TEMPLATES: 'workoutTemplates',
+  WORKOUT_SESSIONS: 'workoutSessions',
+  PERSONAL_RECORDS: 'personalRecords',
+  BODY_WEIGHT: 'bodyWeight',
+  BODY_WEIGHT_LOGS: 'bodyWeightLogs',
+  DASHBOARD_PREFERENCES: 'dashboardPreferences',
+  PROGRESS_PHOTOS: 'progressPhotos',
+  SUBSCRIPTION: 'subscription',
+  RECON_PROTOCOLS: 'reconProtocols',
+  EQUIPMENT_PROFILES: 'equipmentProfiles',
+  SIDE_EFFECTS: 'sideEffects',
+  AI_INSIGHTS: 'aiInsights',
+  CONSISTENCY: 'consistency',
+  CYCLES: 'cycles',
+  RECIPES: 'recipes',
+  BODY_MEASUREMENTS: 'bodyMeasurements',
+  INVENTORY: 'inventory',
+  RECOVERY: 'recovery',           // legacy — read-only after M16a
+  RECOVERY_LOG: 'recoveryLog',    // spec §8 path — new writes go here
+  BODY_MODEL: 'bodyModel',        // daily body model snapshots, keyed by YYYY-MM-DD
+  SAFETY_CONTACTS: 'safetyContacts',
+  IMPORTED_TEMPLATES: 'importedTemplates', // community templates imported by user
+  SETTINGS: 'settings',
+  USER_STATS: 'userStats',
+  XP_LOG: 'xpLog',
+  ACHIEVEMENTS: 'achievements',
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];
@@ -69,6 +99,7 @@ export async function addDocument<T extends DocumentData>(
   data: WithFieldValue<T>
 ): Promise<ServiceResult<string>> {
   try {
+    addBreadcrumb('firestore', 'addDocument', { collection: collectionName });
     const ref = await addDoc(userCollection(collectionName), {
       ...data,
       createdAt: serverTimestamp(),
@@ -89,10 +120,32 @@ export async function setDocument<T extends DocumentData>(
   data: WithFieldValue<T>
 ): Promise<ServiceResult<void>> {
   try {
+    addBreadcrumb('firestore', 'setDocument', { collection: collectionName, docId });
     await setDoc(userDoc(collectionName, docId), {
       ...data,
       updatedAt: serverTimestamp(),
     });
+    return { data: undefined, error: null };
+  } catch (e) {
+    return { data: null, error: e as Error };
+  }
+}
+
+/**
+ * Merge data into a document — creates it if it doesn't exist,
+ * preserves existing fields not present in `data`.
+ */
+export async function mergeDocument<T extends DocumentData>(
+  collectionName: CollectionName,
+  docId: string,
+  data: WithFieldValue<T>
+): Promise<ServiceResult<void>> {
+  try {
+    addBreadcrumb('firestore', 'mergeDocument', { collection: collectionName, docId });
+    await setDoc(userDoc(collectionName, docId) as unknown as DocumentReference<T>, {
+      ...data,
+      updatedAt: serverTimestamp(),
+    } as WithFieldValue<T>, { merge: true });
     return { data: undefined, error: null };
   } catch (e) {
     return { data: null, error: e as Error };
@@ -108,7 +161,8 @@ export async function updateDocument<T extends DocumentData>(
   data: UpdateData<T>
 ): Promise<ServiceResult<void>> {
   try {
-    await updateDoc(userDoc(collectionName, docId), {
+    addBreadcrumb('firestore', 'updateDocument', { collection: collectionName, docId });
+    await updateDoc(userDoc(collectionName, docId) as unknown as DocumentReference<T>, {
       ...data,
       updatedAt: serverTimestamp(),
     } as UpdateData<T>);
@@ -126,6 +180,7 @@ export async function deleteDocument(
   docId: string
 ): Promise<ServiceResult<void>> {
   try {
+    addBreadcrumb('firestore', 'deleteDocument', { collection: collectionName, docId });
     await deleteDoc(userDoc(collectionName, docId));
     return { data: undefined, error: null };
   } catch (e) {
@@ -141,6 +196,7 @@ export async function getDocument<T>(
   docId: string
 ): Promise<ServiceResult<T | null>> {
   try {
+    addBreadcrumb('firestore', 'getDocument', { collection: collectionName, docId });
     const snap = await getDoc(userDoc(collectionName, docId));
     return { data: snap.exists() ? (snap.data() as T) : null, error: null };
   } catch (e) {
@@ -162,6 +218,7 @@ export async function queryDocuments<T>(
   constraints: QueryConstraint[] = []
 ): Promise<ServiceResult<T[]>> {
   try {
+    addBreadcrumb('firestore', 'queryDocuments', { collection: collectionName });
     const q = query(userCollection(collectionName), ...constraints);
     const snap = await getDocs(q);
     const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T);

@@ -10,6 +10,7 @@ export default function PeptidesLayout() {
         headerStyle: { backgroundColor: colors.surface },
         headerTintColor: Colors.peptide,
         headerTitleStyle: { color: colors.textPrimary },
+        animation: 'slide_from_right',
       }}
     >
       <Stack.Screen name="index" options={{ title: 'Peptide Library' }} />
@@ -19,6 +20,11 @@ export default function PeptidesLayout() {
       />
       <Stack.Screen name="log-dose" options={{ title: 'Log Dose' }} />
       <Stack.Screen name="history" options={{ title: 'Dose History' }} />
+      <Stack.Screen name="recon-calculator" options={{ title: 'Recon Calculator' }} />
+      <Stack.Screen name="half-life-timeline" options={{ title: 'Activity Timeline' }} />
+      <Stack.Screen name="cycle-planner" options={{ title: 'Plan Cycle' }} />
+      <Stack.Screen name="inventory" options={{ title: 'Inventory' }} />
+      <Stack.Screen name="progress" options={{ title: 'Dose Trends' }} />
     </Stack>
   );
 }

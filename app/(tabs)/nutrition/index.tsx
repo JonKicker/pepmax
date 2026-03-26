@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,11 @@ import {
   Animated,
   PanResponder,
   RefreshControl,
+  Modal,
 } from 'react-native';
+import { AnimatedPressable } from '../../../src/components/AnimatedPressable';
+import { StaggeredList } from '../../../src/components/StaggeredList';
+import { NutritionSkeleton } from '../../../src/components/SkeletonScreen';
 import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -23,9 +27,21 @@ import Reanimated, {
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors, Theme } from '../../../src/constants/theme';
 import { useAuth } from '../../../src/contexts/AuthContext';
-import { getTodaysLog, deleteFood } from '../../../src/services/nutritionService';
+import { getTodaysLog, deleteFood, getLogForDate, copyMealsFromDate } from '../../../src/services/nutritionService';
+import {
+  getAdaptiveCoachingData,
+  runWeeklyCheckIn,
+  acceptCheckIn,
+  dismissCheckIn,
+} from '../../../src/services/adaptiveCoachingService';
+import { daysUntilNextCheckIn } from '../../../src/utils/expenditureAlgorithm';
+import { toLocalDateKey } from '../../../src/utils/nutrition';
 import { DEFAULT_MEAL_SLOTS } from '../../../src/types/nutrition';
 import type { FoodLogEntry, MealSlotConfig } from '../../../src/types/nutrition';
+import type { AdaptiveTargets, AdaptiveTDEEResult, DataReadiness } from '../../../src/types/adaptiveCoaching';
+import WeeklyCheckInModal from '../../../src/components/nutrition/WeeklyCheckInModal';
+import { GlassBackground } from '../../../src/components/GlassBackground';
+import { pushNutritionToWatch } from '../../../src/utils/watchSync';
 
 // ─── Calorie Ring ─────────────────────────────────────────────────────────────
 
@@ -43,7 +59,6 @@ function CalorieRing({
   colors: Theme['colors'];
 }) {
   const progress = target > 0 ? Math.min(consumed / target, 1.2) : 0;
-  const clamped = Math.min(progress, 1);
 
   // Ring color based on proximity to target
   const ringColor =
@@ -54,19 +69,19 @@ function CalorieRing({
       : Colors.nutrition;
 
   // Reanimated shared values for each half-circle
-  const leftRotation = useSharedValue(0);
-  const rightRotation = useSharedValue(0);
+  const leftRotation = useSharedValue(180);
+  const rightRotation = useSharedValue(180);
   const leftVisible = useSharedValue(0);
 
   React.useEffect(() => {
     const p = Math.min(progress, 1);
     // Right half rotates for first 50% of progress (0–180°)
-    rightRotation.value = withTiming(Math.min(p, 0.5) * 360, {
+    rightRotation.value = withTiming(180 + Math.min(p, 0.5) * 360, {
       duration: 900,
       easing: Easing.out(Easing.quad),
     });
     // Left half rotates for second 50% (180–360°)
-    leftRotation.value = withTiming(Math.max(0, p - 0.5) * 360, {
+    leftRotation.value = withTiming(180 + Math.max(0, p - 0.5) * 360, {
       duration: 900,
       easing: Easing.out(Easing.quad),
     });
@@ -268,10 +283,10 @@ function MealSection({
   const totalCal = entries.reduce((s, e) => s + e.calories, 0);
 
   return (
-    <View style={[styles.mealSection, { borderColor: colors.border }]}>
+    <View style={[styles.mealSection, { borderColor: colors.glass.border }]}>
       {/* Header */}
       <TouchableOpacity
-        style={[styles.mealHeader, { backgroundColor: colors.surface }]}
+        style={[styles.mealHeader, { backgroundColor: colors.glass.subtle }]}
         onPress={() => setExpanded((v) => !v)}
         activeOpacity={0.7}
       >
@@ -302,17 +317,192 @@ function MealSection({
           )}
           {/* Add button (not shown in "Other" orphan section) */}
           {slotId !== '__other__' && (
-            <TouchableOpacity
+            <AnimatedPressable
+              haptic
               style={[styles.addFoodBtn, { borderColor: Colors.nutrition }]}
               onPress={() => onAddFood(slotId)}
             >
               <Ionicons name="add" size={16} color={Colors.nutrition} />
               <Text style={[styles.addFoodBtnText, { color: Colors.nutrition }]}>Add Food</Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           )}
         </View>
       )}
     </View>
+  );
+}
+
+// ─── Copy Meals Modal ─────────────────────────────────────────────────────────
+
+function CopyMealsModal({
+  visible,
+  onDismiss,
+  onCopied,
+  colors,
+  activeSlots,
+}: {
+  visible: boolean;
+  onDismiss: () => void;
+  onCopied: () => void;
+  colors: Theme['colors'];
+  activeSlots: MealSlotConfig[];
+}) {
+  const [loading, setLoading] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [entries, setEntries] = useState<FoodLogEntry[]>([]);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set());
+
+  // Stable for the lifetime of the modal — "yesterday" relative to when the modal mounts.
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayKey = toLocalDateKey(yesterday);
+
+  useEffect(() => {
+    if (!visible) return;
+    setLoading(true);
+    setFetchError(null);
+    getLogForDate(yesterdayKey).then((result) => {
+      setLoading(false);
+      if (result.error) {
+        setFetchError('Failed to load yesterday\'s meals.');
+        return;
+      }
+      const data = result.data ?? [];
+      setEntries(data);
+      // Pre-select all slots that have entries
+      const slotIds = new Set(data.map((e) => e.mealSlot));
+      setSelectedSlots(slotIds);
+    });
+  }, [visible, yesterdayKey]);
+
+  const toggleSlot = (slotId: string) => {
+    setSelectedSlots((prev) => {
+      const next = new Set(prev);
+      if (next.has(slotId)) next.delete(slotId);
+      else next.add(slotId);
+      return next;
+    });
+  };
+
+  const handleCopy = async () => {
+    if (selectedSlots.size === 0) return;
+    setCopying(true);
+    const todayKey = toLocalDateKey();
+    const result = await copyMealsFromDate(yesterdayKey, todayKey, Array.from(selectedSlots));
+    setCopying(false);
+    if (result.error) {
+      Alert.alert('Error', 'Failed to copy meals. Please try again.');
+      return;
+    }
+    const total = entries.filter((e) => selectedSlots.has(e.mealSlot)).length;
+    const copied = result.data ?? 0;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (copied < total) {
+      Alert.alert('Partially copied', `Copied ${copied} of ${total} items.`);
+    }
+    onCopied();
+  };
+
+  // Group entries by slot for display
+  const bySlot: Record<string, FoodLogEntry[]> = {};
+  for (const e of entries) {
+    if (!bySlot[e.mealSlot]) bySlot[e.mealSlot] = [];
+    bySlot[e.mealSlot].push(e);
+  }
+  // Slots that have entries, ordered by activeSlots order then unknown slots at end
+  const slotsWithEntries = [
+    ...activeSlots.filter((s) => bySlot[s.id]),
+    ...Object.keys(bySlot)
+      .filter((id) => !activeSlots.some((s) => s.id === id))
+      .map((id) => ({ id, label: id })),
+  ];
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onDismiss}>
+      <View style={copyStyles.backdrop}>
+        <View style={[copyStyles.sheet, { backgroundColor: colors.surface }]}>
+          {/* Handle */}
+          <View style={[copyStyles.handle, { backgroundColor: colors.border }]} />
+
+          {/* Header */}
+          <View style={[copyStyles.header, { borderBottomColor: colors.border }]}>
+            <Text style={[copyStyles.headerTitle, { color: colors.textPrimary }]}>Copy Yesterday's Meals</Text>
+            <TouchableOpacity onPress={onDismiss} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close" size={24} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Body */}
+          {loading ? (
+            <View style={copyStyles.feedback}>
+              <ActivityIndicator color={Colors.nutrition} />
+            </View>
+          ) : fetchError ? (
+            <View style={copyStyles.feedback}>
+              <Text style={[copyStyles.feedbackText, { color: colors.textSecondary }]}>{fetchError}</Text>
+            </View>
+          ) : slotsWithEntries.length === 0 ? (
+            <View style={copyStyles.feedback}>
+              <Ionicons name="restaurant-outline" size={36} color={colors.textSecondary} style={{ opacity: 0.3 }} />
+              <Text style={[copyStyles.feedbackText, { color: colors.textSecondary }]}>
+                No meals logged yesterday.
+              </Text>
+            </View>
+          ) : (
+            <ScrollView style={copyStyles.list} keyboardShouldPersistTaps="handled">
+              {slotsWithEntries.map((slot) => {
+                const slotEntries = bySlot[slot.id] ?? [];
+                const totalCal = slotEntries.reduce((sum, e) => sum + e.calories, 0);
+                const checked = selectedSlots.has(slot.id);
+                return (
+                  <TouchableOpacity
+                    key={slot.id}
+                    style={[copyStyles.slotRow, { borderBottomColor: colors.border }]}
+                    onPress={() => toggleSlot(slot.id)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name={checked ? 'checkbox' : 'square-outline'}
+                      size={22}
+                      color={checked ? Colors.nutrition : colors.textSecondary}
+                    />
+                    <View style={copyStyles.slotInfo}>
+                      <Text style={[copyStyles.slotLabel, { color: colors.textPrimary }]}>{slot.label}</Text>
+                      <Text style={[copyStyles.slotSub, { color: colors.textSecondary }]}>
+                        {slotEntries.length} item{slotEntries.length !== 1 ? 's' : ''} · {Math.round(totalCal)} kcal
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+
+          {/* Footer */}
+          {slotsWithEntries.length > 0 && !fetchError && (
+            <View style={[copyStyles.footer, { borderTopColor: colors.border }]}>
+              <TouchableOpacity
+                style={[
+                  copyStyles.copyBtn,
+                  { backgroundColor: selectedSlots.size === 0 ? colors.border : Colors.nutrition },
+                ]}
+                onPress={handleCopy}
+                disabled={copying || selectedSlots.size === 0}
+              >
+                {copying ? (
+                  <ActivityIndicator color="white" size="small" />
+                ) : (
+                  <Text style={copyStyles.copyBtnText}>
+                    Copy Selected{selectedSlots.size > 0 ? ` (${selectedSlots.size})` : ''}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -321,12 +511,18 @@ function MealSection({
 export default function NutritionScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { userProfile } = useAuth();
+  const { userProfile, refreshProfile } = useAuth();
 
   const [entries, setEntries] = useState<FoodLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [showCopyModal, setShowCopyModal] = useState(false);
+
+  // Adaptive coaching check-in state
+  const [showCheckIn, setShowCheckIn] = useState(false);
+  const [checkInData, setCheckInData] = useState<{ result: AdaptiveTDEEResult; targets: AdaptiveTargets } | null>(null);
+  const [checkInReadiness, setCheckInReadiness] = useState<DataReadiness | null>(null);
 
   const targets = {
     calories: userProfile?.calorieTarget ?? 2000,
@@ -340,15 +536,50 @@ export default function NutritionScreen() {
     setLoadError(null);
     const result = await getTodaysLog();
     if (result.error) {
+      console.error('[NutritionScreen] load error:', result.error);
       setLoadError('Failed to load today\'s log. Pull down to retry.');
     } else {
-      setEntries(result.data ?? []);
+      const loaded = result.data ?? [];
+      setEntries(loaded);
+      pushNutritionToWatch(loaded, targets);
     }
     setLoading(false);
     setRefreshing(false);
   };
 
-  useFocusEffect(useCallback(() => { load(); }, []));
+  useFocusEffect(useCallback(() => {
+    load();
+
+    // Check if a weekly adaptive coaching check-in is due
+    const adaptive = userProfile?.adaptiveCoaching;
+    if (!adaptive?.enabled) return;
+
+    const daysUntil = daysUntilNextCheckIn(
+      adaptive.lastCheckInDate,
+      adaptive.checkInIntervalDays ?? 7,
+    );
+    if (daysUntil > 0) return;
+
+    // Check-in is due — fetch data and decide which modal state to show
+    (async () => {
+      const coachingResult = await getAdaptiveCoachingData();
+      if (coachingResult.error) return;
+
+      const coachingData = coachingResult.data!;
+      setCheckInReadiness(coachingData.readiness);
+
+      if (coachingData.readiness.ready && userProfile) {
+        // Pass already-fetched data to avoid a redundant Firestore read
+        const checkIn = await runWeeklyCheckIn(userProfile, coachingData);
+        if (!checkIn.error && checkIn.data) {
+          setCheckInData({ result: checkIn.data.result, targets: checkIn.data.targets });
+        }
+      }
+
+      setShowCheckIn(true);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile?.adaptiveCoaching?.lastCheckInDate, userProfile?.adaptiveCoaching?.enabled]));
 
   const totals = entries.reduce(
     (acc, e) => ({
@@ -401,12 +632,43 @@ export default function NutritionScreen() {
     router.push({ pathname: '/(tabs)/nutrition/add-food', params: { mealSlot: slotId } });
   };
 
-  if (loading) {
-    return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={Colors.nutrition} size="large" />
-      </View>
+  const handleAcceptCheckIn = async (targets: AdaptiveTargets) => {
+    if (!checkInData || !userProfile?.adaptiveCoaching) return;
+    const result = await acceptCheckIn(
+      checkInData.result,
+      targets,
+      userProfile.adaptiveCoaching,
     );
+    if (result.error) {
+      Alert.alert('Error', 'Could not update targets. Please try again.');
+      return;
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setShowCheckIn(false);
+    setCheckInData(null);
+    // Refresh profile so CalorieRing and macro bars reflect the new targets immediately
+    await refreshProfile();
+  };
+
+  const handleDismissCheckIn = async () => {
+    if (!checkInData) {
+      setShowCheckIn(false);
+      return;
+    }
+    if (userProfile?.adaptiveCoaching) {
+      await dismissCheckIn(
+        userProfile.adaptiveCoaching,
+        checkInData.result.estimatedTDEE,
+        checkInData.targets.calorieTarget,
+        checkInData.result.weightChangeKgPerWeek,
+      );
+    }
+    setShowCheckIn(false);
+    setCheckInData(null);
+  };
+
+  if (loading) {
+    return <NutritionSkeleton />;
   }
 
   if (loadError) {
@@ -434,6 +696,27 @@ export default function NutritionScreen() {
                 <Ionicons name="calendar-outline" size={22} color={Colors.nutrition} />
               </TouchableOpacity>
               <TouchableOpacity
+                onPress={() => router.push('/(tabs)/nutrition/weight-log')}
+                style={{ marginLeft: 14 }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="scale-outline" size={22} color={Colors.nutrition} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setShowCopyModal(true)}
+                style={{ marginLeft: 14 }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="copy-outline" size={22} color={Colors.nutrition} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => router.push('/(tabs)/nutrition/my-recipes')}
+                style={{ marginLeft: 14 }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="book-outline" size={22} color={Colors.nutrition} />
+              </TouchableOpacity>
+              <TouchableOpacity
                 onPress={() => router.push('/(tabs)/nutrition/settings')}
                 style={{ marginLeft: 14 }}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -444,8 +727,9 @@ export default function NutritionScreen() {
           ),
         }}
       />
+      <GlassBackground>
       <ScrollView
-        style={{ backgroundColor: colors.background }}
+        style={{ flex: 1 }}
         contentContainerStyle={styles.scroll}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={Colors.nutrition} />
@@ -460,14 +744,65 @@ export default function NutritionScreen() {
         <CalorieRing consumed={totals.calories} target={targets.calories} colors={colors} />
 
         {/* Macro bars */}
-        <View style={[styles.macrosCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.macrosCard, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}>
           <MacroBar label="Protein" consumed={totals.protein} target={targets.protein} color="#4A90D9" colors={colors} />
           <MacroBar label="Carbs" consumed={totals.carbs} target={targets.carbs} color={Colors.warning} colors={colors} />
           <MacroBar label="Fat" consumed={totals.fat} target={targets.fat} color={Colors.error} colors={colors} />
         </View>
 
+        {/* Adaptive coaching info card */}
+        {userProfile?.adaptiveCoaching?.enabled && (
+          <AnimatedPressable
+            haptic
+            style={[styles.adaptiveCard, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+            onPress={() => router.push('/(tabs)/nutrition/weight-log')}
+          >
+            <Ionicons name="analytics-outline" size={16} color={Colors.nutrition} />
+            {userProfile.adaptiveCoaching.estimatedTDEE ? (
+              <>
+                <Text style={[styles.adaptiveText, { color: colors.textPrimary }]}>
+                  Est. TDEE: {userProfile.adaptiveCoaching.estimatedTDEE.toLocaleString()} kcal
+                </Text>
+                <View style={styles.adaptiveBadge}>
+                  <Text style={styles.adaptiveBadgeText}>Based on your data</Text>
+                </View>
+              </>
+            ) : (
+              <Text style={[styles.adaptiveText, { color: colors.textSecondary }]}>
+                Adaptive Coaching: {checkInReadiness?.daysWithBothData ?? 0}/7 days tracked
+              </Text>
+            )}
+            <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} style={{ marginLeft: 'auto' }} />
+          </AnimatedPressable>
+        )}
+
+        {/* Micronutrients shortcut */}
+        <AnimatedPressable
+          haptic
+          style={[styles.microsCard, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+          onPress={() => router.push('/(tabs)/nutrition/micros')}
+        >
+          <Ionicons name="flask-outline" size={20} color={Colors.nutrition} />
+          <Text style={[styles.microsLabel, { color: colors.textPrimary }]}>Micronutrients</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} style={{ marginLeft: 'auto' }} />
+        </AnimatedPressable>
+
+        {/* Macro Trends shortcut */}
+        <AnimatedPressable
+          haptic
+          style={[styles.microsCard, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+          onPress={() => router.push('/(tabs)/nutrition/progress')}
+        >
+          <Ionicons name="trending-up-outline" size={20} color={Colors.nutrition} />
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={[styles.microsLabel, { color: colors.textPrimary }]}>View Trends</Text>
+            <Text style={{ fontSize: 12, color: colors.textSecondary }}>{'Calories & macros over time'}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+        </AnimatedPressable>
+
         {/* Meal sections — dynamic slots from profile, with orphaned entry fallback */}
-        <View style={styles.mealsContainer}>
+        <StaggeredList staggerDelay={80} style={styles.mealsContainer}>
           {activeSlots.map((slot) => (
             <MealSection
               key={slot.id}
@@ -490,8 +825,31 @@ export default function NutritionScreen() {
               colors={colors}
             />
           )}
-        </View>
+        </StaggeredList>
       </ScrollView>
+      </GlassBackground>
+
+      <CopyMealsModal
+        visible={showCopyModal}
+        onDismiss={() => setShowCopyModal(false)}
+        onCopied={() => { setShowCopyModal(false); load(); }}
+        colors={colors}
+        activeSlots={activeSlots}
+      />
+
+      <WeeklyCheckInModal
+        visible={showCheckIn}
+        onDismiss={handleDismissCheckIn}
+        onAccept={handleAcceptCheckIn}
+        checkInData={checkInData}
+        readiness={checkInReadiness}
+        currentTargets={{
+          calorieTarget: targets.calories,
+          proteinG: targets.protein,
+          carbsG: targets.carbs,
+          fatG: targets.fat,
+        }}
+      />
     </>
   );
 }
@@ -510,7 +868,7 @@ const styles = StyleSheet.create({
   dateLabel: { fontSize: 13, textAlign: 'center', marginTop: 14, marginBottom: 4 },
 
   // Calorie ring
-  ringContainer: { alignItems: 'center', justifyContent: 'center', marginVertical: 20, height: RING_SIZE },
+  ringContainer: { width: RING_SIZE, height: RING_SIZE, alignSelf: 'center', marginVertical: 20 },
   ringTrack: { position: 'absolute', borderWidth: RING_THICKNESS, opacity: 0.15 },
   halfClip: { position: 'absolute', width: HALF, height: RING_SIZE, overflow: 'hidden' },
   rightClip: { left: HALF },
@@ -525,7 +883,7 @@ const styles = StyleSheet.create({
   },
   rightHalf: { left: -HALF, borderLeftColor: 'transparent', borderBottomColor: 'transparent' },
   leftHalf: { left: 0, borderRightColor: 'transparent', borderTopColor: 'transparent' },
-  ringCenter: { alignItems: 'center' },
+  ringCenter: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   ringConsumed: { fontSize: 38, fontWeight: '800', lineHeight: 42 },
   ringUnit: { fontSize: 13, marginTop: 2 },
   ringDivider: { width: 40, height: 1, marginVertical: 6 },
@@ -533,6 +891,7 @@ const styles = StyleSheet.create({
   overBadge: {
     position: 'absolute',
     bottom: -8,
+    alignSelf: 'center',
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 12,
@@ -546,8 +905,40 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 16,
     gap: 14,
+    marginBottom: 12,
+  },
+  adaptiveCard: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  adaptiveText: { fontSize: 13, fontWeight: '500' },
+  adaptiveBadge: {
+    backgroundColor: Colors.nutrition + '22',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  adaptiveBadgeText: { fontSize: 11, color: Colors.nutrition, fontWeight: '600' },
+
+  microsCard: {
+    marginHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     marginBottom: 20,
   },
+  microsLabel: { fontSize: 14, fontWeight: '600' },
   macroRow: { gap: 6 },
   macroLabelRow: { flexDirection: 'row', alignItems: 'center' },
   macroLabel: { fontSize: 13, fontWeight: '600', flex: 1 },
@@ -610,4 +1001,41 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   addFoodBtnText: { fontSize: 13, fontWeight: '600' },
+});
+
+const copyStyles = StyleSheet.create({
+  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
+  sheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '75%',
+    paddingBottom: 34,
+  },
+  handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 10, marginBottom: 4 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerTitle: { fontSize: 16, fontWeight: '700' },
+  feedback: { alignItems: 'center', paddingVertical: 40, gap: 12, paddingHorizontal: 32 },
+  feedbackText: { fontSize: 14, textAlign: 'center' },
+  list: { maxHeight: 360 },
+  slotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    gap: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  slotInfo: { flex: 1 },
+  slotLabel: { fontSize: 15, fontWeight: '600' },
+  slotSub: { fontSize: 12, marginTop: 2 },
+  footer: { paddingHorizontal: 18, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth },
+  copyBtn: { borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  copyBtnText: { color: 'white', fontSize: 15, fontWeight: '700' },
 });

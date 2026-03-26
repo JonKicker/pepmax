@@ -20,12 +20,26 @@ import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors } from '../../../src/constants/theme';
 import { getPeptides, addDose } from '../../../src/services/peptideService';
 import {
-  INJECTION_SITES,
   INJECTION_SITE_LABELS,
   MOOD_EMOJIS,
   UNITS,
 } from '../../../src/types/peptide';
 import type { Peptide, Unit, InjectionSite } from '../../../src/types/peptide';
+import InjectionSiteMap from '../../../src/components/peptides/InjectionSiteMap';
+import { FastingWindowBanner } from '../../../src/components/peptides/FastingWindowBanner';
+import {
+  scheduleDoseReminder,
+  schedulePeptideFastingWindowNotification,
+  FREQUENCY_TO_HOURS,
+} from '../../../src/services/notificationService';
+import { decrementInventoryOnDose } from '../../../src/services/inventoryService';
+import { analytics, AnalyticsEvent } from '../../../src/services/analytics';
+import { useXP } from '../../../src/hooks/useXP';
+import { pushPeptideToWatch } from '../../../src/utils/watchSync';
+import { getDoses } from '../../../src/services/peptideService';
+import { computeSiteStats, suggestNextSite } from '../../../src/utils/siteRotation';
+import { msUntilPeptideFastingWindowEnds, getPeptideFastingReasoning } from '../../../src/utils/peptideFasting';
+import { GlassBackground } from '../../../src/components/GlassBackground';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -57,7 +71,8 @@ function isToday(d: Date): boolean {
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
-function Toast({ visible }: { visible: boolean }) {
+function Toast({ visible, inventoryLine }: { visible: boolean; inventoryLine?: string | null }) {
+  const { colors: toastColors } = useTheme();
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -69,9 +84,14 @@ function Toast({ visible }: { visible: boolean }) {
   }, [visible, opacity]);
 
   return (
-    <Animated.View style={[styles.toast, { opacity }]} pointerEvents="none">
+    <Animated.View style={[styles.toast, { opacity, backgroundColor: toastColors.surface }]} pointerEvents="none">
       <Ionicons name="checkmark-circle" size={20} color="white" />
-      <Text style={styles.toastText}>Dose logged! ✓</Text>
+      <View>
+        <Text style={styles.toastText}>Dose logged! ✓</Text>
+        {inventoryLine ? (
+          <Text style={styles.toastSubText}>{inventoryLine}</Text>
+        ) : null}
+      </View>
     </Animated.View>
   );
 }
@@ -81,11 +101,13 @@ function Toast({ visible }: { visible: boolean }) {
 export default function LogDoseScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const { awardXP } = useXP();
 
   const [peptides, setPeptides] = useState<Peptide[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
+  const [inventoryToast, setInventoryToast] = useState<string | null>(null);
 
   // Form state
   const [selectedPeptide, setSelectedPeptide] = useState<Peptide | null>(null);
@@ -94,6 +116,7 @@ export default function LogDoseScreen() {
   const [unit, setUnit] = useState<Unit>('mcg');
   const [site, setSite] = useState<InjectionSite | null>(null);
   const [siteOther, setSiteOther] = useState('');
+  const [siteMapVisible, setSiteMapVisible] = useState(false);
   const [timestamp, setTimestamp] = useState<Date>(new Date());
   const [mood, setMood] = useState<number>(3);
   const [notes, setNotes] = useState('');
@@ -166,6 +189,85 @@ export default function LogDoseScreen() {
       return;
     }
 
+    analytics.track(AnalyticsEvent.DOSE_LOGGED, {
+      peptide_name: selectedPeptide.name,
+      method: 'full_form',
+    });
+
+    // Award XP — fire-and-forget, never blocks save flow
+    awardXP(15, 'log_dose', 'peptides').catch(() => {});
+
+    // Schedule next-dose reminder — fire-and-forget, never blocks the save flow
+    const intervalHours = FREQUENCY_TO_HOURS[selectedPeptide.frequency];
+    if (intervalHours !== undefined) {
+      scheduleDoseReminder(selectedPeptide.id, selectedPeptide.name, intervalHours).catch(
+        () => {},
+      );
+      analytics.track(AnalyticsEvent.REMINDER_SET, {});
+    }
+
+    // Schedule peptide-fasting eating-window notification — fire-and-forget
+    const fw = selectedPeptide.fastingWindow;
+    if (fw && fw.notifyWhenWindowEnds && fw.postInjectionMinutes > 0) {
+      const doseMs = timestamp.getTime();
+      const msUntilOpen = msUntilPeptideFastingWindowEnds(
+        [
+          {
+            peptideId: selectedPeptide.id,
+            peptideName: selectedPeptide.name,
+            doseTimestampMs: doseMs,
+            fastingWindow: fw,
+          },
+        ],
+        doseMs, // use dose time as "now" so post window is still in the future
+      );
+      if (msUntilOpen !== null && msUntilOpen > 0) {
+        schedulePeptideFastingWindowNotification(
+          selectedPeptide.id,
+          selectedPeptide.name,
+          msUntilOpen / 1000,
+        ).catch(() => {});
+        analytics.track(AnalyticsEvent.PEPTIDE_FASTING_REMINDER_SET, {
+          peptide_name: selectedPeptide.name,
+          post_minutes: fw.postInjectionMinutes,
+        });
+      }
+    }
+
+    // Fire-and-forget inventory decrement
+    decrementInventoryOnDose(selectedPeptide.id, doseAmount, unit)
+      .then((result) => {
+        if (result?.compoundResult) {
+          setInventoryToast(
+            `${result.compoundResult.itemName} — ${result.compoundResult.remaining} ${unit} remaining`,
+          );
+        }
+      })
+      .catch(() => {});
+
+    // Push updated peptide state to Apple Watch — fire-and-forget
+    getDoses({ peptideId: selectedPeptide.id }).then((dosesResult) => {
+      const allDoses = dosesResult.data ?? [];
+      const stats = computeSiteStats(allDoses);
+      const suggested = suggestNextSite(stats);
+      const lastDose = allDoses[0]
+        ? { site: allDoses[0].site, timestamp: allDoses[0].timestamp.toDate() }
+        : null;
+      pushPeptideToWatch(
+        {
+          id: selectedPeptide.id,
+          name: selectedPeptide.name,
+          defaultDose: doseAmount,
+          unit,
+        },
+        lastDose,
+        suggested.site,
+        0, // daysUntilResupply — not available in this context; watch will show existing value
+        stats.map((s) => s.site),
+        [],
+      );
+    }).catch(() => {});
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setToastVisible(true);
     setTimeout(() => {
@@ -200,7 +302,8 @@ export default function LogDoseScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <GlassBackground>
+    <View style={{ flex: 1 }}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -236,6 +339,15 @@ export default function LogDoseScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+          )}
+
+          {/* Peptide fasting guidance banner — shown when the peptide has a configured window */}
+          {selectedPeptide?.fastingWindow && (
+            <FastingWindowBanner
+              fastingWindow={selectedPeptide.fastingWindow}
+              colors={colors}
+              reasoning={getPeptideFastingReasoning(selectedPeptide.category)}
+            />
           )}
 
           {/* Dose amount + unit */}
@@ -275,27 +387,35 @@ export default function LogDoseScreen() {
             </View>
           </View>
 
-          {/* Injection site grid */}
+          {/* Injection site — map selector */}
           <Text style={[styles.label, { color: colors.textSecondary }]}>INJECTION SITE</Text>
-          <View style={styles.siteGrid}>
-            {INJECTION_SITES.map((s) => (
-              <TouchableOpacity
-                key={s}
-                style={[
-                  styles.siteBtn,
-                  {
-                    backgroundColor: site === s ? Colors.peptide : colors.surface,
-                    borderColor: site === s ? Colors.peptide : colors.border,
-                  },
-                ]}
-                onPress={() => setSite(s)}
-              >
-                <Text style={[styles.siteBtnText, { color: site === s ? 'white' : colors.textPrimary }]}>
-                  {INJECTION_SITE_LABELS[s]}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <TouchableOpacity
+            style={[
+              styles.siteMapBtn,
+              {
+                backgroundColor: colors.surface,
+                borderColor: site ? Colors.peptide : colors.border,
+              },
+            ]}
+            onPress={() => setSiteMapVisible(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="body-outline"
+              size={20}
+              color={site ? Colors.peptide : colors.textSecondary}
+            />
+            {site ? (
+              <Text style={[styles.siteMapBtnLabel, { color: Colors.peptide, flex: 1 }]}>
+                {INJECTION_SITE_LABELS[site]}
+              </Text>
+            ) : (
+              <Text style={[styles.siteMapBtnPlaceholder, { color: colors.textSecondary }]}>
+                Select injection site…
+              </Text>
+            )}
+            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+          </TouchableOpacity>
           {site === 'other' && (
             <TextInput
               style={[
@@ -374,7 +494,7 @@ export default function LogDoseScreen() {
             style={[styles.saveBtn, { backgroundColor: Colors.peptide }]}
             onPress={handleSave}
             disabled={saving}
-            activeOpacity={0.85}
+            activeOpacity={0.7}
           >
             {saving ? (
               <ActivityIndicator color="white" />
@@ -385,8 +505,19 @@ export default function LogDoseScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <Toast visible={toastVisible} />
+      <Toast visible={toastVisible} inventoryLine={inventoryToast} />
+
+      <InjectionSiteMap
+        visible={siteMapVisible}
+        onClose={() => setSiteMapVisible(false)}
+        onSiteSelected={(s) => {
+          setSite(s);
+          setSiteMapVisible(false);
+        }}
+        currentSite={site}
+      />
     </View>
+    </GlassBackground>
   );
 }
 
@@ -395,7 +526,7 @@ export default function LogDoseScreen() {
 const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30 },
   emptyText: { fontSize: 15, textAlign: 'center', marginTop: 16, marginBottom: 24, lineHeight: 22 },
-  goLibraryBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 },
+  goLibraryBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10, minHeight: 44 },
   goLibraryBtnText: { color: 'white', fontWeight: '700', fontSize: 15 },
 
   scroll: { padding: 20, paddingBottom: 60 },
@@ -409,6 +540,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 13,
+    minHeight: 44,
   },
   selectorBtnText: { fontSize: 16 },
 
@@ -425,22 +557,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 13,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    minHeight: 44,
   },
   pickerItemText: { fontSize: 15, fontWeight: '500' },
   pickerItemSub: { fontSize: 13 },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 },
+  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, minHeight: 44 },
   doseInput: { flex: 1 },
   notesInput: { height: 90, paddingTop: 12 },
 
   unitRow: { flexDirection: 'row', gap: 6 },
-  unitBtn: { paddingHorizontal: 14, paddingVertical: 12, borderRadius: 10, borderWidth: 1 },
+  unitBtn: { paddingHorizontal: 14, paddingVertical: 12, borderRadius: 10, borderWidth: 1, minHeight: 44 },
   unitBtnText: { fontSize: 14, fontWeight: '600' },
 
-  siteGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  siteBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
-  siteBtnText: { fontSize: 13, fontWeight: '500' },
+  siteMapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    gap: 10,
+    minHeight: 44,
+  },
+  siteMapBtnLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  siteMapBtnPlaceholder: {
+    flex: 1,
+    fontSize: 16,
+  },
 
   dateRow: {
     flexDirection: 'row',
@@ -463,7 +611,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 8,
   },
-  moodBtn: { padding: 8 },
+  moodBtn: { padding: 8, minHeight: 44, justifyContent: 'center' },
   moodEmoji: { fontSize: 28, opacity: 0.45 },
   moodEmojiActive: { opacity: 1, transform: [{ scale: 1.15 }] },
 
@@ -477,7 +625,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#1a1a1a',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 24,
@@ -488,4 +635,5 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   toastText: { color: 'white', fontWeight: '600', fontSize: 14 },
+  toastSubText: { color: 'rgba(255,255,255,0.8)', fontSize: 11, marginTop: 2 },
 });

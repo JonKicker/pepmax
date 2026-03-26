@@ -10,14 +10,23 @@ export default function NutritionLayout() {
         headerStyle: { backgroundColor: colors.surface },
         headerTintColor: Colors.nutrition,
         headerTitleStyle: { color: colors.textPrimary },
+        animation: 'slide_from_right',
       }}
     >
       <Stack.Screen name="index" options={{ title: 'Nutrition' }} />
       <Stack.Screen name="add-food" options={{ title: 'Add Food' }} />
       <Stack.Screen name="food-detail" options={{ title: 'Food Detail' }} />
       <Stack.Screen name="manual-entry" options={{ title: 'Manual Entry' }} />
+      <Stack.Screen name="barcode-scan" options={{ title: 'Scan Barcode', presentation: 'modal' }} />
       <Stack.Screen name="history" options={{ title: 'Nutrition History' }} />
       <Stack.Screen name="settings" options={{ title: 'Nutrition Settings' }} />
+      <Stack.Screen name="my-recipes" options={{ title: 'My Recipes' }} />
+      <Stack.Screen name="create-recipe" options={{ title: 'Create Recipe' }} />
+      <Stack.Screen name="micros" options={{ title: 'Micronutrients' }} />
+      <Stack.Screen name="fasting-setup" options={{ title: 'Fasting Setup' }} />
+      <Stack.Screen name="fasting-timer" options={{ title: 'Fasting Timer' }} />
+      <Stack.Screen name="weight-log" options={{ title: 'Weight Log' }} />
+      <Stack.Screen name="progress" options={{ title: 'Nutrition Trends' }} />
     </Stack>
   );
 }

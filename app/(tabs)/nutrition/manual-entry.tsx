@@ -17,10 +17,11 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors, Theme } from '../../../src/constants/theme';
+import { useAuth } from '../../../src/contexts/AuthContext';
 import { logFood } from '../../../src/services/nutritionService';
 import { toLocalDateKey } from '../../../src/utils/nutrition';
-import { MEAL_SLOTS, MEAL_SLOT_LABELS } from '../../../src/types/nutrition';
-import type { MealSlot } from '../../../src/types/nutrition';
+import { DEFAULT_MEAL_SLOTS, getSlotLabel } from '../../../src/types/nutrition';
+import type { MealSlotConfig } from '../../../src/types/nutrition';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
@@ -78,6 +79,8 @@ function Field({
 export default function ManualEntryScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const { userProfile } = useAuth();
+  const activeSlots: MealSlotConfig[] = userProfile?.mealSlots ?? DEFAULT_MEAL_SLOTS;
 
   const [foodName, setFoodName] = useState('');
   const [calories, setCalories] = useState('');
@@ -86,7 +89,7 @@ export default function ManualEntryScreen() {
   const [fat, setFat] = useState('');
   const [servingSize, setServingSize] = useState('100');
   const [servingUnit, setServingUnit] = useState('g');
-  const [mealSlot, setMealSlot] = useState<MealSlot>('breakfast');
+  const [mealSlot, setMealSlot] = useState<string>(activeSlots[0]?.id ?? 'breakfast');
   const [showSlotPicker, setShowSlotPicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
@@ -203,21 +206,21 @@ export default function ManualEntryScreen() {
             style={[styles.slotBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             onPress={() => setShowSlotPicker((v) => !v)}
           >
-            <Text style={[styles.slotBtnText, { color: colors.textPrimary }]}>{MEAL_SLOT_LABELS[mealSlot]}</Text>
+            <Text style={[styles.slotBtnText, { color: colors.textPrimary }]}>{getSlotLabel(mealSlot, activeSlots)}</Text>
             <Ionicons name={showSlotPicker ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textSecondary} />
           </TouchableOpacity>
           {showSlotPicker && (
             <View style={[styles.slotDropdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              {MEAL_SLOTS.map((s) => (
+              {activeSlots.map((slot) => (
                 <TouchableOpacity
-                  key={s}
+                  key={slot.id}
                   style={[styles.slotItem, { borderBottomColor: colors.border }]}
-                  onPress={() => { setMealSlot(s); setShowSlotPicker(false); }}
+                  onPress={() => { setMealSlot(slot.id); setShowSlotPicker(false); }}
                 >
-                  <Text style={[styles.slotItemText, { color: s === mealSlot ? Colors.nutrition : colors.textPrimary }]}>
-                    {MEAL_SLOT_LABELS[s]}
+                  <Text style={[styles.slotItemText, { color: slot.id === mealSlot ? Colors.nutrition : colors.textPrimary }]}>
+                    {slot.label}
                   </Text>
-                  {s === mealSlot && <Ionicons name="checkmark" size={16} color={Colors.nutrition} />}
+                  {slot.id === mealSlot && <Ionicons name="checkmark" size={16} color={Colors.nutrition} />}
                 </TouchableOpacity>
               ))}
             </View>
@@ -227,7 +230,7 @@ export default function ManualEntryScreen() {
             style={[styles.logBtn, { backgroundColor: Colors.nutrition }]}
             onPress={handleLog}
             disabled={saving}
-            activeOpacity={0.85}
+            activeOpacity={0.7}
           >
             {saving ? <ActivityIndicator color="white" /> : <Text style={styles.logBtnText}>Log Food</Text>}
           </TouchableOpacity>

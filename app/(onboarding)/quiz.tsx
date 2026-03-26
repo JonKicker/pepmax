@@ -8,7 +8,8 @@ import { serverTimestamp } from 'firebase/firestore';
 import { useTheme } from '../../src/hooks/useTheme';
 import { Colors, Theme } from '../../src/constants/theme';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { setDocument, COLLECTIONS } from '../../src/services/firebase/firestore';
+import { mergeDocument, COLLECTIONS } from '../../src/services/firebase/firestore';
+import { analytics, AnalyticsEvent } from '../../src/services/analytics';
 import { calculateTDEE, calculateMacros, lbsToKg, feetInchesToCm } from '../../src/utils/tdee';
 import type { Goal, ExperienceLevel, Units, Sex } from '../../src/types/profile';
 
@@ -41,7 +42,7 @@ const INITIAL: QuizData = {
 
 export default function QuizScreen() {
   const { colors } = useTheme();
-  const { currentUser } = useAuth();
+  const { currentUser, refreshProfile } = useAuth();
   const [step, setStep] = useState(1);
   const [data, setData] = useState<QuizData>(INITIAL);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +89,7 @@ export default function QuizScreen() {
 
     if (step < TOTAL_STEPS) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      analytics.track(AnalyticsEvent.ONBOARDING_STEP_VIEWED, { step: step + 1, total_steps: TOTAL_STEPS });
       setStep((s) => s + 1);
       return;
     }
@@ -98,7 +100,10 @@ export default function QuizScreen() {
   }
 
   async function saveProfile() {
-    if (!currentUser) return;
+    if (!currentUser) {
+      if (__DEV__) console.log('[quiz] saveProfile: no currentUser, aborting');
+      return;
+    }
     setSaving(true);
 
     // Convert body stats to metric
@@ -118,7 +123,7 @@ export default function QuizScreen() {
     const tdee = calculateTDEE(weightKg, heightCm, age, sex);
     const macros = calculateMacros(tdee);
 
-    const result = await setDocument(COLLECTIONS.PROFILE, 'data', {
+    const result = await mergeDocument(COLLECTIONS.PROFILE, 'data', {
       goals: data.goals,
       experienceLevel: data.experienceLevel!,
       units: data.units!,
@@ -129,16 +134,28 @@ export default function QuizScreen() {
       tdee,
       calorieTarget: tdee,
       macros,
+      onboardingComplete: true,
       quizCompletedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
 
-    setSaving(false);
-
     if (result.error) {
+      console.error('[quiz] Firestore write failed:', result.error);
+      setSaving(false);
       setError('Failed to save. Check your connection and try again.');
+      return;
     }
-    // On success: AuthGuard detects quizCompletedAt and redirects to /(tabs)
+
+    if (__DEV__) console.log('[quiz] Firestore write confirmed — onboardingComplete: true saved to users/{uid}/profile/data');
+    // Refresh full profile from Firestore — returns onboardingComplete: true + all quiz data (TDEE, macros, etc.)
+    // AuthGuard re-evaluates on profileLoading → false and redirects to /(tabs).
+    await refreshProfile();
+    analytics.track(AnalyticsEvent.ONBOARDING_COMPLETED, {
+      goals: data.goals.join(','),
+      experience_level: data.experienceLevel ?? '',
+    });
+    if (__DEV__) console.log('[quiz] refreshProfile complete — AuthGuard should redirect to /(tabs)');
+    setSaving(false);
   }
 
   function handleBack() {

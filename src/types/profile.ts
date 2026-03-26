@@ -1,5 +1,6 @@
 import { Timestamp } from 'firebase/firestore';
 import type { MealSlotConfig } from './nutrition';
+import type { AdaptiveCoachingState } from './adaptiveCoaching';
 
 export type Goal = 'peptides' | 'nutrition' | 'training' | 'cardio';
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
@@ -19,6 +20,16 @@ export type MacroTargets = {
 };
 
 export type UserProfile = {
+  // Identity — set at sign-up, preserved through quiz
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+
+  // Public-facing profile fields
+  profilePictureUrl?: string;
+  bio?: string;
+  username?: string;
+
   // Quiz answers
   goals: Goal[];
   experienceLevel: ExperienceLevel;
@@ -35,13 +46,46 @@ export type UserProfile = {
   calorieTarget: number;
   macros: MacroTargets;
 
+  // Goal weight for body tracking (kg)
+  goalWeight?: number;
+
   // Activity multiplier stored for display in Nutrition Settings
   activityLevel?: number;
 
   // Custom / reordered meal slots. Falls back to DEFAULT_MEAL_SLOTS when absent.
   mealSlots?: MealSlotConfig[];
 
+  // Goal for calorie targeting (applied as offset to TDEE)
+  goalType?: 'lose' | 'maintain' | 'gain';
+
+  // Training day schedule — 0=Sun..6=Sat. Non-training days are rest days.
+  // Default when absent: all 7 days (every day is planned).
+  trainingDays?: number[];
+
+  // Apple HealthKit sync opt-in (iOS only)
+  healthKitEnabled?: boolean;
+
+  // Notification opt-ins (default: both enabled)
+  notificationPrefs?: {
+    doseReminders: boolean;
+    workoutReminders: boolean;
+    recoveryCheckIn?: boolean;
+    recoveryCheckInHour?: number;         // 0–23, default 7
+    recoveryCheckInMinute?: number;       // 0–59, default 0
+    recoveryCheckInOptimized?: boolean;   // true = HealthKit-adaptive schedule
+    doseReminderHour?: number;            // 0–23, default 9
+    doseReminderMinute?: number;          // 0–59, default 0
+    doseReminderOptimized?: boolean;      // true = HealthKit-adaptive schedule
+    workoutReminderHour?: number;         // 0–23, default 17
+    workoutReminderMinute?: number;       // 0–59, default 0
+    workoutReminderOptimized?: boolean;   // true = HealthKit-adaptive schedule
+  };
+
+  // Adaptive calorie coaching — optional; absent means feature not yet enabled
+  adaptiveCoaching?: AdaptiveCoachingState;
+
   // Meta
+  onboardingComplete?: boolean;
   quizCompletedAt: Timestamp;
   updatedAt: Timestamp;
 };

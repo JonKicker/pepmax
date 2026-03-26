@@ -8,17 +8,102 @@ import {
   Alert,
   Animated,
   PanResponder,
-  ActivityIndicator,
   RefreshControl,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../src/hooks/useTheme';
+import { AnimatedPressable } from '../../../src/components/AnimatedPressable';
+import { GradientButton } from '../../../src/components/GradientButton';
+import { StaggeredList } from '../../../src/components/StaggeredList';
+import { PeptidesSkeleton } from '../../../src/components/SkeletonScreen';
 import { Colors } from '../../../src/constants/theme';
-import { getPeptides, deletePeptide } from '../../../src/services/peptideService';
+import { getPeptides, deletePeptide, addPeptideFromPreset } from '../../../src/services/peptideService';
 import { FREQUENCY_LABELS } from '../../../src/types/peptide';
 import type { Peptide } from '../../../src/types/peptide';
+import PresetBrowser from '../../../src/components/peptides/PresetBrowser';
+import { GlassBackground } from '../../../src/components/GlassBackground';
+import type { Compound } from '../../../src/data/compoundDatabase';
+import { useCycleStatus } from '../../../src/hooks/useCycleStatus';
+import type { ActiveCycleInfo } from '../../../src/hooks/useCycleStatus';
+
+// ─── Active cycle card ────────────────────────────────────────────────────────
+
+function ActiveCycleCard({
+  info,
+  colors,
+}: {
+  info: ActiveCycleInfo;
+  colors: ReturnType<typeof import('../../../src/hooks/useTheme').useTheme>['colors'];
+}) {
+  const { cycle, currentWeek, totalWeeks, currentDose, missedCount, completedCount, totalPlanned, nextDoseDate } = info;
+  const progressPct = totalPlanned > 0 ? completedCount / totalPlanned : 0;
+
+  function fmtDate(dateStr: string): string {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  return (
+    <View style={[cycleCardStyles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={[cycleCardStyles.accent, { backgroundColor: Colors.peptide }]} />
+      <View style={cycleCardStyles.body}>
+        <View style={cycleCardStyles.titleRow}>
+          <Text style={[cycleCardStyles.name, { color: colors.textPrimary }]} numberOfLines={1}>
+            {cycle.compoundName}
+          </Text>
+          <View style={[cycleCardStyles.badge, { backgroundColor: Colors.peptide + '1A' }]}>
+            <Text style={[cycleCardStyles.badgeText, { color: Colors.peptide }]}>Active</Text>
+          </View>
+        </View>
+        <Text style={[cycleCardStyles.detail, { color: colors.textSecondary }]}>
+          Week {currentWeek}{totalWeeks ? ` of ${totalWeeks}` : ''} · Current dose: {currentDose} {cycle.unit}
+        </Text>
+        <View style={[cycleCardStyles.progressTrack, { backgroundColor: colors.border }]}>
+          <View
+            style={[
+              cycleCardStyles.progressFill,
+              {
+                backgroundColor: Colors.peptide,
+                width: `${Math.min(progressPct * 100, 100)}%` as `${number}%`,
+              },
+            ]}
+          />
+        </View>
+        <View style={cycleCardStyles.statsRow}>
+          <Text style={[cycleCardStyles.statText, { color: colors.textSecondary }]}>
+            {completedCount}/{totalPlanned} logged
+          </Text>
+          {missedCount > 0 && (
+            <Text style={cycleCardStyles.missedText}>{missedCount} missed</Text>
+          )}
+          {nextDoseDate && (
+            <Text style={[cycleCardStyles.statText, { color: colors.textSecondary }]}>
+              Next: {fmtDate(nextDoseDate)}
+            </Text>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const cycleCardStyles = StyleSheet.create({
+  card: { flexDirection: 'row', borderWidth: 1, borderRadius: 12, marginHorizontal: 16, marginTop: 10, overflow: 'hidden' },
+  accent: { width: 4 },
+  body: { flex: 1, paddingVertical: 12, paddingHorizontal: 12 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  name: { fontSize: 15, fontWeight: '700', flex: 1 },
+  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
+  badgeText: { fontSize: 11, fontWeight: '700' },
+  detail: { fontSize: 13, marginBottom: 8 },
+  progressTrack: { height: 4, borderRadius: 2, marginBottom: 6 },
+  progressFill: { height: 4, borderRadius: 2 },
+  statsRow: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
+  statText: { fontSize: 12 },
+  missedText: { fontSize: 12, fontWeight: '600', color: '#E67E22' },
+});
 
 // ─── Swipeable card ──────────────────────────────────────────────────────────
 
@@ -91,9 +176,9 @@ function SwipeableCard({
               onEdit(peptide);
             }
           }}
-          activeOpacity={0.85}
+          activeOpacity={0.7}
         >
-          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.card, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}>
             <View style={[styles.cardAccent, { backgroundColor: Colors.peptide }]} />
             <View style={styles.cardBody}>
               <Text style={[styles.cardName, { color: colors.textPrimary }]}>{peptide.name}</Text>
@@ -108,6 +193,20 @@ function SwipeableCard({
                     {FREQUENCY_LABELS[peptide.frequency]}
                   </Text>
                 </View>
+                {!!peptide.category && (
+                  <View style={[styles.badge, { marginLeft: 6 }]}>
+                    <Text style={[styles.badgeText, { color: colors.textSecondary }]}>
+                      {peptide.category}
+                    </Text>
+                  </View>
+                )}
+                {!!peptide.route && (
+                  <View style={[styles.badge, { marginLeft: 6 }]}>
+                    <Text style={[styles.badgeText, { color: colors.textSecondary }]}>
+                      {peptide.route}
+                    </Text>
+                  </View>
+                )}
               </View>
               {!!peptide.notes && (
                 <Text style={[styles.cardNotes, { color: colors.textSecondary }]} numberOfLines={1}>
@@ -153,6 +252,8 @@ export default function PeptidesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [presetModalVisible, setPresetModalVisible] = useState(false);
+  const { activeCycles } = useCycleStatus();
 
   const load = async (refresh = false) => {
     if (refresh) setRefreshing(true);
@@ -198,56 +299,129 @@ export default function PeptidesScreen() {
   };
 
   const handleAdd = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push('/(tabs)/peptides/peptide-form');
   };
 
+  const handleAddPreset = async (preset: Compound, dose: number) => {
+    setPresetModalVisible(false);
+    const result = await addPeptideFromPreset(preset, dose);
+    if (result.error) {
+      Alert.alert('Error', 'Could not add compound. Please try again.');
+      return;
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    load();
+  };
+
   if (loading) {
-    return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={Colors.peptide} size="large" />
-      </View>
-    );
+    return <PeptidesSkeleton />;
   }
 
   if (loadError) {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <Ionicons name="cloud-offline-outline" size={48} color={colors.textSecondary} />
-        <Text style={[styles.errorText, { color: colors.textSecondary }]}>{loadError}</Text>
-        <TouchableOpacity
-          style={[styles.retryBtn, { backgroundColor: Colors.peptide }]}
-          onPress={() => load()}
-        >
-          <Text style={styles.retryBtnText}>Retry</Text>
-        </TouchableOpacity>
-      </View>
+      <GlassBackground>
+        <View style={styles.centered}>
+          <Ionicons name="cloud-offline-outline" size={48} color={colors.textSecondary} />
+          <Text style={[styles.errorText, { color: colors.textSecondary }]}>{loadError}</Text>
+          <TouchableOpacity
+            style={[styles.retryBtn, { backgroundColor: Colors.peptide }]}
+            onPress={() => load()}
+          >
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </GlassBackground>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Quick-action row */}
-      <View style={[styles.actionRow, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity
-          style={[styles.actionBtn, { borderColor: Colors.peptide }]}
-          onPress={() => router.push('/(tabs)/peptides/history')}
-        >
-          <Ionicons name="time-outline" size={16} color={Colors.peptide} />
-          <Text style={[styles.actionBtnText, { color: Colors.peptide }]}>Dose History</Text>
-        </TouchableOpacity>
+    <GlassBackground>
+    <View style={styles.container}>
+      <StaggeredList staggerDelay={80}>
+        {/* Log Dose — full-width primary action */}
+        <View style={styles.logDoseWrapper}>
+          <GradientButton
+            label="Log Dose"
+            icon="add-circle"
+            colors={['#2E86C1', '#1A6FA0']}
+            onPress={() => router.push('/(tabs)/peptides/log-dose')}
+          />
+        </View>
 
-        <TouchableOpacity
-          style={[styles.actionBtn, styles.logDoseBtn]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push('/(tabs)/peptides/log-dose');
-          }}
-        >
-          <Ionicons name="add-circle" size={16} color="white" />
-          <Text style={styles.logDoseBtnText}>Log Dose</Text>
-        </TouchableOpacity>
-      </View>
+        {/* Quick-action grid — 3 × 2 */}
+        <View style={styles.quickActions}>
+          <AnimatedPressable
+            haptic
+            style={[styles.quickBtn, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+            onPress={() => router.push('/(tabs)/peptides/cycle-planner')}
+          >
+            <Ionicons name="calendar-outline" size={18} color={Colors.peptide} />
+            <Text style={[styles.quickBtnText, { color: Colors.peptide }]}>Plan Cycle</Text>
+          </AnimatedPressable>
+
+          <AnimatedPressable
+            haptic
+            style={[styles.quickBtn, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+            onPress={() => setPresetModalVisible(true)}
+          >
+            <Ionicons name="flask-outline" size={18} color={Colors.peptide} />
+            <Text style={[styles.quickBtnText, { color: Colors.peptide }]}>Browse Presets</Text>
+          </AnimatedPressable>
+
+          <AnimatedPressable
+            haptic
+            style={[styles.quickBtn, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+            onPress={() => router.push('/(tabs)/peptides/history')}
+          >
+            <Ionicons name="time-outline" size={18} color={Colors.peptide} />
+            <Text style={[styles.quickBtnText, { color: Colors.peptide }]}>Dose History</Text>
+          </AnimatedPressable>
+
+          <AnimatedPressable
+            haptic
+            style={[styles.quickBtn, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+            onPress={() => router.push('/(tabs)/peptides/half-life-timeline')}
+          >
+            <Ionicons name="pulse-outline" size={18} color={Colors.peptide} />
+            <Text style={[styles.quickBtnText, { color: Colors.peptide }]}>Blood Levels</Text>
+          </AnimatedPressable>
+
+          <AnimatedPressable
+            haptic
+            style={[styles.quickBtn, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+            onPress={() => router.push('/(tabs)/peptides/recon-calculator')}
+          >
+            <Ionicons name="calculator-outline" size={18} color={Colors.peptide} />
+            <Text style={[styles.quickBtnText, { color: Colors.peptide }]}>Calculator</Text>
+          </AnimatedPressable>
+
+          <AnimatedPressable
+            haptic
+            style={[styles.quickBtn, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+            onPress={() => router.push('/(tabs)/peptides/inventory')}
+          >
+            <Ionicons name="cube-outline" size={18} color={Colors.peptide} />
+            <Text style={[styles.quickBtnText, { color: Colors.peptide }]}>Inventory</Text>
+          </AnimatedPressable>
+
+          <AnimatedPressable
+            haptic
+            style={[styles.quickBtn, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+            onPress={() => router.push('/(tabs)/peptides/progress')}
+          >
+            <Ionicons name="trending-up-outline" size={18} color={Colors.peptide} />
+            <Text style={[styles.quickBtnText, { color: Colors.peptide }]}>Dose Trends</Text>
+          </AnimatedPressable>
+        </View>
+
+        {activeCycles.length > 0 && (
+          <View style={{ paddingBottom: 4 }}>
+            {activeCycles.map((info) => (
+              <ActiveCycleCard key={info.cycle.id} info={info} colors={colors} />
+            ))}
+          </View>
+        )}
+      </StaggeredList>
 
       <FlatList
         data={peptides}
@@ -263,10 +437,18 @@ export default function PeptidesScreen() {
       />
 
       {/* Floating action button */}
-      <TouchableOpacity style={[styles.fab, { backgroundColor: Colors.peptide }]} onPress={handleAdd} activeOpacity={0.85}>
+      <AnimatedPressable haptic style={[styles.fab, { backgroundColor: Colors.peptide }]} onPress={handleAdd}>
         <Ionicons name="add" size={30} color="white" />
-      </TouchableOpacity>
+      </AnimatedPressable>
+
+      <PresetBrowser
+        visible={presetModalVisible}
+        onClose={() => setPresetModalVisible(false)}
+        onAdd={handleAddPreset}
+        existingPeptideNames={peptides.map((p) => p.name)}
+      />
     </View>
+    </GlassBackground>
   );
 }
 
@@ -279,30 +461,37 @@ const styles = StyleSheet.create({
   retryBtn: { paddingHorizontal: 28, paddingVertical: 12, borderRadius: 10 },
   retryBtnText: { color: 'white', fontWeight: '700', fontSize: 15 },
 
-  actionRow: {
+  logDoseWrapper: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
+  logDoseButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.peptide,
+    borderRadius: 10,
+    paddingVertical: 14,
+    gap: 8,
+  },
+  logDoseButtonText: { color: 'white', fontSize: 16, fontWeight: '700' },
+  quickActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingTop: 8,
+    paddingBottom: 4,
     gap: 10,
   },
-  actionBtn: {
+  quickBtn: {
+    width: '30%',
+    flexGrow: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 8,
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
     borderWidth: 1,
+    gap: 6,
   },
-  actionBtnText: { fontSize: 14, fontWeight: '600' },
-  logDoseBtn: {
-    marginLeft: 'auto',
-    backgroundColor: Colors.peptide,
-    borderColor: Colors.peptide,
-  },
-  logDoseBtnText: { fontSize: 14, fontWeight: '600', color: 'white' },
+  quickBtnText: { fontSize: 14, fontWeight: '700' },
 
   list: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 100 },
   listEmpty: { flex: 1 },

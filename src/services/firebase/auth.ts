@@ -28,6 +28,7 @@ export async function signUp(
     const { user } = await createUserWithEmailAndPassword(auth, email, password);
     return { data: user, error: null };
   } catch (e) {
+    if (__DEV__) console.error('[signUp] Firebase error:', JSON.stringify(e), e);
     return { data: null, error: e as Error };
   }
 }
