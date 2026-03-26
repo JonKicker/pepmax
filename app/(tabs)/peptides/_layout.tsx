@@ -24,6 +24,7 @@ export default function PeptidesLayout() {
       <Stack.Screen name="half-life-timeline" options={{ title: 'Activity Timeline' }} />
       <Stack.Screen name="cycle-planner" options={{ title: 'Plan Cycle' }} />
       <Stack.Screen name="inventory" options={{ title: 'Inventory' }} />
+      <Stack.Screen name="progress" options={{ title: 'Dose Trends' }} />
     </Stack>
   );
 }

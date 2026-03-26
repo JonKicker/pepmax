@@ -1,4 +1,5 @@
 import { Timestamp } from 'firebase/firestore';
+import type { PeptideFastingWindow } from './peptideFasting';
 
 export type Unit = 'mg' | 'mcg' | 'IU';
 export const UNITS: Unit[] = ['mg', 'mcg', 'IU'];
@@ -87,6 +88,8 @@ export type Peptide = {
   storageTemp?: string;
   isPreset?: boolean;   // true if added from the preset browser
   presetId?: string;    // stable key linking to the preset catalog entry
+  // Per-peptide fasting guidance — optional for backward compat with existing docs
+  fastingWindow?: PeptideFastingWindow;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 };

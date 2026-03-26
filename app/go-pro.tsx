@@ -132,7 +132,7 @@ export default function GoProScreen() {
             style={[styles.trialBtn, { backgroundColor: Colors.gold }]}
             onPress={handleStartTrial}
             disabled={starting}
-            activeOpacity={0.85}
+            activeOpacity={0.7}
           >
             {starting ? (
               <ActivityIndicator color="#1A1A2E" />
@@ -147,7 +147,7 @@ export default function GoProScreen() {
           <TouchableOpacity
             style={[styles.plansBtn, { borderColor: colors.border }]}
             onPress={() => router.push('/paywall')}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
           >
             <Text style={[styles.plansBtnText, { color: colors.textPrimary }]}>View Plans & Pricing</Text>
             <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
@@ -159,7 +159,7 @@ export default function GoProScreen() {
         <TouchableOpacity
           style={[styles.plansBtn, { borderColor: colors.border }]}
           onPress={() => router.push('/paywall')}
-          activeOpacity={0.8}
+          activeOpacity={0.7}
         >
           <Text style={[styles.plansBtnText, { color: colors.textPrimary }]}>Manage Subscription</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />

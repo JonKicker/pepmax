@@ -64,7 +64,7 @@ export default function HalfLifeTimelineScreen() {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setShowLogSideEffect(true);
         }}
-        activeOpacity={0.85}
+        activeOpacity={0.7}
       >
         <Ionicons name="add" size={28} color="white" />
         <Text style={styles.fabLabel}>Side Effect</Text>

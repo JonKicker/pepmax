@@ -28,7 +28,7 @@ export function SegmentedControl({ options, values, selectedValue, onValueChange
               selected && { backgroundColor: Colors.accent },
             ]}
             onPress={() => onValueChange(value)}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
           >
             <Text
               style={[

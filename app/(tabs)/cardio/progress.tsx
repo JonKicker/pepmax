@@ -81,7 +81,7 @@ function ChipRow<T extends string>({
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             onSelect(o.value);
           }}
-          activeOpacity={0.8}
+          activeOpacity={0.7}
         >
           <Text style={[styles.chipText, { color: selected === o.value ? 'white' : colors.textPrimary }]}>
             {o.label}
@@ -354,7 +354,7 @@ export default function ProgressScreen() {
                 pathname: '/(tabs)/cardio/session-detail',
                 params: { sessionId: pr.sessionId },
               })}
-              activeOpacity={0.8}
+              activeOpacity={0.7}
             >
               <Ionicons name="trophy" size={18} color="#FFD700" />
               <View style={styles.prInfo}>

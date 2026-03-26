@@ -32,14 +32,18 @@ export function TrainingCard({ sessions, colors, error, onPress, onStartWorkout 
         <Text style={[styles.empty, { color: colors.textSecondary }]}>Could not load training data.</Text>
       ) : sessions.length === 0 ? (
         <View>
-          <Text style={[styles.empty, { color: colors.textSecondary }]}>No workouts completed yet.</Text>
+          <View style={{ alignItems: 'center', paddingVertical: 16, gap: 8 }}>
+            <Ionicons name="barbell-outline" size={48} color={colors.textSecondary} style={{ opacity: 0.5 }} />
+            <Text style={{ fontSize: 16, fontWeight: '700', color: colors.textPrimary }}>No Sessions Yet</Text>
+            <Text style={{ fontSize: 14, color: colors.textSecondary, textAlign: 'center' }}>Start a workout to see your progress</Text>
+          </View>
           <TouchableOpacity
             style={[styles.ctaBtn, { backgroundColor: Colors.gym + '15', borderColor: Colors.gym + '30' }]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               onStartWorkout();
             }}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
           >
             <Ionicons name="flash" size={16} color={Colors.gym} />
             <Text style={[styles.ctaText, { color: Colors.gym }]}>Start Workout</Text>
@@ -134,7 +138,7 @@ export function TrainingCard({ sessions, colors, error, onPress, onStartWorkout 
                   onStartWorkout(suggestion.templateId);
                 }}
                 style={[styles.ctaBtn, { backgroundColor: Colors.gym + '15', borderColor: Colors.gym + '30' }]}
-                activeOpacity={0.8}
+                activeOpacity={0.7}
               >
                 <Ionicons name="flash" size={16} color={Colors.gym} />
                 <Text style={[styles.ctaText, { color: Colors.gym }]}>Next: {suggestion.templateName}</Text>

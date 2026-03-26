@@ -52,7 +52,7 @@ export default function ExportDataScreen() {
           style={[styles.formatBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={() => handleExport('json')}
           disabled={loading}
-          activeOpacity={0.8}
+          activeOpacity={0.7}
         >
           <Ionicons name="code-slash-outline" size={28} color={Colors.accent} />
           <Text style={[styles.formatLabel, { color: colors.textPrimary }]}>Export as JSON</Text>
@@ -68,7 +68,7 @@ export default function ExportDataScreen() {
           style={[styles.formatBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={() => handleExport('csv')}
           disabled={loading}
-          activeOpacity={0.8}
+          activeOpacity={0.7}
         >
           <Ionicons name="grid-outline" size={28} color={Colors.accent} />
           <Text style={[styles.formatLabel, { color: colors.textPrimary }]}>Export as CSV</Text>

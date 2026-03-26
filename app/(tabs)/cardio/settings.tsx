@@ -18,6 +18,7 @@ import { useAuth } from '../../../src/contexts/AuthContext';
 import { estimateMaxHR } from '../../../src/utils/cardio';
 import type { AudioCueFrequency, AudioCueContent, DistanceUnit } from '../../../src/types/cardio';
 import SafetyContactsManager from '../../../src/components/cardio/SafetyContactsManager';
+import { GlassBackground } from '../../../src/components/GlassBackground';
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
@@ -37,9 +38,15 @@ function SettingRow({ label, colors, children }: { label: string; colors: any; c
 }
 
 function Toggle({ value, onToggle }: { value: boolean; onToggle: () => void }) {
+  const { colors: themeColors } = useTheme();
   return (
-    <TouchableOpacity onPress={onToggle} activeOpacity={0.8}>
-      <View style={[styles.toggleTrack, { backgroundColor: value ? Colors.cardio : '#ccc' }]}>
+    <TouchableOpacity
+      onPress={() => { Haptics.selectionAsync(); onToggle(); }}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`Toggle ${value ? 'off' : 'on'}`}
+    >
+      <View style={[styles.toggleTrack, { backgroundColor: value ? Colors.cardio : themeColors.border }]}>
         <View style={[styles.toggleThumb, { left: value ? 20 : 2 }]} />
       </View>
     </TouchableOpacity>
@@ -74,8 +81,10 @@ function ChipGroup<T extends string>({
               borderColor: isSelected(opt.value) ? Colors.cardio : colors.border,
             },
           ]}
-          onPress={() => onSelect(opt.value)}
-          activeOpacity={0.8}
+          onPress={() => { Haptics.selectionAsync(); onSelect(opt.value); }}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Select ${opt.label}`}
         >
           <Text
             style={[
@@ -179,15 +188,18 @@ export default function CardioSettingsScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={Colors.cardio} />
-      </View>
+      <GlassBackground>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={Colors.cardio} />
+        </View>
+      </GlassBackground>
     );
   }
 
   return (
+    <GlassBackground>
     <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
+      style={styles.container}
       contentContainerStyle={styles.content}
     >
       {/* Audio cues */}
@@ -301,7 +313,11 @@ export default function CardioSettingsScreen() {
               <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Connected</Text>
               <Text style={[styles.settingSubLabel, { color: colors.textSecondary }]}>{hrMonitor.deviceName}</Text>
             </View>
-            <TouchableOpacity onPress={handleBLEDisconnect}>
+            <TouchableOpacity
+              onPress={handleBLEDisconnect}
+              accessibilityRole="button"
+              accessibilityLabel="Forget heart rate monitor"
+            >
               <Text style={[styles.chipText, { color: Colors.error }]}>Forget</Text>
             </TouchableOpacity>
           </View>
@@ -314,6 +330,8 @@ export default function CardioSettingsScreen() {
               style={[styles.scanBtn, { backgroundColor: Colors.cardio }]}
               onPress={handleBLEConnect}
               disabled={hrMonitor.scanning}
+              accessibilityRole="button"
+              accessibilityLabel="Scan for heart rate monitor"
             >
               <Text style={styles.scanBtnText}>
                 {hrMonitor.scanning ? 'Scanning…' : 'Scan'}
@@ -321,6 +339,25 @@ export default function CardioSettingsScreen() {
             </TouchableOpacity>
           </View>
         )}
+      </View>
+
+      {/* Live Segments */}
+      <SectionHeader title="SEGMENTS" colors={colors} />
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <SettingRow label="Live Segment Detection" colors={colors}>
+          <Toggle
+            value={settings.liveSegmentsEnabled ?? true}
+            onToggle={() => {
+              haptic();
+              updateSettings({ liveSegmentsEnabled: !(settings.liveSegmentsEnabled ?? true) });
+            }}
+          />
+        </SettingRow>
+        <View style={styles.subSection}>
+          <Text style={[styles.subLabel, { color: colors.textSecondary }]}>
+            Shows a banner when you enter a known segment during an outdoor session and tracks your time against your personal record.
+          </Text>
+        </View>
       </View>
 
       <SectionHeader title="SAFETY BEACON" colors={colors} />
@@ -333,6 +370,7 @@ export default function CardioSettingsScreen() {
         Settings are saved automatically.
       </Text>
     </ScrollView>
+    </GlassBackground>
   );
 }
 

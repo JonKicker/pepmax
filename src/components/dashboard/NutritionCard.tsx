@@ -3,6 +3,7 @@
  */
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { DashboardCard } from './DashboardCard';
 import { Colors } from '../../constants/theme';
 import type { Theme } from '../../constants/theme';
@@ -31,7 +32,11 @@ export function NutritionCard({ totals, colors, error, onPress, calorieTarget }:
       {error ? (
         <Text style={[styles.empty, { color: colors.textSecondary }]}>Could not load nutrition data.</Text>
       ) : !hasData ? (
-        <Text style={[styles.empty, { color: colors.textSecondary }]}>Log your first meal to see daily totals.</Text>
+        <View style={{ alignItems: 'center', paddingVertical: 16, gap: 8 }}>
+          <Ionicons name="nutrition-outline" size={48} color={colors.textSecondary} style={{ opacity: 0.5 }} />
+          <Text style={{ fontSize: 16, fontWeight: '700', color: colors.textPrimary }}>No Meals Logged</Text>
+          <Text style={{ fontSize: 14, color: colors.textSecondary, textAlign: 'center' }}>Track your first meal to see your macros</Text>
+        </View>
       ) : (
         <View style={styles.container}>
           <View style={styles.ringRow}>

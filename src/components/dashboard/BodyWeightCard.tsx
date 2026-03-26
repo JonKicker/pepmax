@@ -50,7 +50,7 @@ export const BodyWeightCard = React.memo(function BodyWeightCard({
   }
 
   // Sparkline data points (simple SVG-free approach using bars)
-  const sparklineData = sorted.slice(-14); // last 14 entries
+  const sparklineData = sorted.slice(-30); // last 30 entries
   const minW = sparklineData.length > 0 ? Math.min(...sparklineData.map((w) => w.weight)) : 0;
   const maxW = sparklineData.length > 0 ? Math.max(...sparklineData.map((w) => w.weight)) : 0;
   const range = maxW - minW || 1;
@@ -67,14 +67,20 @@ export const BodyWeightCard = React.memo(function BodyWeightCard({
         <Text style={[styles.empty, { color: colors.textSecondary }]}>Could not load weight data.</Text>
       ) : sorted.length === 0 ? (
         <View>
-          <Text style={[styles.empty, { color: colors.textSecondary }]}>No weight entries yet.</Text>
+          <View style={{ alignItems: 'center', paddingVertical: 16, gap: 8 }}>
+            <Ionicons name="scale-outline" size={48} color={colors.textSecondary} style={{ opacity: 0.5 }} />
+            <Text style={{ fontSize: 16, fontWeight: '700', color: colors.textPrimary }}>No Weight Logged</Text>
+            <Text style={{ fontSize: 14, color: colors.textSecondary, textAlign: 'center' }}>Log your weight to track your trend</Text>
+          </View>
           <TouchableOpacity
             style={[styles.logBtn, { backgroundColor: Colors.accent + '15', borderColor: Colors.accent + '30' }]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               onLogPress();
             }}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Log Weight"
           >
             <Ionicons name="add-circle-outline" size={16} color={Colors.accent} />
             <Text style={[styles.logBtnText, { color: Colors.accent }]}>Log Weight</Text>
@@ -128,7 +134,9 @@ export const BodyWeightCard = React.memo(function BodyWeightCard({
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               onLogPress();
             }}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Log Weight"
           >
             <Ionicons name="add-circle-outline" size={16} color={Colors.accent} />
             <Text style={[styles.logBtnText, { color: Colors.accent }]}>Log Weight</Text>
@@ -158,7 +166,7 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 4,
   },
-  currentWeight: { fontSize: 20, fontWeight: '800' },
+  currentWeight: { fontSize: 32, fontWeight: '800' },
   delta: { fontSize: 13, fontWeight: '600' },
   logBtn: {
     flexDirection: 'row',

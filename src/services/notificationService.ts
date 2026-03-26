@@ -227,6 +227,304 @@ export async function cancelRecoveryReminder(): Promise<void> {
   }
 }
 
+// ─── Workout reminders ───────────────────────────────────────────────────────
+
+const WORKOUT_ID_KEY = 'pepmax:notif:workout';
+
+/**
+ * Schedule a daily repeating workout reminder at the given time.
+ * Cancels any existing reminder before scheduling.
+ */
+export async function scheduleWorkoutReminder(
+  hour: number,
+  minute: number,
+): Promise<void> {
+  try {
+    await cancelWorkoutReminder();
+
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'PepMax — Workout Reminder',
+        body: 'Time to hit the gym! Tap to start your session.',
+        sound: true,
+        data: { screen: 'training' },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
+        hour,
+        minute,
+        repeats: true,
+      },
+    });
+
+    await AsyncStorage.setItem(WORKOUT_ID_KEY, id);
+  } catch {
+    // Best-effort — scheduling failure should not block the app
+  }
+}
+
+/** Cancel the daily workout reminder. */
+export async function cancelWorkoutReminder(): Promise<void> {
+  try {
+    const id = await AsyncStorage.getItem(WORKOUT_ID_KEY);
+    if (id) {
+      await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
+      await AsyncStorage.removeItem(WORKOUT_ID_KEY);
+    }
+  } catch {
+    // Non-fatal
+  }
+}
+
+// ─── Daily dose reminders (time-of-day, not peptide-specific) ───────────────
+
+const DOSE_DAILY_ID_KEY = 'pepmax:notif:doseDaily';
+
+/**
+ * Schedule a daily repeating dose reminder at the given time.
+ * This is distinct from per-peptide interval reminders — it fires once per day
+ * at a user-chosen time as a general prompt to log their dose.
+ * Cancels any existing reminder before scheduling.
+ */
+export async function scheduleDoseReminderDaily(
+  hour: number,
+  minute: number,
+): Promise<void> {
+  try {
+    await cancelDoseReminderDaily();
+
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'PepMax — Dose Reminder',
+        body: 'Time for your scheduled dose. Tap to log it.',
+        sound: true,
+        data: { screen: 'peptides' },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
+        hour,
+        minute,
+        repeats: true,
+      },
+    });
+
+    await AsyncStorage.setItem(DOSE_DAILY_ID_KEY, id);
+  } catch {
+    // Best-effort — scheduling failure should not block the app
+  }
+}
+
+/** Cancel the daily dose reminder. */
+export async function cancelDoseReminderDaily(): Promise<void> {
+  try {
+    const id = await AsyncStorage.getItem(DOSE_DAILY_ID_KEY);
+    if (id) {
+      await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
+      await AsyncStorage.removeItem(DOSE_DAILY_ID_KEY);
+    }
+  } catch {
+    // Non-fatal
+  }
+}
+
+// ─── Fasting window reminders ────────────────────────────────────────────────
+
+export const FASTING_OPEN_ID_KEY = 'pepmax:notif:fasting:open';
+export const FASTING_CLOSE_ID_KEY = 'pepmax:notif:fasting:close';
+
+/**
+ * Schedule two daily repeating reminders for the fasting window:
+ *   - 30 minutes before the eating window opens (fast about to end)
+ *   - 30 minutes before the eating window closes (window about to end)
+ *
+ * Cancels any existing fasting reminders before scheduling.
+ * Both use CALENDAR triggers with repeats:true for daily recurrence.
+ */
+export async function scheduleFastingReminders(
+  windowStart: string,
+  windowEnd: string,
+): Promise<void> {
+  try {
+    await cancelFastingReminders();
+
+    const parseTime = (hhmm: string): { hour: number; minute: number } => {
+      const parts = hhmm.split(':');
+      return {
+        hour: parseInt(parts[0] ?? '0', 10),
+        minute: parseInt(parts[1] ?? '0', 10),
+      };
+    };
+
+    const subtractMinutes = (
+      hour: number,
+      minute: number,
+      mins: number,
+    ): { hour: number; minute: number } => {
+      const totalMinutes = hour * 60 + minute - mins;
+      const adjusted = ((totalMinutes % 1440) + 1440) % 1440; // wrap at midnight
+      return { hour: Math.floor(adjusted / 60), minute: adjusted % 60 };
+    };
+
+    const startTime = parseTime(windowStart);
+    const openReminder = subtractMinutes(startTime.hour, startTime.minute, 30);
+
+    const endTime = parseTime(windowEnd);
+    const closeReminder = subtractMinutes(endTime.hour, endTime.minute, 30);
+
+    const openId = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'PepMax — Fast Ending Soon',
+        body: 'Your eating window opens in 30 minutes.',
+        sound: true,
+        data: { screen: 'fasting-timer' },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
+        hour: openReminder.hour,
+        minute: openReminder.minute,
+        repeats: true,
+      },
+    });
+
+    await AsyncStorage.setItem(FASTING_OPEN_ID_KEY, openId);
+
+    const closeId = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'PepMax — Eating Window Closing Soon',
+        body: 'Your eating window closes in 30 minutes.',
+        sound: true,
+        data: { screen: 'fasting-timer' },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
+        hour: closeReminder.hour,
+        minute: closeReminder.minute,
+        repeats: true,
+      },
+    });
+
+    await AsyncStorage.setItem(FASTING_CLOSE_ID_KEY, closeId);
+  } catch {
+    // Best-effort — scheduling failure should not block config save
+  }
+}
+
+/** Cancel both fasting window reminders and clear their stored IDs. */
+export async function cancelFastingReminders(): Promise<void> {
+  try {
+    const openId = await AsyncStorage.getItem(FASTING_OPEN_ID_KEY);
+    if (openId) {
+      await Notifications.cancelScheduledNotificationAsync(openId).catch(() => {});
+      await AsyncStorage.removeItem(FASTING_OPEN_ID_KEY);
+    }
+    const closeId = await AsyncStorage.getItem(FASTING_CLOSE_ID_KEY);
+    if (closeId) {
+      await Notifications.cancelScheduledNotificationAsync(closeId).catch(() => {});
+      await AsyncStorage.removeItem(FASTING_CLOSE_ID_KEY);
+    }
+  } catch {
+    // Non-fatal
+  }
+}
+
+// ─── Peptide fasting window notifications ────────────────────────────────────
+// Key format: pepmax:notif:peptidefasting:{peptideId}
+// Does NOT collide with pepmax:notif:fasting:open / pepmax:notif:fasting:close
+// which belong to the intermittent-fasting feature.
+
+const PEPTIDE_FASTING_IDS_KEY = 'pepmax:notif:peptidefasting';
+
+async function readPeptideFastingIds(): Promise<Record<string, string>> {
+  try {
+    const raw = await AsyncStorage.getItem(PEPTIDE_FASTING_IDS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+async function writePeptideFastingIds(ids: Record<string, string>): Promise<void> {
+  try {
+    await AsyncStorage.setItem(PEPTIDE_FASTING_IDS_KEY, JSON.stringify(ids));
+  } catch {
+    // Non-fatal
+  }
+}
+
+/**
+ * Schedule a one-shot notification that fires when the post-injection fasting
+ * window ends for a given peptide.
+ *
+ * Cancels any existing notification for the same peptide before scheduling.
+ * No-ops silently on failure — food logging must not be blocked.
+ *
+ * @param peptideId  Unique peptide document ID
+ * @param peptideName  Human-readable name for the notification body
+ * @param secondsUntilOpen  Seconds from now until the eating window opens
+ */
+export async function schedulePeptideFastingWindowNotification(
+  peptideId: string,
+  peptideName: string,
+  secondsUntilOpen: number,
+): Promise<void> {
+  // Guard against non-positive values — can happen if the window already passed
+  if (secondsUntilOpen <= 0) return;
+
+  try {
+    const ids = await readPeptideFastingIds();
+    if (ids[peptideId]) {
+      await Notifications.cancelScheduledNotificationAsync(ids[peptideId]).catch(() => {});
+    }
+
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'PepMax — Eating Window Open',
+        body: `Your ${peptideName.slice(0, 64)} fasting window has ended. You can eat now.`,
+        sound: true,
+        data: { screen: 'peptides' },
+      },
+      trigger: {
+        seconds: Math.round(secondsUntilOpen),
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      },
+    });
+
+    ids[peptideId] = id;
+    await writePeptideFastingIds(ids);
+  } catch {
+    // Silently swallow — reminder scheduling is best-effort
+  }
+}
+
+/** Cancel the eating-window notification for a single peptide. */
+export async function cancelPeptideFastingWindowNotification(peptideId: string): Promise<void> {
+  try {
+    const ids = await readPeptideFastingIds();
+    if (ids[peptideId]) {
+      await Notifications.cancelScheduledNotificationAsync(ids[peptideId]).catch(() => {});
+      delete ids[peptideId];
+      await writePeptideFastingIds(ids);
+    }
+  } catch {
+    // Non-fatal
+  }
+}
+
+/** Cancel ALL peptide-fasting eating-window notifications. */
+export async function cancelAllPeptideFastingWindowNotifications(): Promise<void> {
+  try {
+    const ids = await readPeptideFastingIds();
+    await Promise.all(
+      Object.values(ids).map((id) =>
+        Notifications.cancelScheduledNotificationAsync(id).catch(() => {}),
+      ),
+    );
+    await AsyncStorage.removeItem(PEPTIDE_FASTING_IDS_KEY);
+  } catch {
+    // Non-fatal
+  }
+}
+
 /** Cancel ALL dose reminders (e.g. when user disables the global toggle). */
 export async function cancelAllDoseReminders(): Promise<void> {
   try {

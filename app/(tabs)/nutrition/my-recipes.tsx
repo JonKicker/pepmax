@@ -186,7 +186,7 @@ function LogRecipeModal({
           style={[styles.logBtn, { backgroundColor: Colors.nutrition }]}
           onPress={handleLog}
           disabled={logging}
-          activeOpacity={0.85}
+          activeOpacity={0.7}
         >
           {logging ? <ActivityIndicator color="white" /> : <Text style={styles.logBtnText}>Log Recipe</Text>}
         </TouchableOpacity>
@@ -243,7 +243,7 @@ function RecipeCard({
       <TouchableOpacity
         style={[styles.logThisBtn, { backgroundColor: Colors.nutrition }]}
         onPress={onLog}
-        activeOpacity={0.85}
+        activeOpacity={0.7}
       >
         <Ionicons name="add-circle-outline" size={16} color="white" />
         <Text style={styles.logThisText}>Log This</Text>
@@ -387,7 +387,7 @@ export default function MyRecipesScreen() {
       <TouchableOpacity
         style={[styles.fab, { backgroundColor: Colors.nutrition }]}
         onPress={() => router.push('/(tabs)/nutrition/create-recipe')}
-        activeOpacity={0.85}
+        activeOpacity={0.7}
       >
         <Ionicons name="add" size={28} color="white" />
       </TouchableOpacity>

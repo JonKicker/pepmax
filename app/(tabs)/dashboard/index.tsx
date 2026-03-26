@@ -5,7 +5,8 @@
  * consistency tracking, body weight sparkline, and card visibility preferences.
  */
 import React, { useState, useEffect, useRef } from 'react';
-import { ScrollView, RefreshControl, StyleSheet, TouchableOpacity, View, Text } from 'react-native';
+import { ScrollView, RefreshControl, StyleSheet, View, Text } from 'react-native';
+import { AnimatedPressable } from '../../../src/components/AnimatedPressable';
 import Animated, { useSharedValue, useAnimatedStyle, withDelay, withTiming, withSpring } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,9 +28,16 @@ import { RecoveryScoreCard } from '../../../src/components/dashboard/RecoverySco
 import { LogWeightModal } from '../../../src/components/dashboard/LogWeightModal';
 import { OnboardingChecklist } from '../../../src/components/dashboard/OnboardingChecklist';
 import { GamificationCard } from '../../../src/components/dashboard/GamificationCard';
+import { DailyQuestsCard } from '../../../src/components/dashboard/DailyQuestsCard';
+import { GlassBackground } from '../../../src/components/GlassBackground';
 
+import { BodyHubHeroCard } from '../../../src/components/dashboard/BodyHubHeroCard';
+import { useBodyHubMuscles } from '../../../src/hooks/useBodyHubMuscles';
+import { useBodyHubInjections } from '../../../src/hooks/useBodyHubInjections';
+import { useBodyHubCardio } from '../../../src/hooks/useBodyHubCardio';
 import { useSmartInsights } from '../../../src/hooks/useSmartInsights';
 import { useXP } from '../../../src/hooks/useXP';
+import { useQuests } from '../../../src/hooks/useQuests';
 import { ACHIEVEMENT_DEFINITIONS } from '../../../src/utils/achievementDefinitions';
 import type { DashboardCardId } from '../../../src/types/dashboard';
 
@@ -66,6 +74,14 @@ export default function DashboardScreen() {
   const { data, loading, refreshing, errors, cardOrder, hiddenCards, onboardingDismissed } = dashboard;
   const smartInsights = useSmartInsights(dashboard.data, userProfile);
   const xp = useXP();
+  const questData = useQuests();
+
+  // Body Hub hero card hooks — deferred until dashboard data is ready and card is not hidden.
+  // Hardcoded view='front' since the hero card is a summary preview only.
+  const bodyHubEnabled = !loading && !hiddenCards.includes('bodyHub');
+  const bodyHubMuscles = useBodyHubMuscles('front', bodyHubEnabled);
+  const bodyHubInjections = useBodyHubInjections('front', bodyHubEnabled);
+  const bodyHubCardio = useBodyHubCardio('front', bodyHubEnabled);
 
   // Award streak milestone XP when a 7-day (or multiple-of-7) streak is hit.
   // Uses a ref to ensure we only award once per milestone per session.
@@ -118,6 +134,7 @@ export default function DashboardScreen() {
             consistency={data?.consistency ?? null}
             colors={colors}
             onToggleRestDay={dashboard.toggleRestDay}
+            onPress={() => router.push('/(tabs)/dashboard/consistency-detail')}
           />
         );
       case 'peptides':
@@ -197,6 +214,33 @@ export default function DashboardScreen() {
         return (
           <AIInsightCard key={cardId} colors={colors} />
         );
+      case 'bodyHub':
+        return (
+          <BodyHubHeroCard
+            key={cardId}
+            onPress={() => router.push('/(tabs)/dashboard/body-hub')}
+            muscleRegionColors={bodyHubMuscles.regionColors}
+            muscleRecovery={null}
+            injectionSitesReady={bodyHubInjections.siteStats.filter((s) => s.status === 'ready').length || null}
+            cardioRegionColors={bodyHubCardio.regionColors}
+            restingHR={bodyHubCardio.heartData?.restingBpm ?? null}
+            effortScore={bodyHubCardio.lungData?.effortScore ?? null}
+            sex={userProfile?.sex ?? 'male'}
+          />
+        );
+      case 'quests':
+        return (
+          <DailyQuestsCard
+            key={cardId}
+            quests={questData.quests}
+            completedCount={questData.completedCount}
+            allDone={questData.allDone}
+            bonusClaimed={questData.bonusClaimed}
+            loading={questData.loading}
+            colors={colors}
+            onClaimBonus={questData.claimBonus}
+          />
+        );
       case 'gamification': {
         // Find the most recently unlocked achievement title for the card subtitle
         const latestAchievement = Object.keys(xp.achievements).length > 0
@@ -222,8 +266,9 @@ export default function DashboardScreen() {
 
   return (
     <>
+      <GlassBackground>
       <ScrollView
-        style={{ backgroundColor: colors.background }}
+        style={{ flex: 1 }}
         contentContainerStyle={styles.scroll}
         refreshControl={
           <RefreshControl
@@ -241,13 +286,16 @@ export default function DashboardScreen() {
         />
 
         {/* Settings gear */}
-        <TouchableOpacity
+        <AnimatedPressable
+          haptic
           style={styles.settingsBtn}
           onPress={() => router.push('/(tabs)/dashboard/settings')}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="Settings"
         >
           <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
-        </TouchableOpacity>
+        </AnimatedPressable>
 
         {/* Onboarding checklist */}
         {showOnboarding && data && (
@@ -273,29 +321,53 @@ export default function DashboardScreen() {
           })
         )}
 
-        {/* Body Hub entry */}
-        <TouchableOpacity
-          style={[styles.communityCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          onPress={() => router.push('/(tabs)/dashboard/body-hub')}
-          activeOpacity={0.85}
+        {/* Social Hub entry */}
+        <AnimatedPressable
+          haptic
+          style={[styles.communityCard, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+          onPress={() => router.push('/(tabs)/dashboard/social')}
+          accessibilityRole="button"
+          accessibilityLabel="Social Hub — Friends, crews and leaderboards"
         >
-          <View style={[styles.communityIcon, { backgroundColor: '#3A7BD5' + '18' }]}>
-            <Ionicons name="body-outline" size={22} color="#3A7BD5" />
+          <View style={[styles.communityIcon, { backgroundColor: Colors.social + '18' }]}>
+            <Ionicons name="people-circle-outline" size={22} color={Colors.social} />
           </View>
           <View style={styles.communityText}>
-            <Text style={[styles.communityTitle, { color: colors.textPrimary }]}>Body Hub</Text>
+            <Text style={[styles.communityTitle, { color: colors.textPrimary }]}>Social Hub</Text>
             <Text style={[styles.communitySubtitle, { color: colors.textSecondary }]}>
-              Interactive body map with all modules
+              Friends, crews & leaderboards
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-        </TouchableOpacity>
+        </AnimatedPressable>
+
+        {/* Challenges entry */}
+        <AnimatedPressable
+          haptic
+          style={[styles.communityCard, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+          onPress={() => router.push('/(tabs)/dashboard/challenges')}
+          accessibilityRole="button"
+          accessibilityLabel="Challenges — Compete with friends and crews"
+        >
+          <View style={[styles.communityIcon, { backgroundColor: Colors.gold + '18' }]}>
+            <Ionicons name="trophy-outline" size={22} color={Colors.gold} />
+          </View>
+          <View style={styles.communityText}>
+            <Text style={[styles.communityTitle, { color: colors.textPrimary }]}>Challenges</Text>
+            <Text style={[styles.communitySubtitle, { color: colors.textSecondary }]}>
+              Compete with friends & crews
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+        </AnimatedPressable>
 
         {/* Community Library entry */}
-        <TouchableOpacity
-          style={[styles.communityCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        <AnimatedPressable
+          haptic
+          style={[styles.communityCard, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
           onPress={() => router.push('/(tabs)/dashboard/community')}
-          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Community Library — Browse and import community protocols"
         >
           <View style={[styles.communityIcon, { backgroundColor: Colors.accent + '18' }]}>
             <Ionicons name="people-outline" size={22} color={Colors.accent} />
@@ -307,8 +379,9 @@ export default function DashboardScreen() {
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-        </TouchableOpacity>
+        </AnimatedPressable>
       </ScrollView>
+      </GlassBackground>
 
       <LogWeightModal
         visible={showWeightModal}
@@ -324,7 +397,7 @@ export default function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  scroll: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 },
+  scroll: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 40 },
   settingsBtn: { position: 'absolute', top: 16, right: 16 },
   communityCard: {
     flexDirection: 'row',

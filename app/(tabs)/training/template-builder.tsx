@@ -375,7 +375,7 @@ export default function TemplateBuilderScreen() {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             openPicker();
           }}
-          activeOpacity={0.8}
+          activeOpacity={0.7}
         >
           <Ionicons name="add-circle-outline" size={20} color={Colors.gym} />
           <Text style={[styles.addBtnText, { color: Colors.gym }]}>Add Exercise</Text>
@@ -386,7 +386,7 @@ export default function TemplateBuilderScreen() {
           style={[styles.saveBtn, { backgroundColor: isValid ? Colors.gym : colors.border }]}
           onPress={handleSave}
           disabled={!isValid || saving}
-          activeOpacity={0.85}
+          activeOpacity={0.7}
         >
           {saving ? (
             <ActivityIndicator color="white" />

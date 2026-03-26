@@ -295,7 +295,7 @@ export default function SessionSummaryScreen() {
         onPress={handleSave}
         style={[styles.saveBtn, { backgroundColor: Colors.gym }]}
         disabled={saving}
-        activeOpacity={0.85}
+        activeOpacity={0.7}
       >
         {saving ? (
           <ActivityIndicator color="white" size="small" />

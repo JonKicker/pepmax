@@ -100,7 +100,7 @@ function SwipeableInventoryCard({
         {...panResponder.panHandlers}
       >
         <TouchableOpacity
-          activeOpacity={0.8}
+          activeOpacity={0.7}
           style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={() => onEdit(item)}
         >
@@ -289,7 +289,7 @@ export default function InventoryScreen() {
       <TouchableOpacity
         style={[styles.fab, { backgroundColor: Colors.peptide }]}
         onPress={openAddSheet}
-        activeOpacity={0.85}
+        activeOpacity={0.7}
       >
         <Ionicons name="add" size={30} color="white" />
       </TouchableOpacity>

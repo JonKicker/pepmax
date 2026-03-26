@@ -163,7 +163,7 @@ export default function LogWorkoutScreen() {
           style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]}
           onPress={handleSave}
           disabled={!canSave}
-          activeOpacity={0.8}
+          activeOpacity={0.7}
         >
           {saving ? (
             <ActivityIndicator color="#FFFFFF" size="small" />

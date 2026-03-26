@@ -24,6 +24,8 @@ export type CardioSettings = {
   distanceUnit: DistanceUnit;
   autoPauseRun: boolean;
   autoPauseCycle: boolean;
+  // Segment competition
+  liveSegmentsEnabled?: boolean;
   // Heart rate
   maxHeartRate?: number;
   hrMonitorId?: string;

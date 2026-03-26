@@ -1,11 +1,16 @@
 /**
  * DashboardCard — shared card wrapper for all dashboard sections.
+ *
+ * FIX 3: TouchableOpacity replaced with AnimatedPressable. Manual Haptics.impactAsync
+ * removed — haptic is now delegated to AnimatedPressable's `haptic` prop to avoid
+ * double haptic firing.
  */
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import type { Theme } from '../../constants/theme';
+import { GlassCard } from '../GlassCard';
+import { AnimatedPressable } from '../AnimatedPressable';
 
 type Props = {
   title: string;
@@ -18,7 +23,7 @@ type Props = {
 
 export function DashboardCard({ title, icon, iconColor, onPress, children, colors }: Props) {
   const content = (
-    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <GlassCard intensity="heavy" style={{ marginBottom: 12 }} padding={16}>
       <View style={styles.cardHeader}>
         <Ionicons name={icon} size={18} color={iconColor} />
         <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{title}</Text>
@@ -27,20 +32,14 @@ export function DashboardCard({ title, icon, iconColor, onPress, children, color
         )}
       </View>
       {children}
-    </View>
+    </GlassCard>
   );
 
   if (onPress) {
     return (
-      <TouchableOpacity
-        activeOpacity={0.7}
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          onPress();
-        }}
-      >
+      <AnimatedPressable haptic onPress={onPress}>
         {content}
-      </TouchableOpacity>
+      </AnimatedPressable>
     );
   }
 
@@ -48,12 +47,6 @@ export function DashboardCard({ title, icon, iconColor, onPress, children, color
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 12,
-  },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',

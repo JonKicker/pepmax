@@ -75,7 +75,7 @@ function SessionRow({
     <TouchableOpacity
       style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}
       onPress={onPress}
-      activeOpacity={0.8}
+      activeOpacity={0.7}
     >
       <View style={styles.rowMain}>
         <View style={styles.rowTop}>

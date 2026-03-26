@@ -29,6 +29,15 @@ import type {
   Micronutrients,
 } from '../types/nutrition';
 import type { ServiceResult } from '../types/service';
+import { addBreadcrumb } from './errorReporting';
+
+export type DailyMacroPoint = {
+  date: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+};
 
 // ─── Input types ─────────────────────────────────────────────────────────────
 
@@ -170,6 +179,42 @@ export async function getLogsForDateRange(
     where('date', '<=', endDate),
     orderBy('date', 'asc'),
   ]);
+}
+
+/**
+ * Aggregate daily nutrition totals for a date range.
+ * Groups foodLog entries by date and sums calories/protein/carbs/fat.
+ */
+export async function getDailyTotalsForRange(
+  startDate: string,
+  endDate: string,
+): Promise<ServiceResult<DailyMacroPoint[]>> {
+  try {
+    addBreadcrumb('nutritionService', 'getDailyTotalsForRange', { startDate, endDate });
+    const result = await queryDocuments<FoodLogEntry>(COLLECTIONS.FOOD_LOG, [
+      where('date', '>=', startDate),
+      where('date', '<=', endDate),
+      orderBy('date', 'asc'),
+    ]);
+    if (result.error) return { data: null, error: result.error };
+
+    const entries = result.data ?? [];
+    const byDate = new Map<string, DailyMacroPoint>();
+
+    for (const entry of entries) {
+      const existing = byDate.get(entry.date) ?? { date: entry.date, calories: 0, protein: 0, carbs: 0, fat: 0 };
+      existing.calories += entry.calories ?? 0;
+      existing.protein += entry.protein ?? 0;
+      existing.carbs += entry.carbs ?? 0;
+      existing.fat += entry.fat ?? 0;
+      byDate.set(entry.date, existing);
+    }
+
+    const sorted = Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+    return { data: sorted, error: null };
+  } catch (err) {
+    return { data: null, error: err as Error };
+  }
 }
 
 /**

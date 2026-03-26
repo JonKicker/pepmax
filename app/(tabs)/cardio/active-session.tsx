@@ -23,6 +23,9 @@ import { useHeartRateZones } from '../../../src/hooks/useHeartRateZones';
 import { useBeaconSession } from '../../../src/hooks/useBeaconSession';
 import HeartRateBar from '../../../src/components/cardio/HeartRateBar';
 import BeaconIndicator from '../../../src/components/cardio/BeaconIndicator';
+import LiveSegmentBanner from '../../../src/components/cardio/LiveSegmentBanner';
+import { GlassBackground } from '../../../src/components/GlassBackground';
+import { useLiveSegment } from '../../../src/hooks/useLiveSegment';
 import {
   formatDuration,
   formatDistance,
@@ -109,6 +112,14 @@ export default function ActiveSessionScreen() {
   } = useCardioSession(sessionId, weightKg, settings, distanceUnit);
 
   const beacon = useBeaconSession();
+
+  // Live segment detection — only for outdoor sessions
+  const isOutdoor = session ? !session.indoorMode : false;
+  const { liveState } = useLiveSegment({
+    currentRoute: route,
+    elapsedSeconds: elapsedActive,
+    liveSegmentsEnabled: isOutdoor && (settings.liveSegmentsEnabled ?? true),
+  });
   // Contacts are passed from start-session as a serialized JSON param — no second
   // Firestore fetch, no race condition with async contact loading.
   const beaconContactList = useMemo(() => {
@@ -204,19 +215,25 @@ export default function ActiveSessionScreen() {
   // Loading state before session doc arrives
   if (!session) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.cardio} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Starting session…</Text>
-        </View>
-      </SafeAreaView>
+      <GlassBackground>
+        <SafeAreaView style={styles.container}>
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color={Colors.cardio} />
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Starting session…</Text>
+          </View>
+        </SafeAreaView>
+      </GlassBackground>
     );
   }
 
   const isSwim = session.activityType === 'swim';
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <GlassBackground>
+    <SafeAreaView style={styles.container}>
+      {/* Live segment banner — shown at very top when segment is active/completed */}
+      <LiveSegmentBanner liveState={liveState} />
+
       {/* New split banner */}
       {newSplit && (
         <View style={[styles.splitBanner, { backgroundColor: Colors.cardio }]}>
@@ -345,6 +362,7 @@ export default function ActiveSessionScreen() {
         </View>
       </Modal>
     </SafeAreaView>
+    </GlassBackground>
   );
 }
 

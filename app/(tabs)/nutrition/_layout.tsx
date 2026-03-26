@@ -23,6 +23,10 @@ export default function NutritionLayout() {
       <Stack.Screen name="my-recipes" options={{ title: 'My Recipes' }} />
       <Stack.Screen name="create-recipe" options={{ title: 'Create Recipe' }} />
       <Stack.Screen name="micros" options={{ title: 'Micronutrients' }} />
+      <Stack.Screen name="fasting-setup" options={{ title: 'Fasting Setup' }} />
+      <Stack.Screen name="fasting-timer" options={{ title: 'Fasting Timer' }} />
+      <Stack.Screen name="weight-log" options={{ title: 'Weight Log' }} />
+      <Stack.Screen name="progress" options={{ title: 'Nutrition Trends' }} />
     </Stack>
   );
 }

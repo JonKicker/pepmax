@@ -83,7 +83,11 @@ export function CardioCard({ sessions, colors, error, units, onPress }: Props) {
       {error ? (
         <Text style={[styles.empty, { color: colors.textSecondary }]}>Could not load cardio data.</Text>
       ) : !recent ? (
-        <Text style={[styles.empty, { color: colors.textSecondary }]}>No cardio sessions yet.</Text>
+        <View style={{ alignItems: 'center', paddingVertical: 16, gap: 8 }}>
+          <Ionicons name="walk-outline" size={48} color={colors.textSecondary} style={{ opacity: 0.5 }} />
+          <Text style={{ fontSize: 16, fontWeight: '700', color: colors.textPrimary }}>No Activities Yet</Text>
+          <Text style={{ fontSize: 14, color: colors.textSecondary, textAlign: 'center' }}>Record your first cardio session</Text>
+        </View>
       ) : (
         <>
           <View style={styles.row}>

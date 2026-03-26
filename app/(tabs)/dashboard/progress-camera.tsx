@@ -192,7 +192,7 @@ export default function ProgressCameraScreen() {
         <TouchableOpacity
           style={[styles.saveBtn, { backgroundColor: Colors.body }]}
           onPress={handleSave}
-          activeOpacity={0.8}
+          activeOpacity={0.7}
         >
           <Text style={styles.saveBtnText}>Save Photos</Text>
         </TouchableOpacity>
@@ -260,7 +260,7 @@ export default function ProgressCameraScreen() {
 
         {/* Bottom controls */}
         <View style={styles.bottomBar}>
-          <TouchableOpacity style={styles.captureBtn} onPress={handleCapture} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.captureBtn} onPress={handleCapture} activeOpacity={0.7}>
             <View style={styles.captureBtnInner} />
           </TouchableOpacity>
         </View>

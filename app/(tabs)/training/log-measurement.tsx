@@ -295,7 +295,7 @@ export default function LogMeasurementScreen() {
         style={[styles.saveBtn, { backgroundColor: Colors.gym }, saving && styles.saveBtnDisabled]}
         onPress={handleSave}
         disabled={saving}
-        activeOpacity={0.85}
+        activeOpacity={0.7}
       >
         {saving ? (
           <ActivityIndicator color="white" />

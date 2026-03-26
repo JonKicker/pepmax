@@ -13,6 +13,8 @@ import type { RecoveryScoreDoc } from './recoveryScore';
 export type DashboardCardId =
   | 'greeting'
   | 'recovery'
+  | 'bodyHub'
+  | 'quests'
   | 'consistency'
   | 'peptides'
   | 'nutrition'
@@ -20,7 +22,8 @@ export type DashboardCardId =
   | 'cardio'
   | 'bodyWeight'
   | 'smartInsights'
-  | 'aiInsight';
+  | 'aiInsight'
+  | 'gamification';
 
 export type DashboardPreferences = {
   cardOrder: DashboardCardId[];
@@ -51,6 +54,8 @@ export type DashboardData = {
 export const DEFAULT_CARD_ORDER: DashboardCardId[] = [
   'greeting',
   'recovery',
+  'bodyHub',
+  'quests',
   'consistency',
   'peptides',
   'nutrition',

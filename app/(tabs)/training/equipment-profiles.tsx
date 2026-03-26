@@ -91,7 +91,7 @@ function ProfileCard({
       <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
         <TouchableOpacity
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress(profile.id); }}
-          activeOpacity={0.8}
+          activeOpacity={0.7}
           style={[
             cardStyles.card,
             {

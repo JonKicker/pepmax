@@ -196,7 +196,7 @@ function Step1({
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               onSelect(p);
             }}
-            activeOpacity={0.75}
+            activeOpacity={0.7}
           >
             <View style={styles.compoundCardLeft}>
               <View
@@ -1073,7 +1073,7 @@ export default function CyclePlannerScreen() {
               ]}
               onPress={handleNext}
               disabled={saving}
-              activeOpacity={0.85}
+              activeOpacity={0.7}
             >
               {saving ? (
                 <ActivityIndicator color="white" size="small" />

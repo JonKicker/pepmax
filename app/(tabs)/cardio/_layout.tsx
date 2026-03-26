@@ -20,6 +20,8 @@ export default function CardioLayout() {
       <Stack.Screen name="progress" options={{ title: 'Progress' }} />
       <Stack.Screen name="history" options={{ title: 'History' }} />
       <Stack.Screen name="settings" options={{ title: 'Cardio Settings' }} />
+      <Stack.Screen name="segments" options={{ title: 'Segments' }} />
+      <Stack.Screen name="segment-detail" options={{ title: 'Segment' }} />
     </Stack>
   );
 }

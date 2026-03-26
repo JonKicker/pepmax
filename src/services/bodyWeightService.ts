@@ -11,6 +11,7 @@ import {
   getDocument,
   queryDocuments,
   deleteDocument,
+  updateDocument,
 } from './firebase/firestore';
 import { writeBodyWeight } from './healthKitService';
 import { HK_WEIGHT_SOURCE_MARKER } from '../constants/healthKit';
@@ -31,6 +32,11 @@ export async function logWeight(input: BodyWeightInput): Promise<ServiceResult<v
   // Fire-and-forget HealthKit write — skip if this entry came from HealthKit itself
   if (!result.error && input.note !== HK_WEIGHT_SOURCE_MARKER) {
     writeBodyWeight(input.weight, new Date(`${input.date}T12:00:00`)).catch(() => {});
+  }
+  // Sync today's weight to profile body stats (fire-and-forget)
+  const today = new Date().toISOString().slice(0, 10);
+  if (!result.error && input.date === today) {
+    updateDocument(COLLECTIONS.PROFILE, 'data', { weightKg: input.weight }).catch(() => {});
   }
   return result;
 }

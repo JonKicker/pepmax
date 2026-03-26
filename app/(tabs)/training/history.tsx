@@ -103,7 +103,7 @@ function SessionCard({
   return (
     <TouchableOpacity
       onPress={onPress}
-      activeOpacity={0.8}
+      activeOpacity={0.7}
       style={[cardStyles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
     >
       <View style={[cardStyles.accent, { backgroundColor: Colors.gym }]} />

@@ -43,7 +43,7 @@ function OptionRow({
     <TouchableOpacity
       style={[styles.optionRow, { borderColor: selected ? Colors.cardio : colors.border }]}
       onPress={onPress}
-      activeOpacity={0.75}
+      activeOpacity={0.7}
     >
       <View style={[styles.radio, { borderColor: selected ? Colors.cardio : colors.border }]}>
         {selected && <View style={[styles.radioDot, { backgroundColor: Colors.cardio }]} />}
@@ -65,7 +65,7 @@ function Toggle({
   colors: any;
 }) {
   return (
-    <TouchableOpacity style={styles.toggleRow} onPress={onToggle} activeOpacity={0.8}>
+    <TouchableOpacity style={styles.toggleRow} onPress={onToggle} activeOpacity={0.7}>
       <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>{label}</Text>
       <View style={[styles.toggleTrack, { backgroundColor: value ? Colors.cardio : colors.border }]}>
         <View style={[styles.toggleThumb, { left: value ? 20 : 2 }]} />
@@ -319,7 +319,7 @@ export default function StartSessionScreen() {
         style={[styles.startBtn, { backgroundColor: Colors.cardio }, starting && styles.startBtnDisabled]}
         onPress={handleStart}
         disabled={starting}
-        activeOpacity={0.85}
+        activeOpacity={0.7}
       >
         {starting ? (
           <ActivityIndicator color="white" size="small" />

@@ -252,7 +252,7 @@ export default function SessionDetailScreen() {
       <TouchableOpacity
         onPress={handleRepeat}
         style={[styles.repeatBtn, { backgroundColor: Colors.gym }]}
-        activeOpacity={0.85}
+        activeOpacity={0.7}
       >
         <Ionicons name="repeat" size={20} color="white" />
         <Text style={styles.repeatBtnText}>Repeat Workout</Text>

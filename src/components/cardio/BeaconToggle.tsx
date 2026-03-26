@@ -31,7 +31,7 @@ export default function BeaconToggle({ value, onToggle, contactCount, colors }: 
           </Text>
         </View>
       </View>
-      <TouchableOpacity onPress={onToggle} activeOpacity={0.8}>
+      <TouchableOpacity onPress={onToggle} activeOpacity={0.7}>
         <View style={[styles.track, { backgroundColor: value ? Colors.cardio : '#ccc' }]}>
           <View style={[styles.thumb, { left: value ? 20 : 2 }]} />
         </View>

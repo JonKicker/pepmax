@@ -560,7 +560,7 @@ export default function FoodDetailScreen() {
             style={[styles.logBtn, { backgroundColor: Colors.nutrition }]}
             onPress={isIngredientMode ? handleAddIngredient : handleLog}
             disabled={saving}
-            activeOpacity={0.85}
+            activeOpacity={0.7}
           >
             {saving ? (
               <ActivityIndicator color="white" />

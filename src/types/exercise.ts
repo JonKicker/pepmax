@@ -10,6 +10,9 @@ export type MuscleGroup =
   | 'Glutes'
   | 'Calves'
   | 'Core'
+  | 'Adductors'
+  | 'Abductors'
+  | 'Traps'
   | 'Full Body';
 
 export type ExerciseCategory =
@@ -32,6 +35,8 @@ export type Equipment =
   | 'EZ Bar'
   | 'Pull-up Bar'
   | 'Bench'
+  | 'Trap Bar'
+  | 'Sled'
   | 'None';
 
 export interface Exercise {

@@ -108,7 +108,7 @@ function SwipeableTemplateCard({
             if (isOpen.current) { close(); return; }
             onPress(template.id);
           }}
-          activeOpacity={0.85}
+          activeOpacity={0.7}
         >
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={[styles.cardAccent, { backgroundColor: template.color || Colors.gym }]} />
@@ -242,7 +242,7 @@ export default function TemplatesScreen() {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           router.push('/(tabs)/training/template-builder');
         }}
-        activeOpacity={0.85}
+        activeOpacity={0.7}
       >
         <Ionicons name="add" size={30} color="white" />
       </TouchableOpacity>

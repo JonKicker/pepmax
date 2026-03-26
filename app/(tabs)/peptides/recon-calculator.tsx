@@ -137,7 +137,7 @@ function ProtocolCard({
       <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
         <TouchableOpacity
           onPress={() => { if (isOpen.current) { close(); } else { onTap(protocol); } }}
-          activeOpacity={0.85}
+          activeOpacity={0.7}
         >
           <View style={[pcStyles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={[pcStyles.cardAccent, { backgroundColor: Colors.peptide }]} />
@@ -601,7 +601,7 @@ export default function ReconCalculatorScreen() {
                   style={[styles.saveBtn, { backgroundColor: Colors.peptide }]}
                   onPress={handleSaveProtocol}
                   disabled={saving}
-                  activeOpacity={0.85}
+                  activeOpacity={0.7}
                 >
                   {saving ? (
                     <ActivityIndicator color="white" />

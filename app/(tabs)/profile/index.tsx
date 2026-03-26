@@ -2,12 +2,16 @@
  * Settings screen — replaces the read-only Profile tab.
  *
  * Sections:
- *   1. Profile Card     — avatar, editable name, email, member since, plan badge
- *   2. Subscription     — upgrade / manage / restore
- *   3. Preferences      — units, dark mode, notification toggles
- *   4. Body Stats       — editable height/weight/age/sex/activity/goal, saves + recalculates TDEE
- *   5. Nutrition        — link to nutrition/settings with calorie target subtitle
- *   6. Sign Out
+ *   1. Profile Card     — avatar (photo or initials), editable name, email,
+ *                         member since, PRO badge, username, bio
+ *   2. Preferences      — units, dark mode, notification toggles with
+ *                         time pickers (Custom / Optimized)
+ *   3. Body Stats       — editable height/weight/age/sex/activity/goal
+ *   4. Nutrition        — link to nutrition/settings
+ *   5. Apple Health     — HealthKit sync toggle (iOS only)
+ *   6. Data & Privacy
+ *   7. About & Support
+ *   8. Sign Out
  */
 import React, { useState, useCallback } from 'react';
 import {
@@ -22,9 +26,12 @@ import {
   Platform,
   Switch,
   TextInput,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { useThemeContext } from '../../../src/contexts/ThemeContext';
 import type { ThemePreference } from '../../../src/contexts/ThemeContext';
@@ -44,7 +51,13 @@ import {
   cancelAllDoseReminders,
   scheduleRecoveryReminder,
   cancelRecoveryReminder,
+  scheduleWorkoutReminder,
+  cancelWorkoutReminder,
+  scheduleDoseReminderDaily,
+  cancelDoseReminderDaily,
 } from '../../../src/services/notificationService';
+import { applyOptimizedSchedule } from '../../../src/services/optimizedReminderService';
+import { uploadProfilePicture, removeProfilePicture } from '../../../src/services/profilePictureService';
 import { analytics, AnalyticsEvent } from '../../../src/services/analytics';
 import { calculateTDEE, calculateMacros, ACTIVITY_LEVELS, feetInchesToCm, cmToFeetInches, kgToLbs, lbsToKg } from '../../../src/utils/tdee';
 import type { Units, Sex } from '../../../src/types/profile';
@@ -61,6 +74,18 @@ function getInitials(firstName?: string, lastName?: string, email?: string): str
   return first + last;
 }
 
+function formatTime(hour: number, minute: number): string {
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+  return `${displayHour}:${minute.toString().padStart(2, '0')} ${ampm}`;
+}
+
+function dateFromHourMinute(hour: number, minute: number): Date {
+  const d = new Date();
+  d.setHours(hour, minute, 0, 0);
+  return d;
+}
+
 const GOAL_OFFSET: Record<'lose' | 'maintain' | 'gain', number> = {
   lose: -500,
   maintain: 0,
@@ -73,7 +98,7 @@ export default function SettingsScreen() {
   const { colors } = useTheme();
   const { themePreference, setThemePreference } = useThemeContext();
   const { currentUser, userProfile, updateProfile, refreshProfile } = useAuth();
-  const { isPremium, plan, expirationDate, restorePurchases } = usePremium();
+  const { isPremium } = usePremium();
   const router = useRouter();
 
   // ── Name editing ────────────────────────────────────────────────────────────
@@ -81,6 +106,14 @@ export default function SettingsScreen() {
   const [draftFirst, setDraftFirst] = useState('');
   const [draftLast, setDraftLast] = useState('');
   const [savingName, setSavingName] = useState(false);
+
+  // ── Avatar / photo ───────────────────────────────────────────────────────────
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // ── Bio editing ─────────────────────────────────────────────────────────────
+  const [bioEditing, setBioEditing] = useState(false);
+  const [draftBio, setDraftBio] = useState('');
+  const [savingBio, setSavingBio] = useState(false);
 
   // ── Body stats editing ──────────────────────────────────────────────────────
   const [statsEditing, setStatsEditing] = useState(false);
@@ -107,8 +140,12 @@ export default function SettingsScreen() {
     [hkEnable, hkDisable],
   );
 
+  // ── Reminder time pickers ────────────────────────────────────────────────────
+  const [showDoseTimePicker, setShowDoseTimePicker] = useState(false);
+  const [showWorkoutTimePicker, setShowWorkoutTimePicker] = useState(false);
+  const [showRecoveryTimePicker, setShowRecoveryTimePicker] = useState(false);
+
   // ── Other ──────────────────────────────────────────────────────────────────
-  const [restoringPurchases, setRestoringPurchases] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [deletingData, setDeletingData] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
@@ -129,6 +166,98 @@ export default function SettingsScreen() {
     ? userProfile.quizCompletedAt.toDate().toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
     : null;
   const notifPrefs = userProfile.notificationPrefs ?? { doseReminders: true, workoutReminders: true };
+
+  // ── Avatar handlers ───────────────────────────────────────────────────────
+
+  function handleAvatarPress() {
+    const options: Array<{ text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }> = [
+      { text: 'Take Photo', onPress: () => pickPhoto('camera') },
+      { text: 'Choose from Library', onPress: () => pickPhoto('library') },
+    ];
+    if (userProfile!.profilePictureUrl) {
+      options.push({ text: 'Remove Photo', style: 'destructive', onPress: handleRemovePhoto });
+    }
+    options.push({ text: 'Cancel', style: 'cancel' });
+    Alert.alert('Profile Photo', 'Update your profile picture', options);
+  }
+
+  async function pickPhoto(source: 'camera' | 'library') {
+    try {
+      let result: ImagePicker.ImagePickerResult;
+      if (source === 'camera') {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Camera access is needed to take a photo.');
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 1,
+        });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Photo library access is needed to choose a photo.');
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 1,
+        });
+      }
+
+      if (result.canceled || !result.assets[0]) return;
+
+      setUploadingPhoto(true);
+      const uploadResult = await uploadProfilePicture(result.assets[0].uri);
+      setUploadingPhoto(false);
+
+      if (uploadResult.error) {
+        Alert.alert('Upload failed', 'Could not update your profile picture. Please try again.');
+        return;
+      }
+      updateProfile({ profilePictureUrl: uploadResult.data ?? undefined });
+    } catch {
+      setUploadingPhoto(false);
+      Alert.alert('Error', 'Something went wrong. Please try again.');
+    }
+  }
+
+  async function handleRemovePhoto() {
+    setUploadingPhoto(true);
+    const result = await removeProfilePicture();
+    setUploadingPhoto(false);
+    if (result.error) {
+      Alert.alert('Error', 'Could not remove your photo. Please try again.');
+      return;
+    }
+    updateProfile({ profilePictureUrl: undefined });
+  }
+
+  // ── Bio handlers ─────────────────────────────────────────────────────────
+
+  function startBioEdit() {
+    setDraftBio(userProfile!.bio ?? '');
+    setBioEditing(true);
+  }
+
+  async function saveBio() {
+    setSavingBio(true);
+    const trimmed = draftBio.trim();
+    const result = await updateDocument(COLLECTIONS.PROFILE, 'data', { bio: trimmed });
+    setSavingBio(false);
+    if (result.error) {
+      Alert.alert('Save failed', 'Could not update your bio. Please try again.');
+      return;
+    }
+    updateProfile({ bio: trimmed });
+    analytics.track(AnalyticsEvent.BIO_UPDATED, { length: trimmed.length });
+    setBioEditing(false);
+  }
 
   // ── Name handlers ────────────────────────────────────────────────────────
 
@@ -223,8 +352,21 @@ export default function SettingsScreen() {
       if (key === 'doseReminders') {
         if (value) {
           requestPermissions().catch(() => {});
+          const hour = notifPrefs.doseReminderHour ?? 9;
+          const minute = notifPrefs.doseReminderMinute ?? 0;
+          scheduleDoseReminderDaily(hour, minute).catch(() => {});
         } else {
           cancelAllDoseReminders().catch(() => {});
+          cancelDoseReminderDaily().catch(() => {});
+        }
+      } else if (key === 'workoutReminders') {
+        if (value) {
+          requestPermissions().catch(() => {});
+          const hour = notifPrefs.workoutReminderHour ?? 17;
+          const minute = notifPrefs.workoutReminderMinute ?? 0;
+          scheduleWorkoutReminder(hour, minute).catch(() => {});
+        } else {
+          cancelWorkoutReminder().catch(() => {});
         }
       } else if (key === 'recoveryCheckIn') {
         if (value) {
@@ -238,6 +380,84 @@ export default function SettingsScreen() {
           analytics.track(AnalyticsEvent.RECOVERY_REMINDER_CONFIGURED, { enabled: false });
         }
       }
+    }
+  }
+
+  // ── Reminder time change handlers ────────────────────────────────────────
+
+  async function handleDoseTimeChange(_: unknown, selectedDate?: Date) {
+    setShowDoseTimePicker(false);
+    if (!selectedDate) return;
+    const hour = selectedDate.getHours();
+    const minute = selectedDate.getMinutes();
+    const newPrefs = {
+      ...notifPrefs,
+      doseReminderHour: hour,
+      doseReminderMinute: minute,
+      doseReminderOptimized: false,
+    };
+    updateDocument(COLLECTIONS.PROFILE, 'data', { notificationPrefs: newPrefs }).catch(() => {});
+    updateProfile({ notificationPrefs: newPrefs });
+    scheduleDoseReminderDaily(hour, minute).catch(() => {});
+    analytics.track(AnalyticsEvent.DOSE_REMINDER_TIME_SET, { hour, minute });
+  }
+
+  async function handleWorkoutTimeChange(_: unknown, selectedDate?: Date) {
+    setShowWorkoutTimePicker(false);
+    if (!selectedDate) return;
+    const hour = selectedDate.getHours();
+    const minute = selectedDate.getMinutes();
+    const newPrefs = {
+      ...notifPrefs,
+      workoutReminderHour: hour,
+      workoutReminderMinute: minute,
+      workoutReminderOptimized: false,
+    };
+    updateDocument(COLLECTIONS.PROFILE, 'data', { notificationPrefs: newPrefs }).catch(() => {});
+    updateProfile({ notificationPrefs: newPrefs });
+    scheduleWorkoutReminder(hour, minute).catch(() => {});
+    analytics.track(AnalyticsEvent.WORKOUT_REMINDER_TIME_SET, { hour, minute });
+  }
+
+  async function handleRecoveryTimeChange(_: unknown, selectedDate?: Date) {
+    setShowRecoveryTimePicker(false);
+    if (!selectedDate) return;
+    const hour = selectedDate.getHours();
+    const minute = selectedDate.getMinutes();
+    const newPrefs = {
+      ...notifPrefs,
+      recoveryCheckInHour: hour,
+      recoveryCheckInMinute: minute,
+      recoveryCheckInOptimized: false,
+    };
+    updateDocument(COLLECTIONS.PROFILE, 'data', { notificationPrefs: newPrefs }).catch(() => {});
+    updateProfile({ notificationPrefs: newPrefs });
+    scheduleRecoveryReminder(hour, minute).catch(() => {});
+    analytics.track(AnalyticsEvent.RECOVERY_REMINDER_CONFIGURED, { enabled: true, hour, minute });
+  }
+
+  async function handleOptimizedToggle(type: 'recovery' | 'dose' | 'workout', value: number) {
+    const isOptimized = value === 1;
+    analytics.track(AnalyticsEvent.REMINDER_OPTIMIZED_TOGGLED, { type, optimized: isOptimized });
+    if (isOptimized) {
+      applyOptimizedSchedule(type).catch(() => {});
+      const optimizedKey = type === 'recovery'
+        ? 'recoveryCheckInOptimized'
+        : type === 'dose'
+        ? 'doseReminderOptimized'
+        : 'workoutReminderOptimized';
+      const newPrefs = { ...notifPrefs, [optimizedKey]: true };
+      updateDocument(COLLECTIONS.PROFILE, 'data', { notificationPrefs: newPrefs }).catch(() => {});
+      updateProfile({ notificationPrefs: newPrefs });
+    } else {
+      const optimizedKey = type === 'recovery'
+        ? 'recoveryCheckInOptimized'
+        : type === 'dose'
+        ? 'doseReminderOptimized'
+        : 'workoutReminderOptimized';
+      const newPrefs = { ...notifPrefs, [optimizedKey]: false };
+      updateDocument(COLLECTIONS.PROFILE, 'data', { notificationPrefs: newPrefs }).catch(() => {});
+      updateProfile({ notificationPrefs: newPrefs });
     }
   }
 
@@ -275,8 +495,6 @@ export default function SettingsScreen() {
               Alert.alert('Sign out failed', 'Please try again.');
               setSigningOut(false);
             }
-            // On success: AuthGuard detects currentUser → null and redirects.
-            // Analytics reset + Sentry user clear handled in _layout.tsx prevUidRef effect.
           },
         },
       ],
@@ -308,12 +526,9 @@ export default function SettingsScreen() {
     try {
       const result = await deleteAccount();
       if (result.error) {
-        // Surface the service's message directly — it is already user-friendly
-        // (e.g. 'For security, please sign out and sign back in before deleting your account.')
         Alert.alert('Could not delete account', result.error.message);
         return;
       }
-      // On success: AuthGuard detects currentUser → null and redirects to welcome.
     } catch {
       Alert.alert('Error', 'Could not delete your account. Please try again.');
     } finally {
@@ -333,7 +548,6 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: () => {
             if (Platform.OS === 'ios') {
-              // iOS: require typed email to confirm — Alert.prompt is iOS-only
               Alert.prompt(
                 'Confirm Account Deletion',
                 `Type your email address to confirm:\n${currentUser?.email ?? ''}`,
@@ -347,7 +561,6 @@ export default function SettingsScreen() {
                 'plain-text',
               );
             } else {
-              // Android: Alert.prompt is unavailable — require a second explicit confirmation
               Alert.alert(
                 'Are you absolutely sure?',
                 `This will permanently delete your account (${currentUser?.email ?? ''}) and all your data. This cannot be reversed.`,
@@ -382,6 +595,13 @@ export default function SettingsScreen() {
   const heightDisplay = imperial ? `${feet}ft ${heightIn}in` : `${Math.round(userProfile.heightCm)} cm`;
   const draftActivityLabel = ACTIVITY_LEVELS.find((l) => l.multiplier === draftActivityMultiplier)?.label ?? '';
 
+  const doseH = notifPrefs.doseReminderHour ?? 9;
+  const doseM = notifPrefs.doseReminderMinute ?? 0;
+  const workoutH = notifPrefs.workoutReminderHour ?? 17;
+  const workoutM = notifPrefs.workoutReminderMinute ?? 0;
+  const recoveryH = notifPrefs.recoveryCheckInHour ?? 7;
+  const recoveryM = notifPrefs.recoveryCheckInMinute ?? 0;
+
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
@@ -393,9 +613,27 @@ export default function SettingsScreen() {
 
       {/* ── 1. Profile Card ─────────────────────────────────────────────── */}
       <View style={[styles.profileCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={[styles.avatar, { backgroundColor: Colors.accent + '22' }]}>
-          <Text style={[styles.initials, { color: Colors.accent }]}>{initials}</Text>
-        </View>
+
+        {/* Avatar */}
+        <TouchableOpacity onPress={handleAvatarPress} style={styles.avatarWrapper} activeOpacity={0.7}>
+          {userProfile.profilePictureUrl ? (
+            <Image
+              source={{ uri: userProfile.profilePictureUrl }}
+              style={styles.avatarImage}
+            />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: Colors.accent + '22' }]}>
+              <Text style={[styles.initials, { color: Colors.accent }]}>{initials}</Text>
+            </View>
+          )}
+          {/* Camera overlay badge */}
+          <View style={[styles.cameraOverlay, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            {uploadingPhoto
+              ? <ActivityIndicator size="small" color={Colors.accent} />
+              : <Ionicons name="camera" size={14} color={Colors.accent} />
+            }
+          </View>
+        </TouchableOpacity>
 
         {nameEditing ? (
           <View style={styles.nameEditRow}>
@@ -436,69 +674,57 @@ export default function SettingsScreen() {
           </View>
         )}
 
-        {/* Plan badge */}
-        <View style={[styles.badge, { backgroundColor: isPremium ? Colors.gold + '22' : colors.border }]}>
-          {isPremium && <Ionicons name="star" size={12} color={Colors.gold} />}
-          <Text style={[styles.badgeText, { color: isPremium ? Colors.gold : colors.textSecondary }]}>
-            {isPremium ? 'PRO' : 'FREE'}
-          </Text>
-        </View>
+        {/* Username row */}
+        {userProfile.username ? (
+          <TouchableOpacity onPress={() => router.push('/profile/choose-username')}>
+            <Text style={[styles.usernameText, { color: Colors.accent }]}>@{userProfile.username}</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity onPress={() => router.push('/profile/choose-username')}>
+            <Text style={[styles.setUsernameLink, { color: colors.textSecondary }]}>Set username</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Bio section */}
+        {bioEditing ? (
+          <View style={styles.bioEditBlock}>
+            <TextInput
+              style={[styles.bioInput, { color: colors.textPrimary, borderColor: colors.border, backgroundColor: colors.background }]}
+              value={draftBio}
+              onChangeText={(t) => setDraftBio(t.slice(0, 160))}
+              placeholder="Tell others a little about yourself..."
+              placeholderTextColor={colors.textSecondary}
+              multiline
+              autoFocus
+            />
+            <Text style={[styles.charCount, { color: colors.textSecondary }]}>{draftBio.length}/160</Text>
+            <View style={styles.nameEditBtns}>
+              <TouchableOpacity onPress={() => setBioEditing(false)} style={styles.cancelBtn}>
+                <Text style={[styles.cancelBtnText, { color: colors.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={saveBio} style={[styles.saveBtn, { backgroundColor: Colors.accent }]} disabled={savingBio}>
+                {savingBio ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.saveBtnText}>Save</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <TouchableOpacity onPress={startBioEdit}>
+            <Text style={[styles.bioText, { color: userProfile.bio ? colors.textPrimary : colors.textSecondary }]}>
+              {userProfile.bio || 'Add a short bio'}
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* PRO badge — only shown when premium */}
+        {isPremium && (
+          <View style={[styles.badge, { backgroundColor: Colors.gold + '22' }]}>
+            <Ionicons name="star" size={12} color={Colors.gold} />
+            <Text style={[styles.badgeText, { color: Colors.gold }]}>PRO</Text>
+          </View>
+        )}
       </View>
 
-      {/* ── 2. Subscription ─────────────────────────────────────────────── */}
-      <SettingsSection title="Subscription">
-        {isPremium ? (
-          <>
-            <SettingsRow
-              icon="star"
-              label={plan === 'annual' ? 'Annual Plan' : 'Monthly Plan'}
-              value={expirationDate
-                ? `Renews ${new Date(expirationDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
-                : 'Active'}
-              separator
-            />
-            <SettingsRow
-              icon="settings-outline"
-              label="Manage Subscription"
-              onPress={() => {
-                const url = Platform.OS === 'ios'
-                  ? 'https://apps.apple.com/account/subscriptions'
-                  : 'https://play.google.com/store/account/subscriptions';
-                Linking.openURL(url);
-              }}
-              separator
-            />
-          </>
-        ) : (
-          <SettingsRow
-            icon="star-outline"
-            label="Go Pro"
-            onPress={() => router.push('/go-pro')}
-            separator
-          />
-        )}
-        <SettingsRow
-          icon="refresh-outline"
-          label="Restore Purchases"
-          rightElement={restoringPurchases ? <ActivityIndicator size="small" color={colors.textSecondary} /> : undefined}
-          onPress={async () => {
-            setRestoringPurchases(true);
-            try {
-              const restored = await restorePurchases();
-              Alert.alert(
-                restored ? 'Restored!' : 'No Subscription Found',
-                restored ? 'Your premium subscription has been restored.' : 'No active subscription found for this account.',
-              );
-            } catch {
-              Alert.alert('Error', 'Could not restore purchases. Please try again.');
-            } finally {
-              setRestoringPurchases(false);
-            }
-          }}
-        />
-      </SettingsSection>
-
-      {/* ── 3. Preferences ──────────────────────────────────────────────── */}
+      {/* ── 2. Preferences ──────────────────────────────────────────────── */}
       <SettingsSection title="Preferences">
         <SettingsRow
           icon="barbell-outline"
@@ -526,6 +752,8 @@ export default function SettingsScreen() {
           }
           separator
         />
+
+        {/* Dose Reminders toggle + expander */}
         <SettingsRow
           icon="notifications-outline"
           label="Dose Reminders"
@@ -538,6 +766,44 @@ export default function SettingsScreen() {
           }
           separator
         />
+        {notifPrefs.doseReminders && (
+          <View style={[styles.reminderExpander, { borderColor: colors.border }]}>
+            <SegmentedControl
+              options={['Custom', 'Optimized']}
+              values={['0', '1']}
+              selectedValue={notifPrefs.doseReminderOptimized ? '1' : '0'}
+              onValueChange={(v) => handleOptimizedToggle('dose', parseInt(v, 10))}
+            />
+            {notifPrefs.doseReminderOptimized ? (
+              <Text style={[styles.optimizedLabel, { color: colors.textSecondary }]}>
+                {Platform.OS === 'ios' && hkEnabled
+                  ? 'Adapts to your sleep schedule'
+                  : 'Enable Apple Health for personalized times'}
+              </Text>
+            ) : (
+              <TouchableOpacity
+                style={styles.reminderTimeRow}
+                onPress={() => setShowDoseTimePicker(true)}
+              >
+                <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
+                <Text style={[styles.reminderTimeText, { color: colors.textPrimary }]}>
+                  {formatTime(doseH, doseM)}
+                </Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
+              </TouchableOpacity>
+            )}
+            {showDoseTimePicker && (
+              <DateTimePicker
+                mode="time"
+                value={dateFromHourMinute(doseH, doseM)}
+                onChange={handleDoseTimeChange}
+                display={Platform.OS === 'ios' ? 'inline' : 'default'}
+              />
+            )}
+          </View>
+        )}
+
+        {/* Workout Reminders toggle + expander */}
         <SettingsRow
           icon="fitness-outline"
           label="Workout Reminders"
@@ -550,9 +816,47 @@ export default function SettingsScreen() {
           }
           separator
         />
+        {notifPrefs.workoutReminders && (
+          <View style={[styles.reminderExpander, { borderColor: colors.border }]}>
+            <SegmentedControl
+              options={['Custom', 'Optimized']}
+              values={['0', '1']}
+              selectedValue={notifPrefs.workoutReminderOptimized ? '1' : '0'}
+              onValueChange={(v) => handleOptimizedToggle('workout', parseInt(v, 10))}
+            />
+            {notifPrefs.workoutReminderOptimized ? (
+              <Text style={[styles.optimizedLabel, { color: colors.textSecondary }]}>
+                {Platform.OS === 'ios' && hkEnabled
+                  ? 'Adapts to your sleep schedule'
+                  : 'Enable Apple Health for personalized times'}
+              </Text>
+            ) : (
+              <TouchableOpacity
+                style={styles.reminderTimeRow}
+                onPress={() => setShowWorkoutTimePicker(true)}
+              >
+                <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
+                <Text style={[styles.reminderTimeText, { color: colors.textPrimary }]}>
+                  {formatTime(workoutH, workoutM)}
+                </Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
+              </TouchableOpacity>
+            )}
+            {showWorkoutTimePicker && (
+              <DateTimePicker
+                mode="time"
+                value={dateFromHourMinute(workoutH, workoutM)}
+                onChange={handleWorkoutTimeChange}
+                display={Platform.OS === 'ios' ? 'inline' : 'default'}
+              />
+            )}
+          </View>
+        )}
+
+        {/* Recovery Check-In toggle + expander */}
         <SettingsRow
           icon="bed-outline"
-          label="Recovery Check-In (7:00 AM)"
+          label="Recovery Check-In"
           rightElement={
             <Switch
               value={notifPrefs.recoveryCheckIn ?? false}
@@ -561,9 +865,46 @@ export default function SettingsScreen() {
             />
           }
         />
+        {notifPrefs.recoveryCheckIn && (
+          <View style={[styles.reminderExpander, { borderColor: colors.border, borderTopWidth: 0 }]}>
+            <SegmentedControl
+              options={['Custom', 'Optimized']}
+              values={['0', '1']}
+              selectedValue={notifPrefs.recoveryCheckInOptimized ? '1' : '0'}
+              onValueChange={(v) => handleOptimizedToggle('recovery', parseInt(v, 10))}
+            />
+            {notifPrefs.recoveryCheckInOptimized ? (
+              <Text style={[styles.optimizedLabel, { color: colors.textSecondary }]}>
+                {Platform.OS === 'ios' && hkEnabled
+                  ? 'Adapts to your sleep schedule'
+                  : 'Enable Apple Health for personalized times'}
+              </Text>
+            ) : (
+              <TouchableOpacity
+                style={styles.reminderTimeRow}
+                onPress={() => setShowRecoveryTimePicker(true)}
+              >
+                <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
+                <Text style={[styles.reminderTimeText, { color: colors.textPrimary }]}>
+                  {formatTime(recoveryH, recoveryM)}
+                </Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
+              </TouchableOpacity>
+            )}
+            {showRecoveryTimePicker && (
+              <DateTimePicker
+                mode="time"
+                value={dateFromHourMinute(recoveryH, recoveryM)}
+                onChange={handleRecoveryTimeChange}
+                display={Platform.OS === 'ios' ? 'inline' : 'default'}
+              />
+            )}
+          </View>
+        )}
+
       </SettingsSection>
 
-      {/* ── 4. Body Stats ───────────────────────────────────────────────── */}
+      {/* ── 3. Body Stats ───────────────────────────────────────────────── */}
       <SettingsSection title="Body Stats">
         {statsEditing ? (
           <View style={styles.statsForm}>
@@ -696,7 +1037,6 @@ export default function SettingsScreen() {
             <TouchableOpacity
               style={[styles.editStatsBtn, { borderColor: colors.border }]}
               onPress={startStatsEdit}
-              activeOpacity={0.8}
             >
               <Ionicons name="create-outline" size={16} color={Colors.accent} />
               <Text style={[styles.editStatsBtnText, { color: Colors.accent }]}>Edit Body Stats</Text>
@@ -705,7 +1045,7 @@ export default function SettingsScreen() {
         )}
       </SettingsSection>
 
-      {/* ── 5. Nutrition ────────────────────────────────────────────────── */}
+      {/* ── 4. Nutrition ────────────────────────────────────────────────── */}
       <SettingsSection title="Nutrition">
         <SettingsRow
           icon="restaurant-outline"
@@ -715,7 +1055,7 @@ export default function SettingsScreen() {
         />
       </SettingsSection>
 
-      {/* ── 6. Apple Health (iOS only) ───────────────────────────────────── */}
+      {/* ── 5. Apple Health (iOS only) ───────────────────────────────────── */}
       {Platform.OS === 'ios' && (
         <SettingsSection title="Apple Health">
           <SettingsRow
@@ -729,7 +1069,7 @@ export default function SettingsScreen() {
         </SettingsSection>
       )}
 
-      {/* -- 7. Data & Privacy */}
+      {/* -- 6. Data & Privacy */}
       <SettingsSection title="Data & Privacy">
         <SettingsRow
           icon="shield-checkmark-outline"
@@ -767,7 +1107,7 @@ export default function SettingsScreen() {
         />
       </SettingsSection>
 
-      {/* -- 8. About & Support */}
+      {/* -- 7. About & Support */}
       <SettingsSection title="About & Support">
         <SettingsRow
           icon="information-circle-outline"
@@ -790,12 +1130,12 @@ export default function SettingsScreen() {
         />
       </SettingsSection>
 
-            {/* ── 6. Sign Out ─────────────────────────────────────────────────── */}
+      {/* ── 8. Sign Out ─────────────────────────────────────────────────── */}
       <TouchableOpacity
         style={[styles.signOutBtn, signingOut && styles.disabled]}
         onPress={handleSignOut}
         disabled={signingOut}
-        activeOpacity={0.8}
+        activeOpacity={0.7}
       >
         {signingOut ? (
           <ActivityIndicator color="#FFFFFF" size="small" />
@@ -826,7 +1166,24 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 20,
   },
-  avatar: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
+  avatarWrapper: {
+    position: 'relative',
+    width: 80,
+    height: 80,
+  },
+  avatar: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
+  avatarImage: { width: 80, height: 80, borderRadius: 40 },
+  cameraOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   initials: { fontSize: 26, fontWeight: '700' },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, width: '100%', justifyContent: 'center' },
   nameTextBlock: { alignItems: 'center', gap: 2 },
@@ -843,8 +1200,41 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   nameEditBtns: { flexDirection: 'row', gap: 8 },
+  usernameText: { fontSize: 14, fontWeight: '600' },
+  setUsernameLink: { fontSize: 13 },
+  bioText: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  bioEditBlock: { width: '100%', gap: 8 },
+  bioInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    minHeight: 72,
+    textAlignVertical: 'top',
+  },
+  charCount: { fontSize: 11, alignSelf: 'flex-end' },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   badgeText: { fontSize: 12, fontWeight: '700' },
+
+  // Reminder expander
+  reminderExpander: {
+    marginHorizontal: 12,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderRadius: 10,
+    gap: 10,
+  },
+  reminderTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  reminderTimeText: { flex: 1, fontSize: 15, fontWeight: '500' },
+  optimizedLabel: { fontSize: 13, lineHeight: 18 },
 
   // Buttons
   cancelBtn: { padding: 10, alignItems: 'center', justifyContent: 'center' },

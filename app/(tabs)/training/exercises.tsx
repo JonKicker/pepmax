@@ -18,6 +18,8 @@ import { Colors } from '../../../src/constants/theme';
 import { useExerciseLibrary } from '../../../src/hooks/useExerciseLibrary';
 import { useExercisePicker } from '../../../src/contexts/ExercisePickerContext';
 import type { Exercise, MuscleGroup, ExerciseCategory } from '../../../src/types/exercise';
+import ExerciseThumbnail from '../../../src/components/training/ExerciseThumbnail';
+import { GlassBackground } from '../../../src/components/GlassBackground';
 
 const MUSCLE_GROUPS: MuscleGroup[] = [
   'Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Forearms',
@@ -29,12 +31,12 @@ const CATEGORIES: ExerciseCategory[] = [
 ];
 
 const CATEGORY_COLORS: Record<ExerciseCategory, string> = {
-  Compound: '#8E44AD',
-  Isolation: '#2E86C1',
-  Bodyweight: '#27AE60',
-  Machine: '#E67E22',
-  Cable: '#1ABC9C',
-  Cardio: '#E74C3C',
+  Compound: Colors.gym,
+  Isolation: Colors.accent,
+  Bodyweight: Colors.nutrition,
+  Machine: Colors.warning,
+  Cable: Colors.teal,
+  Cardio: Colors.cardio,
 };
 
 function ExerciseCard({
@@ -54,14 +56,15 @@ function ExerciseCard({
     <TouchableOpacity
       onPress={onPress}
       onLongPress={onLongPress}
-      activeOpacity={0.8}
+      activeOpacity={0.7}
       style={[
         styles.card,
         { backgroundColor: colors.surface, borderColor: colors.border },
         isPicked && { opacity: 0.6 },
       ]}
     >
-      <View style={styles.cardContent}>
+      <ExerciseThumbnail exerciseId={exercise.id} size={52} />
+      <View style={[styles.cardContent, { marginLeft: 12 }]}>
         <View style={styles.cardHeader}>
           <Text style={[styles.cardName, { color: colors.textPrimary }]} numberOfLines={1}>
             {exercise.name}
@@ -154,7 +157,8 @@ export default function ExercisesScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <GlassBackground>
+    <View style={styles.container}>
       {/* Search */}
       <View style={[styles.searchContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Ionicons name="search" size={18} color={colors.textSecondary} />
@@ -266,12 +270,13 @@ export default function ExercisesScreen() {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             router.push('/(tabs)/training/exercise-form');
           }}
-          activeOpacity={0.85}
+          activeOpacity={0.7}
         >
           <Ionicons name="add" size={30} color="white" />
         </TouchableOpacity>
       )}
     </View>
+    </GlassBackground>
   );
 }
 

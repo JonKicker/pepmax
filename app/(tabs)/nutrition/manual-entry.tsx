@@ -230,7 +230,7 @@ export default function ManualEntryScreen() {
             style={[styles.logBtn, { backgroundColor: Colors.nutrition }]}
             onPress={handleLog}
             disabled={saving}
-            activeOpacity={0.85}
+            activeOpacity={0.7}
           >
             {saving ? <ActivityIndicator color="white" /> : <Text style={styles.logBtnText}>Log Food</Text>}
           </TouchableOpacity>

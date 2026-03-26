@@ -148,7 +148,7 @@ export default function BodyMeasurementsScreen() {
         <TouchableOpacity
           style={[styles.ctaBtn, { backgroundColor: Colors.gym }]}
           onPress={() => router.push('/(tabs)/training/log-measurement')}
-          activeOpacity={0.85}
+          activeOpacity={0.7}
         >
           <Ionicons name="add" size={18} color="white" />
           <Text style={styles.ctaBtnText}>Log Measurement</Text>
@@ -156,7 +156,7 @@ export default function BodyMeasurementsScreen() {
         <TouchableOpacity
           style={[styles.ctaBtn, { backgroundColor: Colors.gym + '20', borderColor: Colors.gym + '40', borderWidth: 1 }]}
           onPress={() => router.push('/(tabs)/training/measurement-trends')}
-          activeOpacity={0.85}
+          activeOpacity={0.7}
         >
           <Ionicons name="trending-up-outline" size={18} color={Colors.gym} />
           <Text style={[styles.ctaBtnText, { color: Colors.gym }]}>View Trends</Text>

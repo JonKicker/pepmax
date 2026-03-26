@@ -12,6 +12,9 @@ import {
   RefreshControl,
   Modal,
 } from 'react-native';
+import { AnimatedPressable } from '../../../src/components/AnimatedPressable';
+import { StaggeredList } from '../../../src/components/StaggeredList';
+import { NutritionSkeleton } from '../../../src/components/SkeletonScreen';
 import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -37,6 +40,7 @@ import { DEFAULT_MEAL_SLOTS } from '../../../src/types/nutrition';
 import type { FoodLogEntry, MealSlotConfig } from '../../../src/types/nutrition';
 import type { AdaptiveTargets, AdaptiveTDEEResult, DataReadiness } from '../../../src/types/adaptiveCoaching';
 import WeeklyCheckInModal from '../../../src/components/nutrition/WeeklyCheckInModal';
+import { GlassBackground } from '../../../src/components/GlassBackground';
 import { pushNutritionToWatch } from '../../../src/utils/watchSync';
 
 // ─── Calorie Ring ─────────────────────────────────────────────────────────────
@@ -279,10 +283,10 @@ function MealSection({
   const totalCal = entries.reduce((s, e) => s + e.calories, 0);
 
   return (
-    <View style={[styles.mealSection, { borderColor: colors.border }]}>
+    <View style={[styles.mealSection, { borderColor: colors.glass.border }]}>
       {/* Header */}
       <TouchableOpacity
-        style={[styles.mealHeader, { backgroundColor: colors.surface }]}
+        style={[styles.mealHeader, { backgroundColor: colors.glass.subtle }]}
         onPress={() => setExpanded((v) => !v)}
         activeOpacity={0.7}
       >
@@ -313,13 +317,14 @@ function MealSection({
           )}
           {/* Add button (not shown in "Other" orphan section) */}
           {slotId !== '__other__' && (
-            <TouchableOpacity
+            <AnimatedPressable
+              haptic
               style={[styles.addFoodBtn, { borderColor: Colors.nutrition }]}
               onPress={() => onAddFood(slotId)}
             >
               <Ionicons name="add" size={16} color={Colors.nutrition} />
               <Text style={[styles.addFoodBtnText, { color: Colors.nutrition }]}>Add Food</Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           )}
         </View>
       )}
@@ -663,11 +668,7 @@ export default function NutritionScreen() {
   };
 
   if (loading) {
-    return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={Colors.nutrition} size="large" />
-      </View>
-    );
+    return <NutritionSkeleton />;
   }
 
   if (loadError) {
@@ -726,8 +727,9 @@ export default function NutritionScreen() {
           ),
         }}
       />
+      <GlassBackground>
       <ScrollView
-        style={{ backgroundColor: colors.background }}
+        style={{ flex: 1 }}
         contentContainerStyle={styles.scroll}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={Colors.nutrition} />
@@ -742,7 +744,7 @@ export default function NutritionScreen() {
         <CalorieRing consumed={totals.calories} target={targets.calories} colors={colors} />
 
         {/* Macro bars */}
-        <View style={[styles.macrosCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.macrosCard, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}>
           <MacroBar label="Protein" consumed={totals.protein} target={targets.protein} color="#4A90D9" colors={colors} />
           <MacroBar label="Carbs" consumed={totals.carbs} target={targets.carbs} color={Colors.warning} colors={colors} />
           <MacroBar label="Fat" consumed={totals.fat} target={targets.fat} color={Colors.error} colors={colors} />
@@ -750,10 +752,10 @@ export default function NutritionScreen() {
 
         {/* Adaptive coaching info card */}
         {userProfile?.adaptiveCoaching?.enabled && (
-          <TouchableOpacity
-            style={[styles.adaptiveCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          <AnimatedPressable
+            haptic
+            style={[styles.adaptiveCard, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
             onPress={() => router.push('/(tabs)/nutrition/weight-log')}
-            activeOpacity={0.8}
           >
             <Ionicons name="analytics-outline" size={16} color={Colors.nutrition} />
             {userProfile.adaptiveCoaching.estimatedTDEE ? (
@@ -771,22 +773,36 @@ export default function NutritionScreen() {
               </Text>
             )}
             <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} style={{ marginLeft: 'auto' }} />
-          </TouchableOpacity>
+          </AnimatedPressable>
         )}
 
         {/* Micronutrients shortcut */}
-        <TouchableOpacity
-          style={[styles.microsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        <AnimatedPressable
+          haptic
+          style={[styles.microsCard, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
           onPress={() => router.push('/(tabs)/nutrition/micros')}
-          activeOpacity={0.7}
         >
           <Ionicons name="flask-outline" size={20} color={Colors.nutrition} />
           <Text style={[styles.microsLabel, { color: colors.textPrimary }]}>Micronutrients</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} style={{ marginLeft: 'auto' }} />
-        </TouchableOpacity>
+        </AnimatedPressable>
+
+        {/* Macro Trends shortcut */}
+        <AnimatedPressable
+          haptic
+          style={[styles.microsCard, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+          onPress={() => router.push('/(tabs)/nutrition/progress')}
+        >
+          <Ionicons name="trending-up-outline" size={20} color={Colors.nutrition} />
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={[styles.microsLabel, { color: colors.textPrimary }]}>View Trends</Text>
+            <Text style={{ fontSize: 12, color: colors.textSecondary }}>{'Calories & macros over time'}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+        </AnimatedPressable>
 
         {/* Meal sections — dynamic slots from profile, with orphaned entry fallback */}
-        <View style={styles.mealsContainer}>
+        <StaggeredList staggerDelay={80} style={styles.mealsContainer}>
           {activeSlots.map((slot) => (
             <MealSection
               key={slot.id}
@@ -809,8 +825,9 @@ export default function NutritionScreen() {
               colors={colors}
             />
           )}
-        </View>
+        </StaggeredList>
       </ScrollView>
+      </GlassBackground>
 
       <CopyMealsModal
         visible={showCopyModal}

@@ -252,7 +252,7 @@ export default function PhotoComparisonScreen() {
         style={[styles.shareBtn, { backgroundColor: Colors.body, opacity: sharing ? 0.6 : 1 }]}
         onPress={handleShare}
         disabled={sharing}
-        activeOpacity={0.8}
+        activeOpacity={0.7}
       >
         <Ionicons name="share-outline" size={20} color="#fff" />
         <Text style={styles.shareBtnText}>{sharing ? 'Generating...' : 'Share Comparison'}</Text>

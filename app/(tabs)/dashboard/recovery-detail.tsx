@@ -19,8 +19,8 @@ import { SubScoreBar } from '../../../src/components/recovery/SubScoreBar';
 import { RecoveryTrendChart } from '../../../src/components/recovery/RecoveryTrendChart';
 import {
   getTodayRecoveryScore,
-  getRecoveryScoreHistory,
 } from '../../../src/services/recoveryScoreService';
+import { useRecoveryProgress } from '../../../src/hooks/useRecoveryProgress';
 import { analytics, AnalyticsEvent } from '../../../src/services/analytics';
 import type { RecoveryScoreDoc } from '../../../src/types/recoveryScore';
 
@@ -36,20 +36,16 @@ const CATEGORY_LABELS: Record<string, string> = {
 export default function RecoveryDetailScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const recovery = useRecoveryProgress('1M');
 
   const [doc, setDoc] = useState<RecoveryScoreDoc | null>(null);
-  const [trend, setTrend] = useState<Array<{ date: string; score: number }>>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     analytics.track(AnalyticsEvent.RECOVERY_DETAIL_VIEWED);
     (async () => {
-      const [scoreResult, historyResult] = await Promise.all([
-        getTodayRecoveryScore(),
-        getRecoveryScoreHistory(7),
-      ]);
+      const scoreResult = await getTodayRecoveryScore();
       if (scoreResult.data) setDoc(scoreResult.data);
-      if (historyResult.data) setTrend(historyResult.data);
       setLoading(false);
     })();
   }, []);
@@ -139,9 +135,15 @@ export default function RecoveryDetailScreen() {
         </>
       )}
 
-      {/* 7-day trend */}
+      {/* Recovery trend */}
       <View style={styles.trendSection}>
-        <RecoveryTrendChart data={trend} colors={colors} />
+        <RecoveryTrendChart
+          data={recovery.data}
+          colors={colors}
+          fullMode
+          timeRange={recovery.timeRange}
+          onTimeRangeChange={recovery.setTimeRange}
+        />
       </View>
 
       {/* Redo check-in */}

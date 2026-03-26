@@ -12,6 +12,11 @@ export const Colors = {
   cardio: '#E74C3C',
   body: '#00897B',
 
+  // Extended palette
+  teal: '#1ABC9C',
+  social: '#8B5CF6',
+  recovery: '#9B59B6',
+
   // Light mode
   light: {
     background: '#FFFFFF',
@@ -20,6 +25,15 @@ export const Colors = {
     textSecondary: '#666666',
     border: '#D5D8DC',
     success: '#27AE60',
+    glass: {
+      heavy: 'rgba(255, 255, 255, 0.45)',
+      subtle: 'rgba(255, 255, 255, 0.25)',
+      border: 'rgba(255, 255, 255, 0.5)',
+      shadow: 'rgba(0, 0, 0, 0.06)',
+      gradientStart: '#eef2ff',
+      gradientMid: '#f8f9ff',
+      gradientEnd: '#ffffff',
+    },
   },
 
   // Dark mode
@@ -30,6 +44,15 @@ export const Colors = {
     textSecondary: '#A0A0A0',
     border: '#333333',
     success: '#2ECC71',
+    glass: {
+      heavy: 'rgba(255, 255, 255, 0.08)',
+      subtle: 'rgba(255, 255, 255, 0.04)',
+      border: 'rgba(255, 255, 255, 0.12)',
+      shadow: 'rgba(0, 0, 0, 0.3)',
+      gradientStart: '#1a1a2e',
+      gradientMid: '#161622',
+      gradientEnd: '#121212',
+    },
   },
 
   // Shared
@@ -57,6 +80,18 @@ export type Theme = {
     cardio: string;
     body: string;
     gold: string;
+    teal: string;
+    social: string;
+    recovery: string;
+    glass: {
+      heavy: string;
+      subtle: string;
+      border: string;
+      shadow: string;
+      gradientStart: string;
+      gradientMid: string;
+      gradientEnd: string;
+    };
   };
 };
 
@@ -76,6 +111,10 @@ function buildTheme(dark: boolean): Theme {
       cardio: Colors.cardio,
       body: Colors.body,
       gold: Colors.gold,
+      teal: Colors.teal,
+      social: Colors.social,
+      recovery: Colors.recovery,
+      glass: mode.glass,
     },
   };
 }

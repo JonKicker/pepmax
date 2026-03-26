@@ -246,7 +246,7 @@ export default function PaywallScreen() {
               setSelectedPlan('monthly');
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             }}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
           >
             <Text style={[styles.planName, { color: colors.textPrimary }]}>Monthly</Text>
             {offeringsLoading ? (
@@ -274,7 +274,7 @@ export default function PaywallScreen() {
               setSelectedPlan('annual');
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             }}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
           >
             {/* Best value badge */}
             <View style={styles.bestValueBadge}>
@@ -300,7 +300,7 @@ export default function PaywallScreen() {
           style={[styles.ctaBtn, { backgroundColor: Colors.accent }]}
           onPress={handlePurchase}
           disabled={purchasing}
-          activeOpacity={0.85}
+          activeOpacity={0.7}
         >
           {purchasing ? (
             <ActivityIndicator color="#FFFFFF" size="small" />

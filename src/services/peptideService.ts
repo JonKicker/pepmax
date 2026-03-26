@@ -25,6 +25,8 @@ import type { Peptide, Dose, Unit, InjectionSite, Frequency, PeptideCategory, Ro
 import { ROUTES } from '../types/peptide';
 import type { ServiceResult } from '../types/service';
 import type { Compound, CompoundCategory } from '../data/compoundDatabase';
+import type { PeptideFastingWindow } from '../types/peptideFasting';
+import { getDefaultPeptideFastingWindow } from '../utils/peptideFasting';
 
 // ─── Input types (strip server-managed fields) ──────────────────────────────
 
@@ -43,6 +45,7 @@ type PeptideInput = {
   storageTemp?: string;
   isPreset?: boolean;
   presetId?: string;
+  fastingWindow?: PeptideFastingWindow;
 };
 
 type DoseInput = {
@@ -93,8 +96,14 @@ export function mapGroupToCategory(group: CompoundCategory): PeptideCategory {
 // ─── Peptide CRUD ────────────────────────────────────────────────────────────
 
 export async function addPeptide(data: PeptideInput): Promise<ServiceResult<string>> {
+  // Apply category-based fasting defaults when category is known and the
+  // caller did not supply an explicit window (e.g. manual add with category).
+  const withDefaults: PeptideInput =
+    data.category && data.fastingWindow === undefined
+      ? { ...data, fastingWindow: getDefaultPeptideFastingWindow(data.category) }
+      : data;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return addDocument(COLLECTIONS.PEPTIDES, data as any);
+  return addDocument(COLLECTIONS.PEPTIDES, withDefaults as any);
 }
 
 export async function updatePeptide(

@@ -48,7 +48,7 @@ function Chip({
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onPress();
       }}
-      activeOpacity={0.8}
+      activeOpacity={0.7}
     >
       <Text style={[styles.chipText, { color: active ? 'white' : colors.textPrimary }]}>
         {label}

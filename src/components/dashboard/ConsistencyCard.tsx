@@ -23,6 +23,7 @@ type Props = {
   consistency: ConsistencyData | null;
   colors: Theme['colors'];
   onToggleRestDay: (dateKey: string) => void;
+  onPress?: () => void;
 };
 
 type TooltipState = {
@@ -52,7 +53,7 @@ function ringColor(score: number): string {
   return Colors.error;
 }
 
-export function ConsistencyCard({ consistency, colors, onToggleRestDay }: Props) {
+export function ConsistencyCard({ consistency, colors, onToggleRestDay, onPress }: Props) {
   const scrollRef = useRef<ScrollView>(null);
   const [tooltip, setTooltip] = useState<TooltipState>(null);
 
@@ -81,6 +82,7 @@ export function ConsistencyCard({ consistency, colors, onToggleRestDay }: Props)
       icon="checkmark-done-outline"
       iconColor={Colors.gold}
       colors={colors}
+      onPress={onPress}
     >
       {/* Headline row */}
       <View style={styles.headlineRow}>
@@ -143,6 +145,7 @@ export function ConsistencyCard({ consistency, colors, onToggleRestDay }: Props)
                 style={styles.dayColumn}
                 onPress={() => handleDotPress(day, index)}
                 activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Text style={[styles.weekdayLabel, { color: colors.textSecondary }]}>
                   {WEEKDAY_INITIALS[weekdayIdx]}
@@ -242,7 +245,7 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     flexShrink: 1,
   },
-  onPlanNum: { fontSize: 28, fontWeight: '700' },
+  onPlanNum: { fontSize: 32, fontWeight: '800' },
   onPlanLabel: { fontSize: 14 },
   // Ring
   ringContainer: {
@@ -308,6 +311,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 8,
     alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
   },
   restBtnText: { fontSize: 12 },
   restLabel: { fontSize: 12, marginTop: 8, fontStyle: 'italic' },

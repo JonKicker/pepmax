@@ -31,14 +31,18 @@ export function PeptideCard({ doses, colors, error, onPress, onQuickLog }: Props
         <Text style={[styles.empty, { color: colors.textSecondary }]}>Could not load today's doses.</Text>
       ) : doses.length === 0 ? (
         <View>
-          <Text style={[styles.empty, { color: colors.textSecondary }]}>No doses logged today.</Text>
+          <View style={{ alignItems: 'center', paddingVertical: 16, gap: 8 }}>
+            <Ionicons name="eyedrop-outline" size={48} color={colors.textSecondary} style={{ opacity: 0.5 }} />
+            <Text style={{ fontSize: 16, fontWeight: '700', color: colors.textPrimary }}>No Doses Today</Text>
+            <Text style={{ fontSize: 14, color: colors.textSecondary, textAlign: 'center' }}>Log your first dose to start tracking</Text>
+          </View>
           <TouchableOpacity
             style={[styles.quickLogBtn, { backgroundColor: Colors.peptide + '15', borderColor: Colors.peptide + '30' }]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               onQuickLog();
             }}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
           >
             <Ionicons name="add-circle-outline" size={16} color={Colors.peptide} />
             <Text style={[styles.quickLogText, { color: Colors.peptide }]}>Log Dose</Text>
@@ -60,7 +64,7 @@ export function PeptideCard({ doses, colors, error, onPress, onQuickLog }: Props
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               onQuickLog();
             }}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
           >
             <Ionicons name="add-circle-outline" size={16} color={Colors.peptide} />
             <Text style={[styles.quickLogText, { color: Colors.peptide }]}>Log Dose</Text>

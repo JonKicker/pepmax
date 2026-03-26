@@ -156,7 +156,7 @@ export default function PrivacyScreen() {
           <TouchableOpacity
             style={[styles.deleteBtn, { borderColor: Colors.error }]}
             onPress={() => setShowDeleteConfirm(true)}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
           >
             <Ionicons name="person-remove-outline" size={16} color={Colors.error} />
             <Text style={[styles.deleteBtnText, { color: Colors.error }]}>Delete My Account</Text>
@@ -207,7 +207,7 @@ export default function PrivacyScreen() {
                 ]}
                 onPress={handleDeleteAccount}
                 disabled={deleteText !== 'DELETE' || deletingAccount}
-                activeOpacity={0.8}
+                activeOpacity={0.7}
               >
                 {deletingAccount ? (
                   <ActivityIndicator color="#FFF" size="small" />

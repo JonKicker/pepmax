@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
@@ -11,11 +10,15 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../src/hooks/useTheme';
+import { AnimatedPressable } from '../../../src/components/AnimatedPressable';
+import { StaggeredList } from '../../../src/components/StaggeredList';
+import { CardioSkeleton } from '../../../src/components/SkeletonScreen';
 import { Colors } from '../../../src/constants/theme';
 import { getLastSessionByType, getThisWeekCardioSummary } from '../../../src/services/cardioService';
 import { formatDistance, formatDuration } from '../../../src/utils/cardio';
 import { useCardioSettings } from '../../../src/hooks/useCardioSettings';
 import WeeklySummaryCard from '../../../src/components/cardio/WeeklySummaryCard';
+import { GlassBackground } from '../../../src/components/GlassBackground';
 import type { ActivityType, LastSessionSummary } from '../../../src/types/cardio';
 import type { WeeklyCardioSummary } from '../../../src/services/cardioService';
 
@@ -52,7 +55,7 @@ function ActivityCard({
   const { settings } = useCardioSettings();
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View style={[styles.card, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}>
       <View style={[styles.cardAccent, { backgroundColor: Colors.cardio }]} />
       <View style={styles.cardContent}>
         <View style={styles.cardHeader}>
@@ -74,14 +77,14 @@ function ActivityCard({
           <Text style={[styles.noSession, { color: colors.textSecondary }]}>No sessions yet</Text>
         )}
 
-        <TouchableOpacity
+        <AnimatedPressable
+          haptic
           style={[styles.startBtn, { backgroundColor: Colors.cardio }]}
           onPress={() => onStart(activity.type)}
-          activeOpacity={0.85}
         >
           <Ionicons name="play" size={14} color="white" />
           <Text style={styles.startBtnText}>Start</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
     </View>
   );
@@ -140,64 +143,91 @@ export default function CardioScreen() {
   );
 
   const handleStart = (type: ActivityType) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push({ pathname: '/(tabs)/cardio/start-session', params: { activityType: type } });
   };
 
+  if (loading) return <CardioSkeleton />;
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <GlassBackground>
+    <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.list}>
-        <WeeklySummaryCard
-          summary={loading ? null : weeklySummary}
-          distanceUnit={settings.distanceUnit}
-        />
-        {ACTIVITIES.map((activity) => (
-          <ActivityCard
-            key={activity.type}
-            activity={activity}
-            lastSession={lastSessions[activity.type]}
-            loading={loading}
-            onStart={handleStart}
-            colors={colors}
+        <StaggeredList staggerDelay={80}>
+          <WeeklySummaryCard
+            summary={weeklySummary}
+            distanceUnit={settings.distanceUnit}
           />
-        ))}
+
+          {/* Segments entry point */}
+          <AnimatedPressable
+            haptic
+            style={[styles.segmentsCard, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+            onPress={() => router.push('/(tabs)/cardio/segments')}
+          >
+            <View style={[styles.segmentsAccent, { backgroundColor: Colors.cardio }]} />
+            <View style={styles.segmentsContent}>
+              <View style={[styles.segmentsIconWrap, { backgroundColor: Colors.cardio + '1A' }]}>
+                <Ionicons name="flag" size={22} color={Colors.cardio} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.segmentsTitle, { color: colors.textPrimary }]}>Segments</Text>
+                <Text style={[styles.segmentsSubtitle, { color: colors.textSecondary }]}>
+                  Compete on named stretches of road or trail
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+            </View>
+          </AnimatedPressable>
+
+          {ACTIVITIES.map((activity) => (
+            <ActivityCard
+              key={activity.type}
+              activity={activity}
+              lastSession={lastSessions[activity.type]}
+              loading={false}
+              onStart={handleStart}
+              colors={colors}
+            />
+          ))}
+        </StaggeredList>
       </ScrollView>
 
-      <TouchableOpacity
+      <AnimatedPressable
+        haptic
         style={[styles.fab, { backgroundColor: Colors.cardio }]}
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          router.push('/(tabs)/cardio/start-session');
-        }}
-        activeOpacity={0.85}
+        onPress={() => router.push('/(tabs)/cardio/start-session')}
       >
         <Ionicons name="add" size={30} color="white" />
-      </TouchableOpacity>
+      </AnimatedPressable>
 
-      <View style={[styles.footer, { borderTopColor: colors.border }]}>
-        <TouchableOpacity
+      <View style={[styles.footer, { borderTopColor: colors.glass.border }]}>
+        <AnimatedPressable
+          haptic
           style={styles.footerBtn}
           onPress={() => router.push('/(tabs)/cardio/history')}
         >
           <Ionicons name="list" size={18} color={Colors.cardio} />
           <Text style={[styles.footerBtnText, { color: Colors.cardio }]}>History</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
+        </AnimatedPressable>
+        <AnimatedPressable
+          haptic
           style={styles.footerBtn}
           onPress={() => router.push('/(tabs)/cardio/progress')}
         >
           <Ionicons name="analytics" size={18} color={Colors.cardio} />
           <Text style={[styles.footerBtnText, { color: Colors.cardio }]}>Progress</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
+        </AnimatedPressable>
+        <AnimatedPressable
+          haptic
           style={styles.footerBtn}
           onPress={() => router.push('/(tabs)/cardio/settings')}
         >
           <Ionicons name="settings-outline" size={18} color={colors.textSecondary} />
           <Text style={[styles.footerBtnText, { color: colors.textSecondary }]}>Settings</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
     </View>
+    </GlassBackground>
   );
 }
 
@@ -249,6 +279,30 @@ const styles = StyleSheet.create({
   },
   footerBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   footerBtnText: { fontSize: 14, fontWeight: '600' },
+
+  segmentsCard: {
+    flexDirection: 'row',
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  segmentsAccent: { width: 4 },
+  segmentsContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    gap: 12,
+  },
+  segmentsIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segmentsTitle: { fontSize: 15, fontWeight: '700' },
+  segmentsSubtitle: { fontSize: 12, marginTop: 2 },
 
   fab: {
     position: 'absolute',

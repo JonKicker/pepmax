@@ -4,6 +4,642 @@
 
 ---
 
+## Daily Quests — Dashboard Integration
+
+**Status:** ✅ Ray-approved (2026-03-24, Plan: 0 cycles (wiring only), Build: 1 cycle)
+**Date:** 2026-03-24
+**Branch:** `feature/recovery-readiness-score`
+
+### What was built
+
+Wired the existing Daily Quests system into the dashboard card feed. All quest logic was already production-ready — this was purely integration.
+
+- `src/types/dashboard.ts` — Added `'quests'` to `DashboardCardId` union + default order (position 3, after Body Hub)
+- `src/hooks/useDashboard.ts` — Migration block for existing users
+- `app/(tabs)/dashboard/index.tsx` — `DailyQuestsCard` + `useQuests` wired into renderCard switch
+- `src/components/gamification/XPToast.tsx` — Added quest source labels
+
+### How it works
+- 3 daily quests (module-aware, de-duplicated, deterministic seed)
+- Auto-complete via progressCoordinator when matching actions occur
+- 10-20 XP per quest + 25 XP bonus for completing all 3
+- Countdown timer to midnight reset
+
+---
+
+## Profile Section Redesign — Photo, Bio, Username, Smart Reminders, Weight Sync
+
+**Status:** ✅ Ray-approved (2026-03-24, Plan: 1 cycle, Build: 3 cycles)
+**Date:** 2026-03-24
+**Branch:** `feature/recovery-readiness-score`
+
+### What was built
+
+**Profile Card Redesign** (`app/(tabs)/profile/index.tsx`)
+- Profile picture upload/remove via Firebase Storage (compressed to 400px, mirrored to publicProfiles)
+- Username display (`@username`) with link to choose-username screen if unset
+- Short bio editing (160 char max, inline edit with character counter)
+- Removed "Go Pro" button, "Restore Purchases" button, and FREE badge
+- PRO badge only shown when user has active subscription
+
+**Reminder Time Pickers** (`app/(tabs)/profile/index.tsx`)
+- Dose, Workout, and Recovery reminders now support Custom time or Optimized mode
+- Custom: native `DateTimePicker` for selecting exact time
+- Optimized: HealthKit-aware — derives ideal times from 7-day sleep/wake pattern
+- Fallback to smart defaults (7 AM / 9 AM / 5 PM) when no HealthKit data
+
+**Profile Picture Service** (`src/services/profilePictureService.ts`)
+- `uploadProfilePicture()` — compress, upload to Storage, update profile + publicProfiles
+- `removeProfilePicture()` — delete from Storage, clear from profile + publicProfiles
+- Critical profile doc errors propagate; secondary writes are fire-and-forget
+
+**Optimized Reminder Service** (`src/services/optimizedReminderService.ts`)
+- `getOptimizedTimes()` — queries 7 days of HealthKit sleep, averages wake time, derives reminder offsets
+- `applyOptimizedSchedule(type)` — schedules notification + updates profile prefs
+
+**Notification Scheduling** (`src/services/notificationService.ts`)
+- Added `scheduleWorkoutReminder` / `cancelWorkoutReminder`
+- Added `scheduleDoseReminderDaily` / `cancelDoseReminderDaily`
+
+**Weight → Body Stats Sync** (`src/services/bodyWeightService.ts`)
+- Logging today's weight now fire-and-forget syncs `weightKg` to profile body stats
+
+**Types** (`src/types/profile.ts`)
+- Added `profilePictureUrl`, `bio`, `username` to UserProfile
+- Extended `notificationPrefs` with hour/minute/optimized fields for dose + workout reminders
+
+**Firestore Rules** (`firestore.rules`)
+- Added `publicProfiles/{uid}` rules: authenticated read, owner-only write
+
+**Tests:** 33 tests across 3 files (profilePictureService: 11, optimizedReminderService: 10, notificationServiceReminders: 12)
+
+### Architecture decisions
+- Profile picture stored at `users/{uid}/profilePicture/avatar.jpg` in Firebase Storage
+- Image compressed to 400px width via expo-image-manipulator before upload
+- Bio stored in private profile doc only (not mirrored to publicProfiles)
+- Optimized reminders re-derive times from HealthKit on each toggle (adapts to changing sleep patterns)
+- Weight sync only fires for today's date to prevent historical corrections overwriting current weight
+- `@react-native-community/datetimepicker` installed for native time picker UI
+
+### Ray follow-ups (tracked, not blockers)
+1. No server-side bio length validation in Firestore rules (client enforces 160 char max)
+2. PII denylist in analytics could add `bio` and `profilePictureUrl` as defense-in-depth
+3. No accessibility labels on avatar, bio edit, and time picker interactive elements
+4. Optimized reminder tests only cover fallback path — HealthKit computation logic untested
+5. `uploadProfilePicture` does not validate MIME type or file size before upload
+
+---
+
+## Progress Charts — Fill All Gaps
+
+**Status:** ✅ Ray-approved (2026-03-24, Plan: 1 cycle, Build: 2 cycles — 7 fixes applied)
+**Date:** 2026-03-24
+**Branch:** `feature/recovery-readiness-score`
+
+### What was built
+
+6 progress/trend charts filling all data visualization gaps:
+
+**1. Body Weight Sparkline** — widened from 14→30 entries (`BodyWeightCard.tsx`)
+**2. Recovery Score Extended** — selectable 1W/1M/3M/6M/ALL time ranges (was fixed 7-day)
+**3. Nutrition Macro Trends** — calories area chart + macros grouped bars on new `nutrition/progress.tsx`
+**4. Peptide Dose Frequency** — doses-per-day bar chart on new `peptides/progress.tsx`
+**5. XP Growth Curve** — cumulative area chart added to `xp-hub.tsx`
+**6. Consistency Trend** — weekly % with green/orange/red zones on new `consistency-detail.tsx`
+
+### Files (25 total: 12 new, 13 modified)
+
+New hooks: `useRecoveryProgress`, `useNutritionProgress`, `usePeptideProgress`, `useXPProgress`, `useConsistencyProgress`
+New charts: `MacroTrendChart`, `DoseFrequencyChart`, `XPGrowthChart`, `ConsistencyTrendChart`
+New screens: `nutrition/progress`, `peptides/progress`, `dashboard/consistency-detail`
+Modified: `BodyWeightCard`, `RecoveryTrendChart`, `recovery-detail`, `xp-hub`, `ConsistencyCard`, `nutritionService`, `gamificationService`, `firestore`, `analytics`, 3 layouts, 2 index screens
+
+### Ray fixes applied
+B1: null timestamp guard in usePeptideProgress, B3: useMemo for derived values, N1: yMax floor, N2: unused import, N3: timezone anchor, N4: Colors.gold spinner, N5: retry buttons
+
+---
+
+## Body Hub Dashboard Upgrade — Hero Card + Muscular SVG Model
+
+**Status:** ✅ Ray-approved (2026-03-24, Plan: 1 cycle conditional, Build: 2 cycles)
+**Date:** 2026-03-24
+**Branch:** `feature/recovery-readiness-score`
+
+### What was built
+
+**Dashboard Integration**
+- Promoted Body Hub from a buried list item at bottom of dashboard to a first-class hero card in the configurable card feed
+- `BodyHubHeroCard` (previously built, never wired) now renders at position 2 (after Recovery score)
+- Layer tab strip (Muscles / Inject / Measure / Cardio), stat chips, and BodyHubSVG all visible inline without tapping
+- Tapping card navigates to full Body Hub detail screen with front/back toggle
+- Hero card is front-view only — hooks supply front-view data, full toggle on detail screen
+
+**Dashboard Wiring**
+- `src/types/dashboard.ts` — Added `'bodyHub'` and `'gamification'` to `DashboardCardId` union + default order
+- `src/hooks/useDashboard.ts` — Migration block inserts `'bodyHub'` after `'recovery'` for existing users
+- `app/(tabs)/dashboard/index.tsx` — Imported `BodyHubHeroCard` + 3 deferred hooks (`useBodyHubMuscles`, `useBodyHubInjections`, `useBodyHubCardio`), gated on `!loading && !hiddenCards.includes('bodyHub')`; removed old Body Hub list item
+
+**Muscularly Defined SVG Body Model**
+- `src/constants/bodyHubPaths.ts` — Replaced all 4 outline paths (male front/back, female front/back) with anatomically detailed versions showing muscle contours (deltoid bumps, serratus notches, V-taper, quad sweep, calf diamond). Added `DetailLine` type and `MUSCLE_DETAIL_LINES` array (63 total lines: male front 23, male back 15, female front 14, female back 11) — sternum split, pec borders, ab grid, serratus fingers, oblique V-cuts, bicep separation, quad teardrops, trap diamond, spine, lat borders, tricep horseshoe, gluteal folds, hamstring midlines, rhomboid lines
+- `src/components/bodyHub/BodyHubSVG.tsx` — New `<G opacity={0.2}>` layer between outline and region fills renders detail lines as subtle strokes (strokeWidth=0.6, dark/light mode aware)
+- Male: pronounced muscular definition. Female: toned athletic definition
+- Sex-specific rendering via `userProfile?.sex` from onboarding
+
+**BodyHubHeroCard Cleanup**
+- `src/components/dashboard/BodyHubHeroCard.tsx` — Removed front/back toggle (hero card is front-only preview), cleaned up unused styles and dead code
+
+### Architecture decisions
+- Hero card hooks hardcoded to `view='front'` — avoids supplying both-view data when only front is displayed
+- Hooks deferred with `!loading` gate — prevents Firestore reads from racing with primary dashboard data fetch
+- Same ViewBox (300x600), same region IDs, same `getBodyPaths(sex)` API — zero breaking changes to existing body hub functionality
+- Detail lines rendered below region fills for layered depth effect
+
+### Ray review notes (tracked, non-blocking)
+1. `useBodyHubCardio` uses `useFocusEffect` (not `useEffect`) — won't fire until next focus if `enabled` flips mid-session
+2. Migration ordering may produce slightly different card sequence than DEFAULT_CARD_ORDER for users missing multiple cards simultaneously
+3. Detail line filter/map could be memoized with `useMemo` (63 items, negligible perf impact)
+4. `'gamification'` added to union type but not in DEFAULT_CARD_ORDER (pre-existing issue)
+5. `muscleRecovery` passed as null — no aggregate recovery score source yet
+
+---
+
+## Navigation Wiring Fix — Orphaned Screen Registration
+
+**Status:** ✅ Ray-approved (2026-03-24, Plan: 1 cycle conditional, Build: 1 cycle)
+**Date:** 2026-03-24
+**Branch:** `feature/recovery-readiness-score`
+
+### What was built
+
+**Dashboard Layout Registration** (`app/(tabs)/dashboard/_layout.tsx`)
+- Registered 16 previously orphaned screens: `body-hub`, `social`, `friends`, `friend-profile`, `friend-search`, `crews`, `crew-detail`, `create-crew`, `join-crew`, `leaderboards`, `challenges`, `challenge-detail`, `create-duel`, `duel-detail`, `xp-hub`, `trophy-case`
+
+**Profile Layout Registration** (`app/(tabs)/profile/_layout.tsx`)
+- Registered 3 previously orphaned screens: `choose-username`, `compare-privacy`, `my-templates`
+
+**Dashboard Entry Points** (`app/(tabs)/dashboard/index.tsx`)
+- Added Social Hub card (purple, `people-circle-outline` icon) → navigates to social hub
+- Added Challenges card (amber, `trophy-outline` icon) → navigates to challenges screen
+- Both cards placed between Body Hub and Community Library, using identical card style pattern
+
+### Architecture decisions
+- No new components, styles, or files — purely wiring existing screens into navigation
+- Card ordering: Body Hub → Social Hub → Challenges → Community Library (body-first, then social, competitive, browse)
+- `join-crew` registered but has no inbound navigation (crews.tsx handles joining inline) — registered for future use
+
+### Notes
+- `animation: 'slide_from_right'` added to dashboard Stack screenOptions for consistent transitions
+- 36 pre-existing tsc errors in unrelated files remain unchanged
+
+---
+
+## Exercise Demonstration GIFs — Animated Exercise Previews
+
+**Status:** ✅ Ray-approved (2026-03-24, Plan: 1 cycle conditional, Build: 3 cycles)
+**Date:** 2026-03-24
+**Branch:** `feature/recovery-readiness-score`
+
+### What was built
+
+Animated exercise demonstration GIFs from ExerciseDB/azilRababe dataset (MIT license) — static thumbnails in exercise list, autoplay GIF on exercise detail view.
+
+**Data source** (`src/data/exerciseMediaMap.ts`)
+- Static Record mapping 129 of 137 exercises to fitnessprogramer.com GIF URLs
+- 123 unique GIF URLs, all verified HTTP 200
+- 8 exercises unmapped (no match in dataset): tibialis raise, man maker, sled push, cable kickback (glute), JM press, spider curl, single-leg glute bridge — graceful fallback to barbell icon
+
+**Service** (`src/services/exerciseMediaService.ts`)
+- Pure synchronous `getExerciseMedia(id)` lookup, returns `{ gifUrl, thumbnailUrl } | null`
+
+**Components**
+- `src/components/training/ExerciseThumbnail.tsx` — expo-image with `autoplay={false}`, `cachePolicy="disk"`, `recyclingKey` for FlatList performance, barbell-outline fallback icon
+- `src/components/training/ExerciseGifPlayer.tsx` — expo-image with `autoplay={true}`, loading spinner, "No demo available" fallback
+
+**Screen integrations**
+- `app/(tabs)/training/exercises.tsx` — ExerciseThumbnail on left side of each ExerciseCard
+- `app/(tabs)/training/exercise-detail.tsx` — ExerciseGifPlayer below exercise name, above category badge
+
+**Tests** (`src/__tests__/exerciseMediaService.test.ts`)
+- 22 tests: happy path, null fallbacks, URL validation, bulk coverage of all 129 mapped IDs, pinned URL assertions
+
+### Architecture decisions
+- Exercise type NOT modified — media resolved externally by ID via service
+- expo-image for native GIF caching (installed via npx expo install for SDK 54 compat)
+- Static first-frame thumbnails in FlatList (autoplay=false) to avoid memory pressure
+- GIFs hosted on fitnessprogramer.com (MIT-licensed dataset) — not bundled in app
+- imageBackgroundColor prop on both components for theme flexibility
+
+### Ray follow-ups (tracked, not blockers)
+1. Hotlink risk — fitnessprogramer.com could block direct linking. Fallback: self-host on Firebase Storage (MIT license permits redistribution)
+2. No getItemLayout on FlatList for thumbnail performance optimization
+3. 8 unmapped exercises could be addressed with custom GIFs or alternative sources
+
+---
+
+## Compare Feature — Integration & Polish Pass
+
+**Status:** ✅ Ray-approved (2026-03-24, Plan: 1 cycle conditional, Build: 2 cycles)
+**Date:** 2026-03-24
+**Branch:** `feature/recovery-readiness-score`
+
+### What was built
+
+**Empty States & Navigation Edge Cases**
+- New user with no data: friendly empty state with barbell icon and guidance to log activities
+- No overlapping modules: info banner explaining why only cross-module stats are shown
+- Self-compare guard: fun "You vs You? You always win!" screen with trophy icon (new `status: 'self'` in CompareState union)
+- Logout navigation: useEffect watches auth state, safely navigates to dashboard on logout
+- Deep link: TODO comment placed for v2 deep link validation
+
+**Performance**
+- `RadarChart` wrapped with `React.memo` to prevent scroll-triggered re-renders
+- Module sections lazy-loaded via `InteractionManager.runAfterInteractions` with placeholder (VS header + radar render first)
+- In-memory session cache in `compareDataService.ts`: Map-based, 50-entry cap, 5-min TTL, oldest eviction, `clearCompareCache()` exported
+
+**Animations**
+- Stat rows: staggered fade-in via `animDelay` prop (100ms between rows, 300ms duration)
+- Winner pulse: scale 1.0→1.05→1.0, 3 iterations then stops (not infinite)
+- Share button: spring scale animation on press (0.95 in, 1.0 out)
+
+**Accessibility**
+- RadarChart: `accessibilityRole="image"`, dynamic label listing all axes with scores
+- CompareStatRow: screen reader labels "Stat: You X, Opponent Y. You/Opponent wins."
+- ShareCardGenerator: `accessibilityRole="image"`, descriptive label
+- All touch targets: `minHeight: 48` on buttons
+
+### Files modified
+- `src/types/compare.ts` — added `{ status: 'self' }` to CompareState union
+- `src/services/compareDataService.ts` — session cache + `OWN_SCORES_MISSING` structured error code
+- `src/components/compare/RadarChart.tsx` — React.memo + accessibility
+- `src/components/compare/CompareStatRow.tsx` — fade animation, pulse, a11y labels, touch targets
+- `src/components/compare/ShareCardGenerator.tsx` — accessibility
+- `app/(tabs)/dashboard/compare.tsx` — empty states, self-compare, logout nav, lazy load, animations, touch targets
+- `app/(tabs)/dashboard/share-preview.tsx` — touch targets
+
+### Tests
+- `src/__tests__/comparePolish.test.ts` — 13 tests (cache TTL/eviction/clear, buildA11yLabel win/lose/tie, buildRadarA11yLabel empty/normal, OWN_SCORES_MISSING pinning)
+- `src/__tests__/compareDataService.test.ts` — updated with clearCompareCache() in beforeEach
+
+### Architecture decisions
+- `{ status: 'self' }` added to CompareState discriminated union — type-safe, no magic strings
+- `OWN_SCORES_MISSING` exported constant prefix in error messages — avoids fragile string matching
+- Cache uses Map insertion order for eviction (FIFO, not LRU) — acceptable for 50-entry cap with 5-min TTL
+- Winner pulse limited to 3 iterations — avoids battery drain on low-end devices
+- InteractionManager deferred sections have minHeight:300 placeholder — prevents layout jump
+
+### Ray follow-ups (tracked, non-blocking)
+1. Cache eviction is FIFO not LRU — hit entries are not re-inserted (add TODO)
+2. `_cache` exported for tests exposes internals — consider test-only helpers in future
+3. `withTimeout` promise pattern has minor cleanup concern — consider AbortController in v2
+4. Cross-Module section outside lazy guard means statIndex stagger may feel inconsistent
+5. `opponentId` undefined tracking as empty string in analytics — minor
+
+---
+
+## Route Segment Competition
+
+**Status:** ✅ Ray-approved (Plan: 2 cycles, Build: 3 cycles — 5 blocking fixes applied)
+**Date:** 2026-03-24
+**Branch:** `feature/recovery-readiness-score`
+
+### What's been built
+
+#### Types
+- `src/types/segments.ts` — `RouteSegment`, `SegmentEffort`, `SegmentMatch`, `LiveSegmentState`, `SegmentFilter`, `CreateSegmentInput`, `SegmentActivityType`, `SegmentPoint`
+
+#### Pure Utilities
+- `src/utils/routeDownsample.ts` — Iterative Ramer-Douglas-Peucker downsampling, `downsampleRoute(points, maxPoints=500)` with auto-tuning epsilon. Stack-based to avoid call-stack overflow on long routes.
+- `src/utils/segmentMatcher.ts` — `haversineDistance`, `matchSessionToSegments` (50m start/end + 90% of points within 30m), `isEnteringSegment` (live detection), `isExitingSegment`
+
+#### Service Layer
+- `src/services/segmentService.ts` — Full CRUD via `communityFirestore.ts` helpers: `createSegment`, `deleteSegment`, `getSegmentById`, `getAccessibleSegments` (batched in chunks of 10 for Firestore `in` limit), `getNearbySegments` (bounding box query), `submitEffort` (runTransaction for atomicity, PR-only overwrites), `getSegmentLeaderboard`. Sentry breadcrumbs, ServiceResult<T> pattern, best-effort silent failures.
+
+#### Hooks
+- `src/hooks/useSegments.ts` — Fetches accessible segments (own + friends' + crew), loading/error/refresh
+- `src/hooks/useLiveSegment.ts` — Pre-fetches nearby segments into useRef on mount (no Firestore reads during GPS loop), in-memory proximity detection, LiveSegmentState machine (idle → approaching → active → completed), dismissTimerRef with unmount cleanup
+
+#### Components
+- `src/components/cardio/LiveSegmentBanner.tsx` — HUD overlay banner with fade animation, live +/- time comparison vs PR, completion toast. Uses useTheme() for text colors, documented HUD exception for dark overlay background.
+- `src/components/cardio/SegmentCard.tsx` — Segment list card with non-interactive MapView + Polyline, leader info, user's best time
+- `src/components/cardio/SegmentLeaderboard.tsx` — Ranked list with crown for #1, user highlight, filter pills (All-Time / This Month / Friends Only / Crew), client-side filtering
+- `src/components/cardio/SegmentCreator.tsx` — Bottom sheet modal: name input, public/private toggle, map preview, route downsampling on create
+- `src/components/cardio/SegmentMatchCard.tsx` — Post-session matched segments card with PR badges
+
+#### Screens
+- `app/(tabs)/cardio/segments.tsx` — Segments list with FlatList, pull-to-refresh, empty state
+- `app/(tabs)/cardio/segment-detail.tsx` — Full map with route overlay + SegmentLeaderboard + segment stats
+
+#### Integration
+- `app/(tabs)/cardio/_layout.tsx` — Registered `segments` and `segment-detail` screens
+- `app/(tabs)/cardio/index.tsx` — Segments entry card on cardio home
+- `app/(tabs)/cardio/session-detail.tsx` — "Save as Segment" button for outdoor GPS sessions, opens SegmentCreator
+- `app/(tabs)/cardio/active-session.tsx` — useLiveSegment + LiveSegmentBanner integration
+- `app/(tabs)/cardio/settings.tsx` — "Live Segment Detection" toggle
+- `src/types/cardio.ts` — Added `liveSegmentsEnabled?: boolean` to CardioSettings
+
+#### Firestore Rules & Analytics
+- `firestore.rules` — `/segments/{segmentId}` (authenticated read, creator write, 20-segment cap via segmentCount, visibility enum validation, route size ≤ 500) + `/segments/{segmentId}/efforts/{uid}` (auth.uid == uid, PR-only updates, field whitelist via hasOnly, durationSeconds positive int). Split update rule allows non-creator bestEffort field writes.
+- `src/services/analytics.ts` — 8 new events: SEGMENT_CREATED, SEGMENT_DELETED, SEGMENT_MATCHED, SEGMENT_PR, SEGMENT_LEADERBOARD_VIEWED, SEGMENTS_LIST_VIEWED, LIVE_SEGMENT_ENTERED, LIVE_SEGMENT_COMPLETED
+
+#### Tests
+- `src/__tests__/segmentMatcher.test.ts` — 27 tests (haversine, route matching, live detection)
+- `src/__tests__/routeDownsample.test.ts` — 17 tests (RDP algorithm, edge cases)
+
+### Architecture decisions
+- **Top-level `/segments` collection** — cross-user competitive data, same pattern as `/templates`
+- **Effort doc ID = user UID** — deterministic, one-per-user-per-segment, no query+delete race
+- **runTransaction for effort + course record** — eliminates TOCTOU race on concurrent PR submissions
+- **RDP downsampling to ≤500 points** — enforced in Firestore rules via `route.size() <= 500`, prevents 1 MiB doc limit
+- **communityFirestore.ts** for all reads/writes (raw SDK only for transactions, documented)
+- **Live detection fully in-memory** — segments pre-fetched to useRef on mount, zero Firestore reads during GPS loop
+- **Segment matching triggered from session-summary** — not injected into useCardioSession.stop() to protect the critical save path
+- **20-segment cap** enforced in Firestore rules via `get()` on user doc's segmentCount with null fallback
+
+### Ray Review Fixes Applied
+
+**Plan review (Cycle 1 → 2):**
+- B1-B7: Firestore rules added, effort doc ID = UID, cap enforced server-side, RDP downsampling, communityFirestore usage, matching moved to session-summary, live detection pre-fetched
+
+**Code review — Core (Cycle 1 → 2):**
+1. ✅ submitEffort refactored to use communityFirestore helpers (raw SDK only for transaction)
+2. ✅ Firestore update rule split: non-creator bestEffort writes via affectedKeys().hasOnly()
+3. ✅ submitEffort wrapped in runTransaction for atomicity
+
+**Code review — UI (Cycle 2 → 3):**
+4. ✅ LiveSegmentBanner: useTheme() added for text, HUD dark overlay documented, magic strings extracted to constants
+5. ✅ useLiveSegment: dismissTimerRef added, cleanup on unmount, clear-before-set guard
+
+**Advisory (tracked, non-blocking):**
+- N1: Boolean expression in useLiveSegment dependency array (eslint-disable present)
+- N2: SegmentLeaderboard Date.now() on every render — consider useMemo
+- N3: segment-detail MapView is interactive (intentional — detail view allows zoom)
+- N4: segment-detail Marker pinColor hardcoded green
+- N5: SegmentCreator handleCreate lacks outer try/catch (service catches internally)
+- W1: durationSeconds is int vs JS float fragility
+- W2: displayName not in PII denylist
+- W3: Private segments excluded from nearby query (intentional)
+- W4: No segmentService test file — add with Firestore mocks
+
+**Targeted checklist (2026-03-24) — 8/8 PASS:**
+1. ✅ Segment matching handles GPS drift (30m proximity threshold covers 5-15m drift)
+2. ✅ No false-positive on perpendicular crossings (90% coverage check on segment points vs session track)
+3. ✅ Leaderboard ranks correctly, crown on #1 (ascending durationSeconds query)
+4. ✅ Live indicator only on known segment start (proximity to startPoint only, not mid-segment)
+5. ✅ Leaderboard updates after effort (mount-based fetch on navigation)
+6. ✅ Friend/crew filter works (client-side filter, includes user's own time, handles empty friends)
+7. ✅ GPS coordinates saved correctly (from session route, RDP preserves start/end)
+8. ✅ All outdoor types covered (run/walk/cycle — `hike` doesn't exist in PepMax ActivityType; swim is indoor)
+
+**Tracked concerns from checklist (non-blocking):**
+- Matching uses naive point-to-point distance, not closest-point-on-line — could miss valid matches on sparse curvy routes
+- Live detection lacks directional/heading validation — proximity to start alone triggers banner (post-hoc matching still validates for effort submission)
+- No real-time leaderboard listener (onSnapshot) — mount-based fetch only
+
+### Firestore schema
+```
+/segments/{segmentId}                    → RouteSegment (name, creator, route[], distance, visibility, bestEffort*)
+/segments/{segmentId}/efforts/{uid}      → SegmentEffort (time, pace, sessionId, attemptedAt)
+/users/{uid}.segmentCount                → integer (creation cap enforcement)
+```
+
+---
+
+## Shareable Comparison Card
+
+**Status:** ✅ Ray-approved (2026-03-24, Plan: 1 cycle, Build: 2 cycles)
+**Date:** 2026-03-24
+**Branch:** `feature/recovery-readiness-score`
+
+### What was built
+
+**Types**
+- `src/types/shareCard.ts` — Added `CompareCardData` type (myName, opponentName, avatars, scores, visibleModules, units) to the `ShareCardData` discriminated union
+
+**Pure Utilities**
+- `src/utils/shareCardStats.ts` — `STAT_DEFINITIONS` (7 modules, 11 stat fields with format functions and winner direction), `getStatDefinitions(units)` (unit-aware factory), `buildVisibleStats(myScores, opponentScores, visibleModules, units)` (bilateral -1 sentinel + undefined guard + module toggle filtering)
+
+**Components**
+- `src/components/compare/ShareCardGenerator.tsx` — 360×640 off-screen card (captured at 3x = 1080×1920 Instagram Story ratio). Dark background (#1F2937), "pepmax.app" header in purple (#7C3AED), VS row with initial-based avatars, RadarChart at 280px, stat highlight rows (winner in accent, loser gray), footer tagline. Re-exports pure helpers from shareCardStats.
+
+**Screen**
+- `app/(tabs)/dashboard/share-preview.tsx` — Preview + customize screen. Route params: myName, opponentName, opponentAvatar, myScoresJson, opponentScoresJson, units. Scaled-down card preview (55%), module toggle switches (peptides defaults OFF), Share button (purple) + Cancel button (gray). ViewShot off-screen capture → captureAndShare from cardGenerator.ts. Double-tap guard, loading indicator, navigate back on success.
+
+**Wiring**
+- `app/(tabs)/dashboard/compare.tsx` — Replaced "Coming Soon" alert with router.push to share-preview, passing serialized compare data + units
+- `app/(tabs)/dashboard/_layout.tsx` — Registered `share-preview` Stack.Screen
+- `src/services/analytics.ts` — Added `COMPARE_CARD_SHARED`, `COMPARE_CARD_CUSTOMIZED` events
+- `src/services/cardGenerator.ts` — Dynamic `dialogTitle` based on card type ('compare' → 'Share comparison')
+
+**Tests**
+- `src/__tests__/shareCardGenerator.test.ts` — 18 tests covering bilateral visibility, module toggle filtering, winner/loser color assignment, tie handling, empty/undefined scores edge cases
+
+### Architecture decisions
+- **No new shareService.ts** — reuses existing `captureAndShare()` from `cardGenerator.ts`
+- **No new packages** — `react-native-view-shot` and `expo-sharing` already installed
+- **Pure helpers in utils** — `shareCardStats.ts` has no React Native imports, enabling Jest testing without native module mocks
+- **SENTINEL_SCORES fallback** — malformed JSON route params produce a full -1 sentinel object, not `{}`, preventing undefined values from passing visibility checks
+- **Peptides default OFF** — share card toggles default all modules ON except peptides, matching the sensitive-data policy in ComparePrivacy
+- **Units threaded end-to-end** — compare.tsx → route params → share-preview → cardData → ShareCardGenerator → buildVisibleStats → format functions
+
+### Ray Review Fixes Applied
+
+**Cycle 1 — Conditional Approval (2 blockers + 4 non-blocking):**
+1. ✅ Peptides toggle defaults OFF (`mod !== 'peptides'`)
+2. ✅ SENTINEL_SCORES constant (13 numeric fields = -1) replaces `{} as CompareScores` fallback; `buildVisibleStats` adds `undefined` guard
+3. ✅ Stale "stub" comment removed from compare.tsx
+4. ✅ Units param added: `getStatDefinitions(units)` factory, threaded from compare.tsx through to format functions
+5. ✅ Two tests added for empty/undefined scores path
+6. ✅ Tie test updated to use actual STAT_DEFINITIONS entries
+
+### Follow-up items (tracked)
+- No component-level screen test for share-preview.tsx (pure logic tested via shareCardStats)
+- Imperial/metric default inconsistency: compare.tsx defaults to 'imperial' (US users), rest of pipeline defaults to 'metric' — intentional but worth documenting
+
+---
+
+## Compare Screen
+
+**Status:** ✅ Ray-approved (conditional → all 3 fixes applied 2026-03-24)
+**Date:** 2026-03-24
+**Branch:** `feature/recovery-readiness-score`
+
+### What's been built
+
+**Types & Data Layer**
+- `src/types/compare.ts` — Added `TopLift`, `CompareData`, `CompareState` discriminated union; added v2 optional fields to `CompareScores` (`top3Lifts?`, `strengthTrend30d?`, `workoutConsistency?`, `weeklyCardioSessions?`, `cardioTrend30d?`, `avgDailyProtein?`, `macroTargetHitRate?`, `loggingConsistency?`, `cycleAdherence?`, `protocolConsistency?`, `badgesEarned?`). Fixed path comment (was `users/{uid}/stats/compareScores`, now `userStats/{uid}/compareScores/current`).
+- `src/services/compareDataService.ts` — Orchestration layer: `fetchCompareData(opponentUid)` delegates to existing `compareService.ts` (no raw Firestore calls). Parallel fetch with 10s timeout via `Promise.race` (timer cleared on resolve). Privacy graceful degrade via inner try/catch.
+- `src/utils/compareFormatters.ts` — Pure presentation utilities: `formatWeight`, `formatDistance`, `formatPace`, `formatTrend`, `formatStat`. Unit conversion constants `KG_TO_LB`, `KM_TO_MI`.
+
+**UI Components**
+- `src/components/compare/CompareStatRow.tsx` — Three-column row (40/20/40). Winner gets accent color, loser gray, tie default. Optional trend arrow.
+- `src/components/compare/CompareModuleSection.tsx` — Section header with Ionicons icon + accent underline + children.
+
+**Screen**
+- `app/(tabs)/dashboard/compare.tsx` — Full compare screen with route params `{ opponentId, opponentName, opponentAvatar? }`. States: loading (skeleton with pulse), blocked, unavailable, error (retry), ready (VS header, RadarChart, module sections, share stub). Module visibility: bilateral check via -1 sentinels. `avgPace` uses `winnerLower`. Calories show no winner. Dark mode safe.
+- `app/(tabs)/dashboard/_layout.tsx` — Registered `compare` screen.
+
+**Firestore & Config**
+- `firestore.rules` — Added `userStats/{uid}/compareScores/{doc}`: read if authenticated, write if false (CF uses Admin SDK).
+- `src/services/firebase/firestore.ts` — Added `SETTINGS` and `USER_STATS` to `COLLECTIONS`.
+- `src/services/analytics.ts` — Added `COMPARE_FETCH_FAILED` and `COMPARE_SHARE_TAPPED` events.
+
+**Tests**
+- `src/__tests__/compareDataService.test.ts` — 9 tests (happy path, blocked, unavailable, own scores null/error, privacy graceful degrade ×2, timeout, analytics on exception)
+- `src/__tests__/compareFormatters.test.ts` — 25 tests (all formatters, constants, edge cases)
+
+### Architecture decisions
+- **No raw Firestore calls in compareDataService** — delegates entirely to `compareService.ts` for score reads and block checks
+- **Privacy via sentinels** — opponent privacy NOT read (can't access `users/{opponentId}/`); CF already writes -1 for hidden modules
+- **Unit conversion in presentation layer** — `compareFormatters.ts` is pure; data service returns raw metric values
+- **CompareState discriminated union** — exhaustive switch in consumers: loading, ready, error, blocked, unavailable
+- **Timer cleanup** — `withTimeout` clears setTimeout on resolve/reject to prevent orphan timers
+- **Peptide safety** — client NEVER reads raw peptide subcollections; `cycleAdherence`/`protocolConsistency` computed by CF only
+
+### Ray Review Fixes Applied
+
+**Must-fix (all resolved):**
+1. ✅ Timer leak in `withTimeout` — `clearTimeout(timer)` on both resolve and reject paths
+2. ✅ `isPeptidesVisible` — changed from `>= 0` to `!== -1` for consistency with other visibility checks
+3. ✅ Type comment path — fixed from `users/{uid}/stats/compareScores` to `userStats/{uid}/compareScores/current`
+
+**Advisory (resolved):**
+4. ✅ Skeleton hardcoded color — replaced `#E5E7EB` with `colors.surface` for dark mode support
+
+**Advisory (tracked):**
+5. `opponentId` not validated as UID format at screen level — validate via regex in a future pass
+6. `as any` casts for timestamps in privacy fallback — consider using `Timestamp.now()`
+7. No component-level screen tests — data service and formatters tested, screen smoke test deferred
+
+### Follow-up items (tracked)
+- Extend `computeCompareScores` Cloud Function to compute v2 fields (top3Lifts, strengthTrend30d, workoutConsistency, weeklyCardioSessions, cardioTrend30d, avgDailyProtein, macroTargetHitRate, loggingConsistency, cycleAdherence, protocolConsistency, badgesEarned)
+- Wire Share button to share card generation (Prompt 5)
+- Add component-level screen test
+
+---
+
+## Peptide Fasting Windows — Per-Compound Eating Restrictions
+
+**Status:** ✅ Ray-approved (2026-03-24, Plan: 1 cycle conditional, Build: 2 cycles)
+**Date:** 2026-03-24
+**Branch:** `feature/recovery-readiness-score`
+
+### What was built
+
+**Types** (`src/types/peptideFasting.ts`)
+- `PeptideFastingWindow` — `preInjectionMinutes`, `postInjectionMinutes`, `notifyWhenWindowEnds`, `enabled`
+- `ActivePeptideFastingWindow` — runtime computed: `peptideName`, `peptideId`, `windowStartsAt`, `windowEndsAt`, `doseTimestamp`
+- `PEPTIDE_CATEGORY_FASTING_DEFAULTS` — GH Secretagogue: 90/90, GLP-1: 30/30, Healing/Other: 0/0 disabled
+
+**Peptide type extension** (`src/types/peptide.ts`)
+- Added optional `fastingWindow?: PeptideFastingWindow` to `Peptide` (backward compatible)
+
+**Pure utilities** (`src/utils/peptideFasting.ts`)
+- `clampPeptideFastingMinutes()` — enforces 0–480 min bounds
+- `validatePeptideFastingWindow()` — checks enabled + positive durations
+- `getDefaultPeptideFastingWindow(category)` — category-based sensible defaults
+- `buildPeptideFastingGuidanceText()` — human-readable "No food X before / Y after" string
+- `computeActivePeptideFastingWindows(doses, peptides)` — finds windows active right now
+- `isPeptideFastingActive(timestamp, windows)` — boolean + conflicting windows
+- `msUntilPeptideFastingWindowEnds()` — countdown for notification scheduling
+
+**Hook** (`src/hooks/usePeptideFasting.ts`)
+- Fetches doses from last 12h (cross-midnight safe — does NOT use getTodaysDoses)
+- Computes active windows, auto-refreshes every 60 seconds
+- Returns `activeWindows`, `isAnyWindowActive`, `loading`, `refresh()`
+
+**Components**
+- `src/components/peptides/FastingWindowBanner.tsx` — info card shown at dose-log time with pre/post durations
+- `src/components/peptides/FastingWindowSettings.tsx` — stepper form (pre/post minutes from step list + notify toggle)
+
+**Screen integrations**
+- `app/(tabs)/peptides/log-dose.tsx` — shows FastingWindowBanner when selected peptide has fasting enabled; schedules eating-window notification after save
+- `app/(tabs)/nutrition/add-food.tsx` — shows dismissible warning banner when any peptide fasting window is active
+
+**Service changes**
+- `src/services/peptideService.ts` — `addPeptide` applies category-based defaults when `fastingWindow` is undefined (covers both preset and manual adds)
+- `src/services/notificationService.ts` — `schedulePeptideFastingWindowNotification` / `cancelPeptideFastingWindowNotification` with key namespace `pepmax:notif:peptidefasting:{peptideId}`
+
+**Analytics** (`src/services/analytics.ts`)
+- `PEPTIDE_FASTING_REMINDER_SET`, `PEPTIDE_FASTING_WARNING_SHOWN`
+
+**Tests** (`src/__tests__/peptideFasting.test.ts`)
+- 50 tests covering all 7 utility functions + defaults structure
+
+### Architecture decisions
+- "peptideFasting" prefix everywhere to avoid collision with existing IF fasting feature
+- Notification key namespace `pepmax:notif:peptidefasting` distinct from IF fasting keys
+- 12h dose lookback instead of calendar-day filtering handles cross-midnight windows
+- Step list [0, 15, 30, 45, 60, 90, 120...480] for settings UX
+- 60-second interval refresh in hook keeps activeWindows fresh
+- Advisory-only food warning — never blocks user from logging food
+- No new Firestore collections or security rules needed
+
+### Ray follow-ups (tracked, not blockers)
+1. Hook setLoading(true) fires every 60s — consider suppressing on interval refreshes
+2. Peptides array reference stability on parent re-fetch
+3. No server-side validation for fastingWindow fields (matches existing architecture)
+4. Hook + notification scheduling paths not unit-tested
+5. add-food.tsx fires getPeptides() on every visit — wasted read for non-peptide users
+6. Consider PEPTIDE_FASTING_WARNING_DISMISSED analytics event
+
+---
+
+## Warm-Up Calculator + Plate Loading Visual
+
+**Status:** ✅ Ray-approved (3 rounds — 5 code fixes + 3 checklist fixes applied)
+**Date:** 2026-03-24
+**Branch:** `feature/recovery-readiness-score`
+
+### What's been built
+
+#### Types
+- `src/types/warmUp.ts` — `WarmUpSet`, `WarmUpResult`, `PlateSet`, `PlateResult`, `BarType` (derived from `Equipment` via `Extract`), `WeightUnit`, `GymSettings`
+
+#### Pure Utilities
+- `src/utils/warmUpCalculator.ts` — `computeWarmUpSets(workingWeight, barType, unit)`: 5-set warm-up protocol (empty bar x10, 40% x8, 55% x5, 70% x3, 80%+ x2), rounding to nearest 5 lbs / 2.5 kg, skip-if-below-bar-weight logic. Exports shared `BAR_WEIGHTS` constant (Barbell=45/20, EZ Bar=25/11, Smith Machine=45/20). Handles Barbell, EZ Bar, Smith Machine, and Dumbbell equipment types.
+- `src/utils/plateCalculator.ts` — `computePlates(totalWeight, unit)`: greedy largest-first plate breakdown per side. Imports `BAR_WEIGHTS` from warmUpCalculator (single source of truth). Returns `isExact` flag + `totalAchievable` for non-standard weights. Guard rails for NaN, negative, and sub-bar-weight inputs.
+
+#### Components
+- `src/components/training/WarmUpSets.tsx` — Tabular warm-up set display with tap-to-strikethrough, "Skip Warm-Up" button, gray/italic styling via `useTheme()`
+- `src/components/training/PlateCalculator.tsx` — Horizontal barbell SVG diagram (react-native-svg) with color-coded plates per side (45=red, 35=blue, 25=green, 10=yellow, 5=white, 2.5=gray), text summary below, amber warning for non-exact weights
+
+#### Hook
+- `src/hooks/useGymSettings.ts` — AsyncStorage-backed toggles (`showWarmUp`, `showPlateCalculator`), functional updater pattern (no stale closures), try/catch with silent fallback to defaults on corrupt storage
+
+#### Integration
+- `app/(tabs)/training/active-session.tsx` — `getBarType()` type guard replaces unsafe cast; WarmUpSets renders above first working set for bar-based exercises when first set has weight > 0; PlateCalculator renders below weight input for barbell exercises
+
+#### Tests
+- `src/__tests__/warmUpCalculator.test.ts` — 35 tests (barbell/EZ bar/dumbbell/Smith Machine, metric/imperial, edge cases, below-bar-weight)
+- `src/__tests__/plateCalculator.test.ts` — 28 tests (standard breakdowns, remainder handling, edge cases, unit variants)
+
+### Architecture decisions
+- **BAR_WEIGHTS single source of truth** — exported from `warmUpCalculator.ts`, imported by `plateCalculator.ts`; prevents drift
+- **BarType = Extract<Equipment, ...>** — derived from canonical `Equipment` type; TypeScript catches drift automatically
+- **Warm-up sets are local UI state only** — not persisted to Firestore or `SessionExercise.sets`; display-only guidance
+- **Working weight from first set** — `exercise.sets[0].weight` drives both warm-up and plate calculations dynamically
+- **Functional updater in useGymSettings** — eliminates stale closure risk on rapid toggles
+
+### Ray Review Fixes Applied
+
+**Cycle 1 — Conditional Approval (5 mandatory):**
+1. ✅ Duplicated `BAR_WEIGHTS` extracted to single export in `warmUpCalculator.ts`
+2. ✅ `useGymSettings` stale closure fixed with functional updater pattern
+3. ✅ Redundant `isNaN` guard removed from `plateCalculator.ts`
+4. ✅ `BarType` derived from `Equipment` via `Extract<>` instead of hand-written union
+5. ✅ Unsafe `as BarType` cast replaced with `getBarType()` type guard in `active-session.tsx`
+
+**Cycle 3 — Targeted Checklist Fixes (3 mandatory):**
+6. ✅ Rounding increments fixed: 2.5 lbs / 1 kg → 5 lbs / 2.5 kg (matches standard gym plate loading)
+7. ✅ SVG overflow fixed: dynamic plate width scaling via `effectivePlateWidth()` — compresses plates proportionally for heavy loads, 4px minimum
+8. ✅ Integration into `active-session.tsx` verified — WarmUpSets + PlateCalculator + useGymSettings all imported and conditionally rendered
+
+**Advisory (tracked, non-blocking):**
+- No tests for `useGymSettings` hook — add with AsyncStorage mock
+- `WeightUnit` may duplicate existing type — consolidate if found
+
+---
+
 ## Safety Beacon — Cardio Live Location Sharing
 
 **Status:** ✅ Ray-approved (conditional — mandatory follow-up applied 2026-03-23)

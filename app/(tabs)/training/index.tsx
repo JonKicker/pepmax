@@ -8,13 +8,15 @@ import {
   Alert,
   Animated,
   PanResponder,
-  ActivityIndicator,
   RefreshControl,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../src/hooks/useTheme';
+import { AnimatedPressable } from '../../../src/components/AnimatedPressable';
+import { StaggeredList } from '../../../src/components/StaggeredList';
+import { TrainingSkeleton } from '../../../src/components/SkeletonScreen';
 import { Colors } from '../../../src/constants/theme';
 import { getTodaysWorkouts, deleteWorkout } from '../../../src/services/trainingService';
 import { useWorkoutRecovery } from '../../../src/hooks/useWorkoutRecovery';
@@ -24,6 +26,7 @@ import { EquipmentQuickSwitch } from '../../../src/components/training/Equipment
 import BodyMeasurementSummary from '../../../src/components/training/BodyMeasurementSummary';
 import { getLatestMeasurement } from '../../../src/services/bodyMeasurementService';
 import type { WorkoutLog } from '../../../src/types/training';
+import { GlassBackground } from '../../../src/components/GlassBackground';
 import type { BodyMeasurement } from '../../../src/types/bodyMeasurement';
 
 // ─── Swipeable card ───────────────────────────────────────────────────────────
@@ -91,9 +94,9 @@ function SwipeableCard({
       >
         <TouchableOpacity
           onPress={() => { if (isOpen.current) close(); }}
-          activeOpacity={0.85}
+          activeOpacity={0.7}
         >
-          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.card, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}>
             <View style={[styles.cardAccent, { backgroundColor: Colors.gym }]} />
             <View style={styles.cardBody}>
               <Text style={[styles.cardName, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -215,25 +218,23 @@ export default function TrainingScreen() {
   };
 
   if (loading) {
-    return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={Colors.gym} size="large" />
-      </View>
-    );
+    return <TrainingSkeleton />;
   }
 
   if (loadError) {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <Ionicons name="cloud-offline-outline" size={48} color={colors.textSecondary} />
-        <Text style={[styles.errorText, { color: colors.textSecondary }]}>{loadError}</Text>
-        <TouchableOpacity
-          style={[styles.retryBtn, { backgroundColor: Colors.gym }]}
-          onPress={() => load()}
-        >
-          <Text style={styles.retryBtnText}>Retry</Text>
-        </TouchableOpacity>
-      </View>
+      <GlassBackground>
+        <View style={styles.centered}>
+          <Ionicons name="cloud-offline-outline" size={48} color={colors.textSecondary} />
+          <Text style={[styles.errorText, { color: colors.textSecondary }]}>{loadError}</Text>
+          <TouchableOpacity
+            style={[styles.retryBtn, { backgroundColor: Colors.gym }]}
+            onPress={() => load()}
+          >
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </GlassBackground>
     );
   }
 
@@ -263,97 +264,100 @@ export default function TrainingScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Recovery banner */}
-      {activeSession && (
-        <View style={[styles.recoveryBanner, { backgroundColor: Colors.warning + '20', borderColor: Colors.warning + '40' }]}>
-          <View style={styles.recoveryContent}>
-            <Ionicons name="alert-circle" size={20} color={Colors.warning} />
-            <View style={styles.recoveryText}>
-              <Text style={[styles.recoveryTitle, { color: colors.textPrimary }]}>
-                Unfinished workout
-              </Text>
-              <Text style={[styles.recoverySubtitle, { color: colors.textSecondary }]}>
-                {activeSession.templateName}
-              </Text>
+    <GlassBackground>
+    <View style={styles.container}>
+      <StaggeredList staggerDelay={80}>
+        {/* Recovery banner */}
+        {activeSession ? (
+          <View style={[styles.recoveryBanner, { backgroundColor: Colors.warning + '20', borderColor: Colors.warning + '40' }]}>
+            <View style={styles.recoveryContent}>
+              <Ionicons name="alert-circle" size={20} color={Colors.warning} />
+              <View style={styles.recoveryText}>
+                <Text style={[styles.recoveryTitle, { color: colors.textPrimary }]}>
+                  Unfinished workout
+                </Text>
+                <Text style={[styles.recoverySubtitle, { color: colors.textSecondary }]}>
+                  {activeSession.templateName}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.recoveryActions}>
+              <AnimatedPressable haptic onPress={handleResumeWorkout} style={[styles.recoveryBtn, { backgroundColor: Colors.gym }]}>
+                <Text style={styles.recoveryBtnText}>Resume</Text>
+              </AnimatedPressable>
+              <AnimatedPressable onPress={handleDiscardRecovery} style={styles.recoveryDismiss}>
+                <Text style={[styles.recoveryDismissText, { color: colors.textSecondary }]}>Discard</Text>
+              </AnimatedPressable>
             </View>
           </View>
-          <View style={styles.recoveryActions}>
-            <TouchableOpacity onPress={handleResumeWorkout} style={[styles.recoveryBtn, { backgroundColor: Colors.gym }]}>
-              <Text style={styles.recoveryBtnText}>Resume</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleDiscardRecovery} style={styles.recoveryDismiss}>
-              <Text style={[styles.recoveryDismissText, { color: colors.textSecondary }]}>Discard</Text>
-            </TouchableOpacity>
-          </View>
+        ) : <View /> /* Empty View keeps child count stable for StaggeredList stagger timing */}
+
+        {/* Equipment profile chip */}
+        {activeProfile ? (
+          <AnimatedPressable
+            haptic
+            onPress={() => setQuickSwitchVisible(true)}
+            style={[styles.equipChip, { backgroundColor: Colors.gym + '15', borderColor: Colors.gym + '30' }]}
+          >
+            <Ionicons name="barbell-outline" size={14} color={Colors.gym} />
+            <Text style={[styles.equipChipText, { color: Colors.gym }]}>
+              Equipment: {activeProfile.name}
+            </Text>
+            <Ionicons name="chevron-down" size={14} color={Colors.gym} />
+          </AnimatedPressable>
+        ) : <View /> /* Empty View keeps child count stable for StaggeredList stagger timing */}
+
+        {/* Quick-action buttons */}
+        <View style={styles.quickActions}>
+          <AnimatedPressable
+            haptic
+            style={[styles.quickBtn, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+            onPress={() => router.push('/(tabs)/training/exercises')}
+          >
+            <Ionicons name="library-outline" size={18} color={Colors.gym} />
+            <Text style={[styles.quickBtnText, { color: Colors.gym }]}>Exercises</Text>
+          </AnimatedPressable>
+          <AnimatedPressable
+            haptic
+            style={[styles.quickBtn, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+            onPress={() => router.push('/(tabs)/training/templates')}
+          >
+            <Ionicons name="clipboard-outline" size={18} color={Colors.gym} />
+            <Text style={[styles.quickBtnText, { color: Colors.gym }]}>Templates</Text>
+          </AnimatedPressable>
+          <AnimatedPressable
+            haptic
+            style={[styles.quickBtn, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+            onPress={() => router.push('/(tabs)/training/history')}
+          >
+            <Ionicons name="time-outline" size={18} color={Colors.gym} />
+            <Text style={[styles.quickBtnText, { color: Colors.gym }]}>History</Text>
+          </AnimatedPressable>
+          <AnimatedPressable
+            haptic
+            style={[styles.quickBtn, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+            onPress={() => router.push('/(tabs)/training/progress')}
+          >
+            <Ionicons name="analytics-outline" size={18} color={Colors.gym} />
+            <Text style={[styles.quickBtnText, { color: Colors.gym }]}>Progress</Text>
+          </AnimatedPressable>
+          <AnimatedPressable
+            haptic
+            style={[styles.quickBtn, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+            onPress={() => router.push('/(tabs)/training/body-measurements')}
+          >
+            <Ionicons name="body-outline" size={18} color={Colors.gym} />
+            <Text style={[styles.quickBtnText, { color: Colors.gym }]}>Body</Text>
+          </AnimatedPressable>
         </View>
-      )}
 
-      {/* Equipment profile chip */}
-      {activeProfile && (
-        <TouchableOpacity
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setQuickSwitchVisible(true); }}
-          style={[styles.equipChip, { backgroundColor: Colors.gym + '15', borderColor: Colors.gym + '30' }]}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="barbell-outline" size={14} color={Colors.gym} />
-          <Text style={[styles.equipChipText, { color: Colors.gym }]}>
-            Equipment: {activeProfile.name}
-          </Text>
-          <Ionicons name="chevron-down" size={14} color={Colors.gym} />
-        </TouchableOpacity>
-      )}
-
-      {/* Quick-action buttons */}
-      <View style={styles.quickActions}>
-        <TouchableOpacity
-          style={[styles.quickBtn, { backgroundColor: Colors.gym + '15', borderColor: Colors.gym + '30' }]}
-          onPress={() => router.push('/(tabs)/training/exercises')}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="library-outline" size={18} color={Colors.gym} />
-          <Text style={[styles.quickBtnText, { color: Colors.gym }]}>Exercises</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.quickBtn, { backgroundColor: Colors.gym + '15', borderColor: Colors.gym + '30' }]}
-          onPress={() => router.push('/(tabs)/training/templates')}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="clipboard-outline" size={18} color={Colors.gym} />
-          <Text style={[styles.quickBtnText, { color: Colors.gym }]}>Templates</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.quickBtn, { backgroundColor: Colors.gym + '15', borderColor: Colors.gym + '30' }]}
-          onPress={() => router.push('/(tabs)/training/history')}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="time-outline" size={18} color={Colors.gym} />
-          <Text style={[styles.quickBtnText, { color: Colors.gym }]}>History</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.quickBtn, { backgroundColor: Colors.gym + '15', borderColor: Colors.gym + '30' }]}
-          onPress={() => router.push('/(tabs)/training/progress')}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="analytics-outline" size={18} color={Colors.gym} />
-          <Text style={[styles.quickBtnText, { color: Colors.gym }]}>Progress</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.quickBtn, { backgroundColor: Colors.gym + '15', borderColor: Colors.gym + '30' }]}
-          onPress={() => router.push('/(tabs)/training/body-measurements')}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="body-outline" size={18} color={Colors.gym} />
-          <Text style={[styles.quickBtnText, { color: Colors.gym }]}>Body</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Body measurement summary card */}
-      <BodyMeasurementSummary
-        latest={latestMeasurement}
-        monthlyWeightChange={measurementMonthlyChange}
-        colors={colors}
-      />
+        {/* Body measurement summary card */}
+        <BodyMeasurementSummary
+          latest={latestMeasurement}
+          monthlyWeightChange={measurementMonthlyChange}
+          colors={colors}
+        />
+      </StaggeredList>
 
       <FlatList
         data={workouts}
@@ -372,19 +376,18 @@ export default function TrainingScreen() {
         )}
       />
 
-      <TouchableOpacity
+      <AnimatedPressable
+        haptic
         style={[styles.fab, { backgroundColor: Colors.gym }]}
         onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           router.push({
             pathname: '/(tabs)/training/active-session',
             params: { mode: 'quick' },
           });
         }}
-        activeOpacity={0.85}
       >
         <Ionicons name="flash" size={26} color="white" />
-      </TouchableOpacity>
+      </AnimatedPressable>
 
       <EquipmentQuickSwitch
         visible={quickSwitchVisible}
@@ -396,6 +399,7 @@ export default function TrainingScreen() {
         colors={colors}
       />
     </View>
+    </GlassBackground>
   );
 }
 

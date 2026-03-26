@@ -25,6 +25,11 @@ export type UserProfile = {
   lastName?: string;
   email?: string;
 
+  // Public-facing profile fields
+  profilePictureUrl?: string;
+  bio?: string;
+  username?: string;
+
   // Quiz answers
   goals: Goal[];
   experienceLevel: ExperienceLevel;
@@ -65,8 +70,15 @@ export type UserProfile = {
     doseReminders: boolean;
     workoutReminders: boolean;
     recoveryCheckIn?: boolean;
-    recoveryCheckInHour?: number;   // 0–23, default 7
-    recoveryCheckInMinute?: number; // 0–59, default 0
+    recoveryCheckInHour?: number;         // 0–23, default 7
+    recoveryCheckInMinute?: number;       // 0–59, default 0
+    recoveryCheckInOptimized?: boolean;   // true = HealthKit-adaptive schedule
+    doseReminderHour?: number;            // 0–23, default 9
+    doseReminderMinute?: number;          // 0–59, default 0
+    doseReminderOptimized?: boolean;      // true = HealthKit-adaptive schedule
+    workoutReminderHour?: number;         // 0–23, default 17
+    workoutReminderMinute?: number;       // 0–59, default 0
+    workoutReminderOptimized?: boolean;   // true = HealthKit-adaptive schedule
   };
 
   // Adaptive calorie coaching — optional; absent means feature not yet enabled

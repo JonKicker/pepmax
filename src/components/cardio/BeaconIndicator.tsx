@@ -27,7 +27,7 @@ export default function BeaconIndicator({ contactCount }: Props) {
       <TouchableOpacity
         style={styles.pill}
         onPress={() => setTooltipVisible(true)}
-        activeOpacity={0.8}
+        activeOpacity={0.7}
       >
         <View style={styles.dot} />
         <Ionicons name="radio-outline" size={13} color={BEACON_GREEN} />

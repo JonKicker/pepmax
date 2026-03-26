@@ -8,6 +8,7 @@ import { ActivityIndicator, Text, StyleSheet, TouchableOpacity, View } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { DashboardCard } from './DashboardCard';
 import { Colors } from '../../constants/theme';
+import { SkeletonLoader } from '../SkeletonLoader';
 import { getWeeklyInsight } from '../../services/aiInsightService';
 import type { Theme } from '../../constants/theme';
 
@@ -58,11 +59,10 @@ export function AIInsightCard({ colors }: Props) {
       colors={colors}
     >
       {loading && !insight ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="small" color={Colors.gold} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-            Analysing your week…
-          </Text>
+        <View style={{ gap: 8 }}>
+          <SkeletonLoader width="100%" height={14} />
+          <SkeletonLoader width="80%" height={14} />
+          <SkeletonLoader width="60%" height={14} />
         </View>
       ) : error ? (
         <TouchableOpacity onPress={() => fetchInsight(true)} activeOpacity={0.7}>

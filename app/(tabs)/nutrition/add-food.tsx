@@ -28,6 +28,10 @@ import { getRecipes, logRecipeAsFood } from '../../../src/services/recipeService
 import type { FoodSearchResult, FavoriteFood, FoodLogEntry, FoodNavPayload, MealSlotConfig } from '../../../src/types/nutrition';
 import { DEFAULT_MEAL_SLOTS, getSlotLabel } from '../../../src/types/nutrition';
 import type { Recipe } from '../../../src/types/recipe';
+import { getPeptides } from '../../../src/services/peptideService';
+import type { Peptide } from '../../../src/types/peptide';
+import { usePeptideFasting } from '../../../src/hooks/usePeptideFasting';
+import { GlassBackground } from '../../../src/components/GlassBackground';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -103,7 +107,7 @@ function foodNavPayload(
 
 // ─── Source Badge ─────────────────────────────────────────────────────────────
 
-function SourceBadge({ source }: { source: 'usda' | 'off' | undefined }) {
+function SourceBadge({ source, colors }: { source: 'usda' | 'off' | undefined; colors: Theme['colors'] }) {
   if (source === 'usda') {
     return (
       <View style={[styles.badge, styles.badgeUSDA]}>
@@ -114,7 +118,7 @@ function SourceBadge({ source }: { source: 'usda' | 'off' | undefined }) {
   }
   if (source === 'off') {
     return (
-      <View style={[styles.badge, styles.badgeOFF]}>
+      <View style={[styles.badge, { backgroundColor: colors.textSecondary }]}>
         <Text style={styles.badgeTextOFF}>Community</Text>
       </View>
     );
@@ -144,7 +148,7 @@ function SearchResultRow({
           <Text style={[styles.resultName, { color: colors.textPrimary }]} numberOfLines={1}>
             {item.name}
           </Text>
-          <SourceBadge source={item.foodSource} />
+          <SourceBadge source={item.foodSource} colors={colors} />
         </View>
         {!!item.usdaFullDescription && item.usdaFullDescription !== item.name && (
           <Text style={[styles.resultSubtitle, { color: colors.textSecondary }]} numberOfLines={2}>
@@ -253,6 +257,25 @@ export default function AddFoodScreen() {
   }, [userProfile]);
 
   const [showSlotPicker, setShowSlotPicker] = useState(false);
+
+  // ─── Peptide fasting warning ──────────────────────────────────────────────
+  // Load peptides once so usePeptideFasting can resolve fasting windows
+  const [peptideList, setPeptideList] = useState<Peptide[]>([]);
+  const fastingWarningTrackedRef = useRef(false);
+  useEffect(() => {
+    getPeptides().then((r) => { if (r.data) setPeptideList(r.data); }).catch(() => {});
+  }, []);
+  const { activeWindows: activePeptideFastingWindows } = usePeptideFasting({ peptides: peptideList });
+
+  // Track the warning once when it first appears (fire-and-forget)
+  useEffect(() => {
+    if (activePeptideFastingWindows.length > 0 && !fastingWarningTrackedRef.current) {
+      fastingWarningTrackedRef.current = true;
+      analytics.track(AnalyticsEvent.PEPTIDE_FASTING_WARNING_SHOWN, {
+        peptide_count: activePeptideFastingWindows.length,
+      });
+    }
+  }, [activePeptideFastingWindows]);
 
   // Recipes tab state
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -606,7 +629,8 @@ export default function AddFoodScreen() {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <GlassBackground>
+    <View style={styles.container}>
       {/* Meal slot selector — hidden in ingredient mode */}
       {!isIngredientMode && (
         <>
@@ -641,6 +665,18 @@ export default function AddFoodScreen() {
         </>
       )}
 
+      {/* Peptide fasting warning — shown when an active post-injection window is open */}
+      {activePeptideFastingWindows.length > 0 && (
+        <View style={[styles.fastingWarning, { backgroundColor: Colors.warning + '1A', borderColor: Colors.warning + '4D' }]}>
+          <Ionicons name="warning-outline" size={16} color={Colors.warning} />
+          <Text style={[styles.fastingWarningText, { color: colors.textPrimary }]}>
+            {activePeptideFastingWindows.length === 1
+              ? `${activePeptideFastingWindows[0]!.peptideName} fasting window is active — eating may reduce effectiveness.`
+              : `${activePeptideFastingWindows.length} peptide fasting windows are active — eating may reduce effectiveness.`}
+          </Text>
+        </View>
+      )}
+
       {/* Tabs */}
       <View style={[styles.tabRow, { borderBottomColor: colors.border }]}>
         {(isIngredientMode
@@ -667,6 +703,7 @@ export default function AddFoodScreen() {
         {activeTab === 'recipes' && !isIngredientMode && renderRecipes()}
       </View>
     </View>
+    </GlassBackground>
   );
 }
 
@@ -674,6 +711,18 @@ export default function AddFoodScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
+  fastingWarning: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderWidth: 1,
+    marginHorizontal: 12,
+    marginTop: 8,
+    borderRadius: 10,
+    padding: 10,
+    gap: 8,
+  },
+  fastingWarningText: { flex: 1, fontSize: 13, lineHeight: 18 },
 
   slotRow: {
     flexDirection: 'row',
@@ -692,6 +741,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 8,
     borderWidth: 1,
+    minHeight: 44,
   },
   slotBtnText: { fontSize: 14, fontWeight: '600' },
   slotDropdown: {
@@ -709,6 +759,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    minHeight: 44,
   },
   slotItemText: { fontSize: 15 },
 
@@ -716,7 +767,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: 12 },
+  tab: { flex: 1, alignItems: 'center', paddingVertical: 12, minHeight: 44 },
   tabText: { fontSize: 14, fontWeight: '600' },
 
   searchInput: {
@@ -726,6 +777,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
     fontSize: 15,
+    minHeight: 44,
   },
   searchFeedback: { flex: 1, alignItems: 'center', paddingTop: 48, gap: 12, paddingHorizontal: 32 },
   feedbackText: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
@@ -755,6 +807,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    minHeight: 44,
   },
   resultBody: { flex: 1 },
   resultNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
@@ -765,8 +818,8 @@ const styles = StyleSheet.create({
   resultRight: { alignItems: 'flex-end', marginLeft: 12 },
   resultCal: { fontSize: 16, fontWeight: '700' },
   resultCalUnit: { fontSize: 11 },
-  removeFavBtn: { padding: 8, marginLeft: 4 },
-  barcodeBtn: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
+  removeFavBtn: { padding: 8, marginLeft: 4, minHeight: 44, justifyContent: 'center' },
+  barcodeBtn: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center', minHeight: 44 },
 
   badge: {
     flexDirection: 'row',
@@ -777,7 +830,7 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   badgeUSDA: { backgroundColor: Colors.nutrition },
-  badgeOFF: { backgroundColor: '#888' },
+  badgeOFF: {},
   badgeTextUSDA: { fontSize: 10, fontWeight: '700', color: 'white' },
   badgeTextOFF: { fontSize: 10, fontWeight: '600', color: 'white' },
 });

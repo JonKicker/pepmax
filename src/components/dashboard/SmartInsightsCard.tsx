@@ -2,11 +2,12 @@
  * SmartInsightsCard — shows cross-module insights on the dashboard.
  */
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { DashboardCard } from './DashboardCard';
 import { Colors } from '../../constants/theme';
+import { SkeletonLoader } from '../SkeletonLoader';
 import type { Theme } from '../../constants/theme';
 import type { Insight } from '../../types/insight';
 
@@ -28,7 +29,11 @@ export function SmartInsightsCard({ insights, loading, onDismiss, colors }: Prop
       colors={colors}
     >
       {loading && insights.length === 0 ? (
-        <ActivityIndicator size="small" color={Colors.primary} style={styles.loader} />
+        <View style={{ gap: 8 }}>
+          <SkeletonLoader width="100%" height={14} />
+          <SkeletonLoader width="80%" height={14} />
+          <SkeletonLoader width="60%" height={14} />
+        </View>
       ) : (
         insights.map((insight, index) => (
           <View key={insight.id}>
@@ -48,8 +53,10 @@ export function SmartInsightsCard({ insights, loading, onDismiss, colors }: Prop
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   onDismiss(insight.id);
                 }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 style={styles.dismissBtn}
+                accessibilityRole="button"
+                accessibilityLabel={`Dismiss insight: ${insight.headline}`}
               >
                 <Ionicons name="close-circle-outline" size={20} color={colors.textSecondary} />
               </TouchableOpacity>

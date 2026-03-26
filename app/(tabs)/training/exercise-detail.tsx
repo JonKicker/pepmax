@@ -8,14 +8,17 @@ import { useExerciseLibrary } from '../../../src/hooks/useExerciseLibrary';
 import { findExerciseById } from '../../../src/services/exerciseService';
 import { getPersonalRecords } from '../../../src/services/personalRecordService';
 import type { PersonalRecord } from '../../../src/types/personalRecord';
+import ExerciseGifPlayer from '../../../src/components/training/ExerciseGifPlayer';
+import * as Haptics from 'expo-haptics';
+import { GlassBackground } from '../../../src/components/GlassBackground';
 
 const CATEGORY_COLORS: Record<string, string> = {
-  Compound: '#8E44AD',
-  Isolation: '#2E86C1',
-  Bodyweight: '#27AE60',
-  Machine: '#E67E22',
-  Cable: '#1ABC9C',
-  Cardio: '#E74C3C',
+  Compound: Colors.gym,
+  Isolation: Colors.accent,
+  Bodyweight: Colors.nutrition,
+  Machine: Colors.warning,
+  Cable: Colors.teal,
+  Cardio: Colors.cardio,
 };
 
 export default function ExerciseDetailScreen() {
@@ -54,9 +57,13 @@ export default function ExerciseDetailScreen() {
   const catColor = CATEGORY_COLORS[exercise.category] ?? Colors.gym;
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={styles.content}>
+    <GlassBackground>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Name */}
       <Text style={[styles.name, { color: colors.textPrimary }]}>{exercise.name}</Text>
+
+      {/* Animated GIF demonstration */}
+      <ExerciseGifPlayer exerciseId={exercise.id} />
 
       {/* Category badge */}
       <View style={[styles.badge, { backgroundColor: catColor + '20' }]}>
@@ -123,8 +130,10 @@ export default function ExerciseDetailScreen() {
         <View style={styles.prGrid}>
           {prData.weightPR && (
             <TouchableOpacity
-              onPress={() => router.push({ pathname: '/(tabs)/training/session-detail', params: { sessionId: prData.weightPR!.sessionId } })}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push({ pathname: '/(tabs)/training/session-detail', params: { sessionId: prData.weightPR!.sessionId } }); }}
               style={[styles.prCard, { backgroundColor: Colors.gold + '15', borderColor: Colors.gold + '30' }]}
+              accessibilityRole="button"
+              accessibilityLabel="View weight personal record"
             >
               <View style={styles.prCardHeader}>
                 <Ionicons name="trophy" size={16} color={Colors.gold} />
@@ -141,8 +150,10 @@ export default function ExerciseDetailScreen() {
 
           {prData.volumePR && (
             <TouchableOpacity
-              onPress={() => router.push({ pathname: '/(tabs)/training/session-detail', params: { sessionId: prData.volumePR!.sessionId } })}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push({ pathname: '/(tabs)/training/session-detail', params: { sessionId: prData.volumePR!.sessionId } }); }}
               style={[styles.prCard, { backgroundColor: Colors.gold + '15', borderColor: Colors.gold + '30' }]}
+              accessibilityRole="button"
+              accessibilityLabel="View volume personal record"
             >
               <View style={styles.prCardHeader}>
                 <Ionicons name="trophy" size={16} color={Colors.gold} />
@@ -159,8 +170,10 @@ export default function ExerciseDetailScreen() {
 
           {prData.estimated1RM && (
             <TouchableOpacity
-              onPress={() => router.push({ pathname: '/(tabs)/training/session-detail', params: { sessionId: prData.estimated1RM!.sessionId } })}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push({ pathname: '/(tabs)/training/session-detail', params: { sessionId: prData.estimated1RM!.sessionId } }); }}
               style={[styles.prCard, { backgroundColor: Colors.gold + '15', borderColor: Colors.gold + '30' }]}
+              accessibilityRole="button"
+              accessibilityLabel="View estimated one rep max personal record"
             >
               <View style={styles.prCardHeader}>
                 <Ionicons name="trophy" size={16} color={Colors.gold} />
@@ -195,6 +208,7 @@ export default function ExerciseDetailScreen() {
         </View>
       )}
     </ScrollView>
+    </GlassBackground>
   );
 }
 
@@ -203,7 +217,7 @@ const styles = StyleSheet.create({
   content: { padding: 20, paddingBottom: 40 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   notFound: { fontSize: 16, marginTop: 12 },
-  name: { fontSize: 26, fontWeight: '800', marginBottom: 10 },
+  name: { fontSize: 32, fontWeight: '800', marginBottom: 10 },
   badge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 14, marginBottom: 20 },
   badgeText: { fontSize: 13, fontWeight: '700' },
   sectionTitle: { fontSize: 17, fontWeight: '700', marginTop: 20, marginBottom: 8 },

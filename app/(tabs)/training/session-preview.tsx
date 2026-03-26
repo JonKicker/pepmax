@@ -229,7 +229,7 @@ export default function SessionPreviewScreen() {
           styles.startBtn,
           { backgroundColor: mode === 'bareMinimum' ? Colors.warning : Colors.gym },
         ]}
-        activeOpacity={0.85}
+        activeOpacity={0.7}
       >
         <Ionicons name="play" size={20} color="white" />
         <Text style={styles.startBtnText}>

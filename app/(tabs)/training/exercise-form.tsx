@@ -246,7 +246,7 @@ export default function ExerciseFormScreen() {
           style={[styles.saveBtn, { backgroundColor: isValid ? Colors.gym : colors.border }]}
           onPress={handleSave}
           disabled={!isValid || saving}
-          activeOpacity={0.85}
+          activeOpacity={0.7}
         >
           {saving ? (
             <ActivityIndicator color="white" />

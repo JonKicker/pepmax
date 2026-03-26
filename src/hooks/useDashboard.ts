@@ -82,6 +82,29 @@ export function useDashboard(userProfile?: UserProfile | null) {
               result.unshift('recovery');
             }
           }
+          // Migration: ensure bodyHub is after recovery
+          if (!result.includes('bodyHub')) {
+            const recoveryIdx = result.indexOf('recovery');
+            if (recoveryIdx >= 0) {
+              result.splice(recoveryIdx + 1, 0, 'bodyHub');
+            } else {
+              result.push('bodyHub');
+            }
+          }
+          // Migration: ensure quests is after bodyHub
+          if (!result.includes('quests')) {
+            const bodyHubIdx = result.indexOf('bodyHub');
+            if (bodyHubIdx >= 0) {
+              result.splice(bodyHubIdx + 1, 0, 'quests');
+            } else {
+              const recoveryIdx = result.indexOf('recovery');
+              if (recoveryIdx >= 0) {
+                result.splice(recoveryIdx + 1, 0, 'quests');
+              } else {
+                result.push('quests');
+              }
+            }
+          }
           return result;
         })(),
         hiddenCards: prefs?.hiddenCards ?? [],

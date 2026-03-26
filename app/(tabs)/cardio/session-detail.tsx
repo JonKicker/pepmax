@@ -25,9 +25,12 @@ import RouteMap from '../../../src/components/cardio/RouteMap';
 import HeartRateChart from '../../../src/components/cardio/HeartRateChart';
 import TimeInZones from '../../../src/components/cardio/TimeInZones';
 import ShareModal from '../../../src/components/cardio/ShareModal';
+import SegmentCreator from '../../../src/components/cardio/SegmentCreator';
+import { GlassBackground } from '../../../src/components/GlassBackground';
 import { useHeartRateZones } from '../../../src/hooks/useHeartRateZones';
 import { getTrainingEffect } from '../../../src/utils/cardio';
 import type { CardioSession, Split } from '../../../src/types/cardio';
+import type { RouteSegment } from '../../../src/types/segments';
 
 // ─── Stat row ─────────────────────────────────────────────────────────────────
 
@@ -56,11 +59,11 @@ function SplitRowView({
   colors: any;
 }) {
   const bg = isFastest
-    ? '#27AE601A'
+    ? Colors.nutrition + '1A'
     : isSlowest
-    ? '#E74C3C1A'
+    ? Colors.cardio + '1A'
     : 'transparent';
-  const accent = isFastest ? '#27AE60' : isSlowest ? '#E74C3C' : colors.textPrimary;
+  const accent = isFastest ? Colors.nutrition : isSlowest ? Colors.cardio : colors.textPrimary;
 
   return (
     <View style={[styles.splitRow, { backgroundColor: bg, borderBottomColor: colors.border }]}>
@@ -94,6 +97,7 @@ export default function SessionDetailScreen() {
   const [loadError, setLoadError] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [segmentCreatorVisible, setSegmentCreatorVisible] = useState(false);
 
   // Must be called unconditionally (Rules of Hooks) — zones only used when session is loaded
   const maxHR = settings.maxHeartRate ?? 180;
@@ -149,26 +153,32 @@ export default function SessionDetailScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={Colors.cardio} />
-      </View>
+      <GlassBackground>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={Colors.cardio} />
+        </View>
+      </GlassBackground>
     );
   }
 
   if (loadError || !session) {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <Ionicons name="cloud-offline-outline" size={48} color={colors.textSecondary} />
-        <Text style={[styles.errorText, { color: colors.textSecondary }]}>
-          Could not load session data.
-        </Text>
-        <TouchableOpacity
-          style={[styles.actionBtn, { backgroundColor: Colors.cardio }]}
-          onPress={() => router.back()}
-        >
-          <Text style={styles.actionBtnText}>Go Back</Text>
-        </TouchableOpacity>
-      </View>
+      <GlassBackground>
+        <View style={styles.centered}>
+          <Ionicons name="cloud-offline-outline" size={48} color={colors.textSecondary} />
+          <Text style={[styles.errorText, { color: colors.textSecondary }]}>
+            Could not load session data.
+          </Text>
+          <TouchableOpacity
+            style={[styles.actionBtn, { backgroundColor: Colors.cardio }]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.back(); }}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Text style={styles.actionBtnText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </GlassBackground>
     );
   }
 
@@ -194,8 +204,9 @@ export default function SessionDetailScreen() {
   const goalMet = isGoalMet(session);
 
   return (
+    <GlassBackground>
     <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
+      style={styles.container}
       contentContainerStyle={styles.content}
     >
       {/* Header */}
@@ -210,9 +221,9 @@ export default function SessionDetailScreen() {
 
       {/* Goal badge */}
       {session.goals && session.goals.type !== 'none' && (
-        <View style={[styles.goalBadge, { backgroundColor: goalMet ? '#27AE601A' : colors.surface, borderColor: goalMet ? '#27AE60' : colors.border }]}>
-          <Ionicons name={goalMet ? 'checkmark-circle' : 'close-circle'} size={16} color={goalMet ? '#27AE60' : colors.textSecondary} />
-          <Text style={[styles.goalText, { color: goalMet ? '#27AE60' : colors.textSecondary }]}>
+        <View style={[styles.goalBadge, { backgroundColor: goalMet ? Colors.nutrition + '1A' : colors.surface, borderColor: goalMet ? Colors.nutrition : colors.border }]}>
+          <Ionicons name={goalMet ? 'checkmark-circle' : 'close-circle'} size={16} color={goalMet ? Colors.nutrition : colors.textSecondary} />
+          <Text style={[styles.goalText, { color: goalMet ? Colors.nutrition : colors.textSecondary }]}>
             {goalMet ? 'Goal achieved!' : 'Goal not met'}
           </Text>
         </View>
@@ -313,6 +324,8 @@ export default function SessionDetailScreen() {
         <TouchableOpacity
           style={[styles.actionBtn, { backgroundColor: Colors.cardio }]}
           onPress={handleRepeat}
+          accessibilityRole="button"
+          accessibilityLabel="Repeat route"
         >
           <Ionicons name="repeat" size={16} color="white" />
           <Text style={styles.actionBtnText}>Repeat Route</Text>
@@ -321,11 +334,31 @@ export default function SessionDetailScreen() {
         <TouchableOpacity
           style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShareModalVisible(true); }}
+          accessibilityRole="button"
+          accessibilityLabel="Share session"
         >
           <Ionicons name="share-outline" size={16} color={colors.textPrimary} />
           <Text style={[styles.actionBtnText, { color: colors.textPrimary }]}>Share</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Save as Segment — outdoor sessions with GPS route only */}
+      {!session.indoorMode &&
+        session.route.length >= 2 &&
+        ['run', 'cycle', 'walk'].includes(session.activityType) && (
+          <TouchableOpacity
+            style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setSegmentCreatorVisible(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Save as segment"
+          >
+            <Ionicons name="flag-outline" size={16} color={colors.textPrimary} />
+            <Text style={[styles.actionBtnText, { color: colors.textPrimary }]}>Save as Segment</Text>
+          </TouchableOpacity>
+        )}
 
       {/* Share modal */}
       <ShareModal
@@ -335,10 +368,24 @@ export default function SessionDetailScreen() {
         onClose={() => setShareModalVisible(false)}
       />
 
+      {/* Segment creator */}
+      {segmentCreatorVisible && (
+        <SegmentCreator
+          session={session}
+          onCreated={(_segment: RouteSegment) => {
+            setSegmentCreatorVisible(false);
+            Alert.alert('Segment Created', 'Your segment is live and ready for competition!');
+          }}
+          onCancel={() => setSegmentCreatorVisible(false)}
+        />
+      )}
+
       <TouchableOpacity
         style={[styles.deleteBtn, { borderColor: Colors.error }]}
         onPress={handleDelete}
         disabled={deleting}
+        accessibilityRole="button"
+        accessibilityLabel="Delete session"
       >
         {deleting ? (
           <ActivityIndicator size="small" color={Colors.error} />
@@ -350,6 +397,7 @@ export default function SessionDetailScreen() {
         )}
       </TouchableOpacity>
     </ScrollView>
+    </GlassBackground>
   );
 }
 
@@ -385,7 +433,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 13,
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   statLabel: { fontSize: 14 },

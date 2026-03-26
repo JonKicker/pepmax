@@ -44,7 +44,7 @@ export default function BodyMeasurementSummary({ latest, monthlyWeightChange, co
     <TouchableOpacity
       style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
       onPress={() => router.push('/(tabs)/training/body-measurements')}
-      activeOpacity={0.8}
+      activeOpacity={0.7}
     >
       <View style={[styles.accent, { backgroundColor: Colors.gym }]} />
       <View style={styles.body}>

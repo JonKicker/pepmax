@@ -265,7 +265,7 @@ export default function LogSideEffectModal({ visible, onClose, onSaved }: Props)
               style={[styles.saveBtn, { backgroundColor: Colors.peptide }]}
               onPress={handleSave}
               disabled={saving}
-              activeOpacity={0.85}
+              activeOpacity={0.7}
             >
               {saving ? (
                 <ActivityIndicator color="white" />

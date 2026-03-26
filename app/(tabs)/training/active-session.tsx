@@ -28,11 +28,23 @@ import { exerciseLibrary } from '../../../src/data/exerciseLibrary';
 import { isExerciseAvailable, findAlternatives } from '../../../src/utils/equipmentMapping';
 import PRCelebration from '../../../src/components/PRCelebration';
 import { ExerciseSwapModal } from '../../../src/components/training/EquipmentQuickSwitch';
+import { GlassBackground } from '../../../src/components/GlassBackground';
+import { WarmUpSets } from '../../../src/components/training/WarmUpSets';
+import { PlateCalculator } from '../../../src/components/training/PlateCalculator';
+import { useGymSettings } from '../../../src/hooks/useGymSettings';
 import type { SessionExercise, SessionSet } from '../../../src/types/workout';
 import type { Exercise } from '../../../src/types/exercise';
 import type { PRDetectionResult } from '../../../src/types/personalRecord';
+import type { BarType } from '../../../src/types/warmUp';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const BAR_TYPES: ReadonlySet<BarType> = new Set<BarType>(['Barbell', 'EZ Bar', 'Smith Machine']);
+
+/** Returns the BarType for bar-based equipment, or null for everything else. */
+function getBarType(equipment: string): BarType | null {
+  return BAR_TYPES.has(equipment as BarType) ? (equipment as BarType) : null;
+}
 
 function formatTime(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -76,7 +88,7 @@ function RPESelector({
 
 const rpeStyles = StyleSheet.create({
   container: { flexDirection: 'row', gap: 4, marginTop: 4 },
-  chip: { width: 30, height: 26, borderRadius: 6, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  chip: { width: 34, height: 34, borderRadius: 6, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   chipText: { fontSize: 12, fontWeight: '600' },
 });
 
@@ -238,9 +250,9 @@ const setRowStyles = StyleSheet.create({
   },
   times: { fontSize: 14, fontWeight: '600' },
   checkBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -376,6 +388,7 @@ const sectionStyles = StyleSheet.create({
     borderStyle: 'dashed',
     marginTop: 4,
     gap: 4,
+    minHeight: 44,
   },
   addSetText: { fontSize: 13, fontWeight: '600' },
 });
@@ -449,9 +462,9 @@ const timerStyles = StyleSheet.create({
   progressTrack: { height: 4, borderRadius: 2, marginVertical: 8 },
   progressBar: { height: 4, borderRadius: 2 },
   actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 },
-  adjustBtn: { paddingHorizontal: 12, paddingVertical: 6 },
+  adjustBtn: { paddingHorizontal: 12, paddingVertical: 6, minHeight: 44 },
   adjustText: { fontSize: 14, fontWeight: '600' },
-  skipBtn: { paddingHorizontal: 24, paddingVertical: 8, borderRadius: 8 },
+  skipBtn: { paddingHorizontal: 24, paddingVertical: 8, borderRadius: 8, minHeight: 44 },
   skipText: { color: 'white', fontWeight: '700', fontSize: 14 },
 });
 
@@ -467,6 +480,7 @@ export default function ActiveSessionScreen() {
   const workout = useWorkoutSession();
   const restTimer = useRestTimer();
   const { activeProfile, loadProfiles } = useEquipmentProfiles();
+  const { settings: gymSettings, toggleWarmUp, togglePlateCalc } = useGymSettings();
 
   const [previousBests, setPreviousBests] = useState<Record<string, string>>({});
   const [weightUnit, setWeightUnit] = useState<'lbs' | 'kg'>('lbs');
@@ -684,7 +698,8 @@ export default function ActiveSessionScreen() {
   // ─── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <GlassBackground>
+    <View style={styles.container}>
       {/* PR celebration overlay */}
       <PRCelebration
         visible={prCelebration.visible}
@@ -723,20 +738,82 @@ export default function ActiveSessionScreen() {
             const libExercise = exerciseLibrary.find((e) => e.id === exercise.exerciseId);
             const needsSwap = !!activeProfile && !!libExercise &&
               !isExerciseAvailable(libExercise, activeProfile.equipment);
+
+            // Map Equipment to BarType — returns null for non-bar equipment
+            const barType = getBarType(libExercise?.equipment ?? '');
+            const isBarBased = barType !== null;
+
+            // Use the first set's weight as the working weight target
+            const firstSetWeight = exercise.sets[0]?.weight ?? 0;
+
             return (
-              <ExerciseSection
-                key={`${exercise.exerciseId}-${ei}`}
-                exercise={exercise}
-                exerciseIndex={ei}
-                previousBest={previousBests[exercise.exerciseId]}
-                onCompleteSet={handleCompleteSet}
-                onAddSet={workout.addSet}
-                onRemoveSet={workout.removeSet}
-                onSwapPress={handleSwapPress}
-                needsSwap={needsSwap}
-                colors={colors}
-                weightUnit={weightUnit}
-              />
+              <View key={`${exercise.exerciseId}-${ei}`}>
+                <ExerciseSection
+                  exercise={exercise}
+                  exerciseIndex={ei}
+                  previousBest={previousBests[exercise.exerciseId]}
+                  onCompleteSet={handleCompleteSet}
+                  onAddSet={workout.addSet}
+                  onRemoveSet={workout.removeSet}
+                  onSwapPress={handleSwapPress}
+                  needsSwap={needsSwap}
+                  colors={colors}
+                  weightUnit={weightUnit}
+                />
+
+                {/* Warm-up & plate calculator — only for bar-based exercises */}
+                {isBarBased && barType !== null && firstSetWeight > 0 && (
+                  <View style={gymCalcStyles.calcWrapper}>
+                    {gymSettings.showWarmUp && (
+                      <WarmUpSets
+                        workingWeight={firstSetWeight}
+                        unit={weightUnit}
+                        barType={barType}
+                      />
+                    )}
+                    {gymSettings.showPlateCalc && (
+                      <PlateCalculator
+                        totalWeight={firstSetWeight}
+                        unit={weightUnit}
+                        barType={barType}
+                      />
+                    )}
+                    {/* Toggle row */}
+                    <View style={gymCalcStyles.toggleRow}>
+                      <TouchableOpacity
+                        onPress={toggleWarmUp}
+                        style={[
+                          gymCalcStyles.toggleBtn,
+                          { borderColor: colors.border },
+                          gymSettings.showWarmUp && gymCalcStyles.toggleBtnActive,
+                        ]}
+                      >
+                        <Text style={[
+                          gymCalcStyles.toggleText,
+                          { color: gymSettings.showWarmUp ? Colors.gym : colors.textSecondary },
+                        ]}>
+                          Warm-Up
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={togglePlateCalc}
+                        style={[
+                          gymCalcStyles.toggleBtn,
+                          { borderColor: colors.border },
+                          gymSettings.showPlateCalc && gymCalcStyles.toggleBtnActive,
+                        ]}
+                      >
+                        <Text style={[
+                          gymCalcStyles.toggleText,
+                          { color: gymSettings.showPlateCalc ? Colors.gym : colors.textSecondary },
+                        ]}>
+                          Plates
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </View>
             );
           })}
 
@@ -772,6 +849,7 @@ export default function ActiveSessionScreen() {
         />
       )}
     </View>
+    </GlassBackground>
   );
 }
 
@@ -795,7 +873,7 @@ const styles = StyleSheet.create({
   headerLeft: { flex: 1, marginRight: 12 },
   headerTitle: { fontSize: 18, fontWeight: '700' },
   headerTimer: { fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'], marginTop: 2 },
-  finishBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
+  finishBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8, minHeight: 44 },
   finishBtnText: { color: 'white', fontWeight: '700', fontSize: 15 },
 
   scrollContent: { paddingTop: 16, paddingBottom: 40 },
@@ -813,4 +891,33 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   addExerciseText: { fontSize: 15, fontWeight: '700' },
+});
+
+const gymCalcStyles = StyleSheet.create({
+  calcWrapper: {
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  toggleBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  toggleBtnActive: {
+    backgroundColor: Colors.gym + '15',
+    borderColor: Colors.gym,
+  } as const,
+  toggleText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
 });
