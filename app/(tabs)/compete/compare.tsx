@@ -241,7 +241,7 @@ export default function CompareScreen() {
     if (compareState.status !== 'ready') return;
     analytics.track(AnalyticsEvent.COMPARE_SHARE_TAPPED, { opponentId: opponentId ?? '' });
     router.push({
-      pathname: '/(tabs)/dashboard/share-preview',
+      pathname: '/(tabs)/compete/share-preview',
       params: {
         myName,
         opponentName: opponentDisplayName,

@@ -139,7 +139,7 @@ export default function FriendProfileScreen() {
           style={styles.challengeButton}
           onPress={() =>
             router.push({
-              pathname: '/(tabs)/dashboard/create-duel',
+              pathname: '/(tabs)/compete/create-duel',
               params: { opponentUid: uid, opponentUsername: profile.username },
             })
           }

@@ -136,7 +136,7 @@ export default function JoinCrewScreen() {
 
     // Navigate to crew-detail; replace so back button doesn't return here
     router.replace({
-      pathname: '/(tabs)/dashboard/crew-detail',
+      pathname: '/(tabs)/compete/crew-detail',
       params: { crewId: result.data! },
     });
   };

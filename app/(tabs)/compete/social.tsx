@@ -196,7 +196,7 @@ export default function SocialHubScreen() {
           }
           color={Colors.gold}
           badge={friendsHook.pendingCount}
-          onPress={() => router.push('/(tabs)/dashboard/friends')}
+          onPress={() => router.push('/(tabs)/compete/friends')}
           colors={colors}
         />
         <QuickActionCard
@@ -208,7 +208,7 @@ export default function SocialHubScreen() {
               : 'Join or create'
           }
           color={Colors.nutrition}
-          onPress={() => router.push('/(tabs)/dashboard/crews')}
+          onPress={() => router.push('/(tabs)/compete/crews')}
           colors={colors}
         />
         <QuickActionCard
@@ -216,7 +216,7 @@ export default function SocialHubScreen() {
           label="Rankings"
           subtitle="Weekly & all-time"
           color={Colors.social}
-          onPress={() => router.push('/(tabs)/dashboard/leaderboards')}
+          onPress={() => router.push('/(tabs)/compete/leaderboards')}
           colors={colors}
         />
       </View>
@@ -227,7 +227,7 @@ export default function SocialHubScreen() {
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>YOUR BEST RANK</Text>
           <TouchableOpacity
             style={[styles.rankCard, { backgroundColor: colors.surface, borderColor: tierInfo.color + '55' }]}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/dashboard/leaderboards'); }}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/compete/leaderboards'); }}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel={`Your best rank: number ${bestRank.rank} in ${bestRank.categoryLabel}`}
@@ -282,7 +282,7 @@ export default function SocialHubScreen() {
             </View>
           ))}
           {friendsHook.friends.length > 5 && (
-            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/dashboard/friends'); }} accessibilityRole="button" accessibilityLabel="See all friends">
+            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/compete/friends'); }} accessibilityRole="button" accessibilityLabel="See all friends">
               <Text style={[styles.seeAllLink, { color: Colors.accent }]}>
                 See all friends →
               </Text>

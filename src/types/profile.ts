@@ -29,6 +29,7 @@ export type UserProfile = {
   profilePictureUrl?: string;
   bio?: string;
   username?: string;
+  instagramHandle?: string;
 
   // Quiz answers
   goals: Goal[];

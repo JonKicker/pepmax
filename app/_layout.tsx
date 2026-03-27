@@ -19,6 +19,9 @@ import * as Notifications from 'expo-notifications';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { ThemeProvider, useThemeContext } from '../src/contexts/ThemeContext';
 import { PremiumProvider, usePremium } from '../src/contexts/PremiumContext';
+import { GamificationProvider } from '../src/contexts/GamificationContext';
+import { useCelebration } from '../src/hooks/useCelebration';
+import { CelebrationOverlay } from '../src/components/celebrations/CelebrationOverlay';
 import ErrorBoundary from '../src/components/ErrorBoundary';
 import { initSentry, sentryWrap, setUser as sentrySetUser } from '../src/services/errorReporting';
 import { analytics, AnalyticsEvent } from '../src/services/analytics';
@@ -133,6 +136,18 @@ function PremiumSync() {
   return null;
 }
 
+function CelebrationLayer() {
+  const { currentItem, onCelebrationComplete } = useCelebration();
+  if (!currentItem) return null;
+  return (
+    <CelebrationOverlay
+      config={currentItem.config}
+      visible={true}
+      onComplete={onCelebrationComplete}
+    />
+  );
+}
+
 function RootLayout() {
   useEffect(() => {
     analytics.track(AnalyticsEvent.APP_OPENED);
@@ -149,14 +164,17 @@ function RootLayout() {
       <ErrorBoundary>
         <PremiumProvider>
           <PremiumSync />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(onboarding)" />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="paywall" options={{ presentation: 'modal', headerShown: false }} />
-            <Stack.Screen name="go-pro" options={{ presentation: 'modal', headerShown: false }} />
-          </Stack>
+          <GamificationProvider>
+            <CelebrationLayer />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="index" />
+              <Stack.Screen name="(auth)" />
+              <Stack.Screen name="(onboarding)" />
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="paywall" options={{ presentation: 'modal', headerShown: false }} />
+              <Stack.Screen name="go-pro" options={{ presentation: 'modal', headerShown: false }} />
+            </Stack>
+          </GamificationProvider>
         </PremiumProvider>
       </ErrorBoundary>
     </AuthProvider>

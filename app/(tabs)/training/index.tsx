@@ -386,7 +386,7 @@ export default function TrainingScreen() {
           });
         }}
       >
-        <Ionicons name="flash" size={26} color="white" />
+        <Ionicons name="flash" size={26} color="white" style={{ marginLeft: 2 }} />
       </AnimatedPressable>
 
       <EquipmentQuickSwitch
@@ -484,15 +484,15 @@ const styles = StyleSheet.create({
   quickBtn: {
     width: '30%',
     flexGrow: 1,
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 10,
     borderWidth: 1,
-    gap: 6,
+    gap: 4,
   },
-  quickBtnText: { fontSize: 14, fontWeight: '700' },
+  quickBtnText: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
 
   recoveryBanner: {
     marginHorizontal: 16,

@@ -232,7 +232,7 @@ export default function FriendsScreen() {
 
         <TouchableOpacity
           style={[styles.findBtn, { backgroundColor: Colors.accent + '18', borderColor: Colors.accent + '44' }]}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/dashboard/friend-search'); }}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/compete/friend-search'); }}
           activeOpacity={0.7}
           accessibilityRole="button"
           accessibilityLabel="Find friends"
@@ -260,7 +260,7 @@ export default function FriendsScreen() {
               colors={colors}
               onPress={() =>
                 router.push({
-                  pathname: '/(tabs)/dashboard/friend-profile',
+                  pathname: '/(tabs)/compete/friend-profile',
                   params: { uid: item.friendUid },
                 })
               }

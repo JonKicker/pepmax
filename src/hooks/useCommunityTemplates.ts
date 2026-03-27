@@ -69,7 +69,10 @@ export default function useCommunityTemplates() {
       setLoading(false);
       isLoadingRef.current = false;
 
-      if (result.error || !result.data) return;
+      if (result.error || !result.data) {
+        setHasMore(false);
+        return;
+      }
 
       const { templates: newBatch, lastDoc } = result.data;
       cursorRef.current = lastDoc;

@@ -7,13 +7,13 @@
  *   Top: challenger vs opponent split with progress bars + "VS" badge
  *   Middle: metric label + countdown timer to endDate
  *   Bottom: status-specific content
- *     - active:    "In progress..."
+ *     - active:    DuelProgressBar tug-of-war + "In progress..."
  *     - pending (I'm opponent): Accept / Decline buttons
- *     - completed: "Winner: {username}" with trophy icon
+ *     - completed: DuelResultScreen overlay on first view, then static result
  *
  * Analytics: DUEL_DETAIL_VIEWED tracked on mount
  */
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -29,7 +29,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../../src/services/firebase/index';
 import { getDuelDetail, acceptDuel, declineDuel } from '../../../src/services/duelService';
 import { analytics, AnalyticsEvent } from '../../../src/services/analytics';
+import { useDuels } from '../../../src/hooks/useDuels';
+import { DuelProgressBar } from '../../../src/components/pvp/DuelProgressBar';
+import { DuelResultScreen } from '../../../src/components/pvp/DuelResultScreen';
+import { WinStreakBadge } from '../../../src/components/pvp/WinStreakBadge';
+import { getTierForRP } from '../../../src/utils/rankTierV2';
 import type { DuelDoc, DuelMetric } from '../../../src/types/challenges';
+import type { RankTierV2 } from '../../../src/types/rankV2';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -58,6 +64,14 @@ const METRIC_ICONS: Record<DuelMetric, keyof typeof Ionicons.glyphMap> = {
   xp_earned: 'star-outline',
 };
 
+/** Short unit string for DuelProgressBar and DuelResultScreen */
+const METRIC_UNITS: Record<DuelMetric, string> = {
+  volume_lifted: 'kg',
+  distance_run: 'km',
+  days_on_plan: 'days',
+  xp_earned: 'XP',
+};
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatCountdown(endDate: { toDate: () => Date } | Date | null | undefined): string {
@@ -81,6 +95,37 @@ function progressPercent(value: number, max: number): number {
   return Math.min(1, value / max);
 }
 
+/**
+ * Compute consecutive win streak for myUid from completedDuels.
+ * Walks from most-recent backward; stops at first non-win.
+ */
+function computeWinStreak(completedDuels: DuelDoc[], myUid: string): number {
+  // Sort by updatedAt descending (most recent first)
+  const sorted = [...completedDuels].sort((a, b) => {
+    const aMs = a.updatedAt?.toDate?.()?.getTime() ?? 0;
+    const bMs = b.updatedAt?.toDate?.()?.getTime() ?? 0;
+    return bMs - aMs;
+  });
+
+  let streak = 0;
+  for (const d of sorted) {
+    if (d.winnerId === myUid) {
+      streak++;
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+/**
+ * Resolve a RankTierV2 from optional RP value, defaulting to 'bronze'.
+ */
+function resolveRankTier(rp?: number): RankTierV2 {
+  if (typeof rp !== 'number') return 'bronze';
+  return getTierForRP(rp).tier;
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function DuelDetailScreen() {
@@ -91,6 +136,17 @@ export default function DuelDetailScreen() {
   const [duel, setDuel] = useState<DuelDoc | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  // Show result overlay once on first view of a completed duel
+  const resultSeenRef = useRef(false);
+  const [showResult, setShowResult] = useState(true);
+
+  const dismissResult = useCallback(() => {
+    resultSeenRef.current = true;
+    setShowResult(false);
+  }, []);
+
+  // useDuels provides completedDuels for win-streak computation
+  const { completedDuels } = useDuels();
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
@@ -105,6 +161,8 @@ export default function DuelDetailScreen() {
   useFocusEffect(
     useCallback(() => {
       load();
+      // Don't re-show result overlay if already dismissed this session
+      if (resultSeenRef.current) setShowResult(false);
     }, [load]),
   );
 
@@ -179,14 +237,43 @@ export default function DuelDetailScreen() {
   const opponentPct = progressPercent(duel.opponentProgress, totalProgress || 1);
 
   const isWinner = (uid: string) => duel.status === 'completed' && duel.winnerId === uid;
-  const isTie = duel.status === 'completed' && duel.winnerId === null;
+  const isTie = duel.status === 'completed' && !duel.winnerId;
 
   const metricLabel = METRIC_LABELS[duel.metric];
   const metricIcon = METRIC_ICONS[duel.metric];
+  const metricUnit = METRIC_UNITS[duel.metric];
 
   const myProgress = iAmChallenger ? duel.challengerProgress : duel.opponentProgress;
   const theirProgress = iAmChallenger ? duel.opponentProgress : duel.challengerProgress;
   const theirName = iAmChallenger ? duel.opponentUsername : duel.challengerUsername;
+
+  // Tiers — DuelDoc does not carry RP; default both to bronze
+  const challengerTier = resolveRankTier(undefined);
+  const opponentTier = resolveRankTier(undefined);
+
+  // Win streak computed from all completed duels
+  const winStreak = computeWinStreak(completedDuels, myUid);
+
+  // DuelResultScreen: map winnerId to 'challenger' | 'opponent' | 'tie'
+  const resultWinner: 'challenger' | 'opponent' | 'tie' = isTie
+    ? 'tie'
+    : duel.winnerId === duel.challengerUid
+    ? 'challenger'
+    : 'opponent';
+
+  // Which side am I on?
+  const isMe: 'challenger' | 'opponent' = iAmChallenger ? 'challenger' : 'opponent';
+
+  // Revenge handler: navigate to opponent's compare page
+  const handleRevenge = () => {
+    router.push({
+      pathname: '/(tabs)/compete/compare',
+      params: {
+        opponentId: iAmChallenger ? duel.opponentUid : duel.challengerUid,
+        opponentName: theirName,
+      },
+    });
+  };
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -201,14 +288,19 @@ export default function DuelDetailScreen() {
                 {duel.challengerUsername.charAt(0).toUpperCase()}
               </Text>
             </View>
-            <Text
-              style={[styles.playerName, isWinner(duel.challengerUid) && styles.winnerName]}
-              numberOfLines={1}
-            >
-              {duel.challengerUsername}
-              {duel.challengerUid === myUid ? ' (You)' : ''}
-            </Text>
-            {/* Vertical progress bar */}
+            <View style={styles.playerNameRow}>
+              <Text
+                style={[styles.playerName, isWinner(duel.challengerUid) && styles.winnerName]}
+                numberOfLines={1}
+              >
+                {duel.challengerUsername}
+                {duel.challengerUid === myUid ? ' (You)' : ''}
+              </Text>
+              {duel.challengerUid === myUid && winStreak >= 3 && (
+                <WinStreakBadge streak={winStreak} style={styles.streakBadge} />
+              )}
+            </View>
+            {/* Vertical progress bar — kept for the versus panel visual */}
             <View style={styles.progressBarWrap}>
               <View style={styles.progressTrack}>
                 <View
@@ -239,13 +331,18 @@ export default function DuelDetailScreen() {
                 {duel.opponentUsername.charAt(0).toUpperCase()}
               </Text>
             </View>
-            <Text
-              style={[styles.playerName, isWinner(duel.opponentUid) && styles.winnerName]}
-              numberOfLines={1}
-            >
-              {duel.opponentUsername}
-              {duel.opponentUid === myUid ? ' (You)' : ''}
-            </Text>
+            <View style={styles.playerNameRow}>
+              <Text
+                style={[styles.playerName, isWinner(duel.opponentUid) && styles.winnerName]}
+                numberOfLines={1}
+              >
+                {duel.opponentUsername}
+                {duel.opponentUid === myUid ? ' (You)' : ''}
+              </Text>
+              {duel.opponentUid === myUid && winStreak >= 3 && (
+                <WinStreakBadge streak={winStreak} style={styles.streakBadge} />
+              )}
+            </View>
             <View style={styles.progressBarWrap}>
               <View style={styles.progressTrack}>
                 <View
@@ -280,10 +377,25 @@ export default function DuelDetailScreen() {
         {/* ── Status content ────────────────────────────────────────────── */}
         <View style={styles.statusSection}>
           {duel.status === 'active' && (
-            <View style={styles.inProgressCard}>
-              <Ionicons name="pulse-outline" size={20} color={GREEN} />
-              <Text style={styles.inProgressText}>Duel in progress...</Text>
-            </View>
+            <>
+              {/* DuelProgressBar — animated tug-of-war visualization */}
+              <View style={styles.tugCard}>
+                <DuelProgressBar
+                  challengerProgress={duel.challengerProgress}
+                  opponentProgress={duel.opponentProgress}
+                  challengerName={duel.challengerUsername}
+                  opponentName={duel.opponentUsername}
+                  challengerTier={challengerTier}
+                  opponentTier={opponentTier}
+                  targetValue={0}
+                  unit={metricUnit}
+                />
+              </View>
+              <View style={styles.inProgressCard}>
+                <Ionicons name="pulse-outline" size={20} color={GREEN} />
+                <Text style={styles.inProgressText}>Duel in progress...</Text>
+              </View>
+            </>
           )}
 
           {isPendingForMe && (
@@ -362,7 +474,7 @@ export default function DuelDetailScreen() {
               style={styles.compareLink}
               onPress={() =>
                 router.push({
-                  pathname: '/(tabs)/dashboard/compare',
+                  pathname: '/(tabs)/compete/compare',
                   params: {
                     opponentId: iAmChallenger ? duel.opponentUid : duel.challengerUid,
                     opponentName: theirName,
@@ -385,6 +497,23 @@ export default function DuelDetailScreen() {
         </View>
 
       </ScrollView>
+
+      {/* ── DuelResultScreen overlay — shown once on first view of completed duel ── */}
+      {duel.status === 'completed' && showResult && (
+        <DuelResultScreen
+          winner={resultWinner}
+          challengerName={duel.challengerUsername}
+          opponentName={duel.opponentUsername}
+          challengerTier={challengerTier}
+          opponentTier={opponentTier}
+          challengerValue={duel.challengerProgress}
+          opponentValue={duel.opponentProgress}
+          unit={metricUnit}
+          isMe={isMe}
+          onComplete={dismissResult}
+          onRevenge={handleRevenge}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -427,6 +556,13 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     gap: 6,
+  },
+  playerNameRow: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  streakBadge: {
+    marginTop: 2,
   },
   playerAvatar: {
     width: 48,
@@ -531,6 +667,14 @@ const styles = StyleSheet.create({
   statusSection: {
     paddingHorizontal: 16,
     paddingTop: 12,
+    gap: 10,
+  },
+  tugCard: {
+    backgroundColor: SURFACE,
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   inProgressCard: {
     flexDirection: 'row',
@@ -579,7 +723,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   acceptButtonText: {
-    color: '#FFF',
+    color: TEXT_PRIMARY,
     fontSize: 14,
     fontWeight: '700',
   },

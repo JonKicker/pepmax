@@ -12,7 +12,7 @@
  *
  * Navigated to from Dashboard → "Leaderboards" entry card.
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -33,8 +33,11 @@ import { useAuth } from '../../../src/contexts/AuthContext';
 import { useFriends } from '../../../src/hooks/useFriends';
 import { useLeaderboard } from '../../../src/hooks/useLeaderboard';
 import { LeaderboardRow } from '../../../src/components/social/LeaderboardRow';
+import { LeaderboardPodium } from '../../../src/components/pvp/LeaderboardPodium';
+import { YourRankBanner } from '../../../src/components/pvp/YourRankBanner';
 import { LEADERBOARD_CATEGORIES, getCategoryConfig } from '../../../src/utils/leaderboardCategories';
 import { analytics, AnalyticsEvent } from '../../../src/services/analytics';
+import { mapLegacyToV2 } from '../../../src/utils/rankTierV2';
 import * as Haptics from 'expo-haptics';
 import type {
   LeaderboardCategory,
@@ -103,9 +106,12 @@ export default function LeaderboardsScreen() {
   const { currentUser } = useAuth();
   const friendsHook = useFriends();
 
-  const leaderboard = useLeaderboard({
-    friendUids: friendsHook.friends.map((f) => f.friendUid),
-  });
+  const friendUids = useMemo(
+    () => friendsHook.friends.map((f) => f.friendUid),
+    [friendsHook.friends],
+  );
+
+  const leaderboard = useLeaderboard({ friendUids });
 
   const {
     entries,
@@ -140,36 +146,71 @@ export default function LeaderboardsScreen() {
 
   const categoryConfig = getCategoryConfig(category);
 
-  // Footer: user's rank (global only) or their position in list (friends/crew)
-  const renderFooter = () => {
-    if (loading) return null;
+  // ── Podium: top-3 entries mapped to PodiumEntry shape ────────────────────
+  const showPodium = entries.length >= 3;
+  const podiumEntries = showPodium
+    ? entries.slice(0, 3).map((e) => ({
+        rank: e.rank ?? 0,
+        username: e.username,
+        value: e.value ?? 0,
+        tier: mapLegacyToV2(e.tier),
+      }))
+    : [];
 
-    if (scope === 'global' && userRank) {
-      const topPercent = Math.max(1, 100 - userRank.percentile);
-      return (
-        <View style={[styles.rankFooter, { backgroundColor: Colors.social + '18', borderColor: Colors.social + '44' }]}>
-          <Ionicons name="ribbon-outline" size={16} color={Colors.social} />
-          <Text style={[styles.rankFooterText, { color: Colors.social }]}>
-            You are ranked #{userRank.rank} of {userRank.totalParticipants.toLocaleString()} — Top {topPercent}%
-          </Text>
-        </View>
-      );
+  // FlatList data: skip top-3 when podium is visible to avoid duplication
+  const listData = showPodium ? entries.slice(3) : entries;
+
+  // ── YourRankBanner: derive rank/tier/next-opponent data ─────────────────
+  const yourRankBanner = (() => {
+    // Global scope: use userRank from the hook
+    if (scope === 'global' && userRank && currentUser) {
+      const userEntry = entries.find((e) => e.uid === currentUser.uid);
+      const userTier = userEntry ? mapLegacyToV2(userEntry.tier) : 'bronze';
+
+      // Next opponent: the entry directly above the current user in the list
+      const userListRank = userEntry?.rank ?? userRank.rank;
+      const nextEntry = entries.find((e) => e.rank === userListRank - 1);
+      const pointsToNext =
+        nextEntry && userEntry
+          ? Math.max(0, (nextEntry.value ?? 0) - (userEntry.value ?? 0))
+          : undefined;
+
+      return {
+        rank: userRank.rank,
+        total: userRank.totalParticipants,
+        tier: userTier,
+        nextUsername: nextEntry?.username,
+        pointsToNext,
+        unit: categoryConfig.unit,
+      };
     }
 
+    // Friends / crew scope: derive from entries list
     if ((scope === 'friends' || scope === 'crew') && currentUser) {
       const userEntry = entries.find((e) => e.uid === currentUser.uid);
       if (userEntry?.rank) {
-        return (
-          <View style={[styles.rankFooter, { backgroundColor: Colors.social + '18', borderColor: Colors.social + '44' }]}>
-            <Ionicons name="ribbon-outline" size={16} color={Colors.social} />
-            <Text style={[styles.rankFooterText, { color: Colors.social }]}>
-              You are ranked #{userEntry.rank} among {totalParticipants}
-            </Text>
-          </View>
-        );
+        const userTier = mapLegacyToV2(userEntry.tier);
+        const nextEntry = entries.find((e) => e.rank === userEntry.rank! - 1);
+        const pointsToNext =
+          nextEntry
+            ? Math.max(0, (nextEntry.value ?? 0) - (userEntry.value ?? 0))
+            : undefined;
+        return {
+          rank: userEntry.rank,
+          total: totalParticipants,
+          tier: userTier,
+          nextUsername: nextEntry?.username,
+          pointsToNext,
+          unit: categoryConfig.unit,
+        };
       }
     }
 
+    return null;
+  })();
+
+  // Footer: empty state only (rank info moved to sticky YourRankBanner)
+  const renderFooter = () => {
     if (!loading && entries.length === 0) {
       return (
         <View style={styles.emptyContainer}>
@@ -183,13 +224,13 @@ export default function LeaderboardsScreen() {
         </View>
       );
     }
-
     return null;
   };
 
   return (
     <GlassBackground>
     <View style={styles.container}>
+
 
       {/* Category pills */}
       <ScrollView
@@ -218,9 +259,9 @@ export default function LeaderboardsScreen() {
               <Ionicons
                 name={cfg.icon as React.ComponentProps<typeof Ionicons>['name']}
                 size={14}
-                color={isActive ? '#fff' : colors.textSecondary}
+                color={isActive ? Colors.light.background : colors.textSecondary}
               />
-              <Text style={[styles.pillLabel, { color: isActive ? '#fff' : colors.textSecondary }]}>
+              <Text style={[styles.pillLabel, { color: isActive ? Colors.light.background : colors.textSecondary }]}>
                 {cfg.label}
               </Text>
             </TouchableOpacity>
@@ -247,7 +288,7 @@ export default function LeaderboardsScreen() {
               <Text
                 style={[
                   styles.segmentLabel,
-                  { color: scope === s.key ? '#fff' : colors.textSecondary },
+                  { color: scope === s.key ? Colors.light.background : colors.textSecondary },
                 ]}
               >
                 {s.label}
@@ -273,7 +314,7 @@ export default function LeaderboardsScreen() {
               <Text
                 style={[
                   styles.segmentLabel,
-                  { color: timeframe === tf.key ? '#fff' : colors.textSecondary },
+                  { color: timeframe === tf.key ? Colors.light.background : colors.textSecondary },
                 ]}
               >
                 {tf.label}
@@ -290,9 +331,14 @@ export default function LeaderboardsScreen() {
         </ScrollView>
       ) : (
         <FlatList
-          data={entries}
+          data={listData}
           keyExtractor={(item) => item.uid}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, yourRankBanner ? styles.listWithBanner : undefined]}
+          ListHeaderComponent={
+            showPodium ? (
+              <LeaderboardPodium entries={podiumEntries} unit={categoryConfig.unit} />
+            ) : null
+          }
           renderItem={({ item }) => (
             <TouchableOpacity
               accessibilityRole="button"
@@ -308,7 +354,7 @@ export default function LeaderboardsScreen() {
                       text: 'View Profile',
                       onPress: () =>
                         router.push({
-                          pathname: '/(tabs)/dashboard/friend-profile',
+                          pathname: '/(tabs)/compete/friend-profile',
                           params: { uid: item.uid },
                         }),
                     },
@@ -316,7 +362,7 @@ export default function LeaderboardsScreen() {
                       text: 'Compare with Me',
                       onPress: () =>
                         router.push({
-                          pathname: '/(tabs)/dashboard/compare',
+                          pathname: '/(tabs)/compete/compare',
                           params: { opponentId: item.uid, opponentName: item.username },
                         }),
                     },
@@ -343,6 +389,18 @@ export default function LeaderboardsScreen() {
             />
           }
           showsVerticalScrollIndicator={false}
+        />
+      )}
+
+      {/* Sticky rank banner — positioned outside FlatList so it always visible */}
+      {yourRankBanner && !loading && (
+        <YourRankBanner
+          rank={yourRankBanner.rank}
+          total={yourRankBanner.total}
+          tier={yourRankBanner.tier}
+          nextUsername={yourRankBanner.nextUsername}
+          pointsToNext={yourRankBanner.pointsToNext}
+          unit={yourRankBanner.unit}
         />
       )}
     </View>
@@ -389,6 +447,7 @@ const styles = StyleSheet.create({
   },
   segmentLabel: { fontSize: 12, fontWeight: '600' },
   list: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 40 },
+  listWithBanner: { paddingBottom: 120 },
   rankFooter: {
     flexDirection: 'row',
     alignItems: 'center',

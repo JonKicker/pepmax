@@ -12,7 +12,7 @@
  * Intentionally displays no PII — no email, no real name.
  */
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
 import { Colors } from '../../constants/theme';
@@ -83,6 +83,20 @@ export function UserProfileCard({ profile, rank }: Props) {
             <Text style={[styles.displayHandle, { color: colors.textSecondary }]}>
               {profile.displayHandle}
             </Text>
+          )}
+          {!!profile.instagramHandle && (
+            <TouchableOpacity
+              onPress={() =>
+                Linking.openURL(`https://instagram.com/${profile.instagramHandle}`)
+              }
+              style={styles.instagramRow}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="logo-instagram" size={12} color={colors.textSecondary} />
+              <Text style={[styles.instagramHandle, { color: colors.textSecondary }]}>
+                @{profile.instagramHandle}
+              </Text>
+            </TouchableOpacity>
           )}
         </View>
 
@@ -252,6 +266,15 @@ const styles = StyleSheet.create({
   },
   displayHandle: {
     fontSize: 13,
+  },
+  instagramRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  instagramHandle: {
+    fontSize: 12,
   },
   tierBadge: {
     flexDirection: 'row',

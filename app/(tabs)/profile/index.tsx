@@ -46,6 +46,8 @@ import * as StoreReview from 'expo-store-review';
 import * as MailComposer from 'expo-mail-composer';
 import * as WebBrowser from 'expo-web-browser';
 import { updateDocument, COLLECTIONS } from '../../../src/services/firebase/firestore';
+import { updatePublicProfile } from '../../../src/services/publicProfileService';
+import { sanitizeInstagramHandle, isValidInstagramHandle } from '../../../src/utils/instagramValidation';
 import {
   requestPermissions,
   cancelAllDoseReminders,
@@ -114,6 +116,12 @@ export default function SettingsScreen() {
   const [bioEditing, setBioEditing] = useState(false);
   const [draftBio, setDraftBio] = useState('');
   const [savingBio, setSavingBio] = useState(false);
+
+  // ── Instagram editing ────────────────────────────────────────────────────────
+  const [instagramEditing, setInstagramEditing] = useState(false);
+  const [draftInstagram, setDraftInstagram] = useState('');
+  const [savingInstagram, setSavingInstagram] = useState(false);
+  const [instagramError, setInstagramError] = useState('');
 
   // ── Body stats editing ──────────────────────────────────────────────────────
   const [statsEditing, setStatsEditing] = useState(false);
@@ -257,6 +265,53 @@ export default function SettingsScreen() {
     updateProfile({ bio: trimmed });
     analytics.track(AnalyticsEvent.BIO_UPDATED, { length: trimmed.length });
     setBioEditing(false);
+  }
+
+  // ── Instagram handlers ───────────────────────────────────────────────────
+
+  function startInstagramEdit() {
+    setDraftInstagram(userProfile!.instagramHandle ?? '');
+    setInstagramError('');
+    setInstagramEditing(true);
+  }
+
+  async function saveInstagram() {
+    const sanitized = sanitizeInstagramHandle(draftInstagram);
+
+    // Clearing the handle is always allowed
+    if (sanitized === '') {
+      setSavingInstagram(true);
+      const result = await updateDocument(COLLECTIONS.PROFILE, 'data', { instagramHandle: '' });
+      if (!result.error) {
+        await updatePublicProfile({ instagramHandle: '' });
+        updateProfile({ instagramHandle: '' });
+        analytics.track(AnalyticsEvent.INSTAGRAM_UNLINKED, {});
+      } else {
+        Alert.alert('Save failed', 'Could not remove your Instagram. Please try again.');
+      }
+      setSavingInstagram(false);
+      setInstagramEditing(false);
+      return;
+    }
+
+    if (!isValidInstagramHandle(sanitized)) {
+      setInstagramError('Invalid handle. Use letters, numbers, underscores, or periods (1–30 chars).');
+      return;
+    }
+
+    setSavingInstagram(true);
+    setInstagramError('');
+    const result = await updateDocument(COLLECTIONS.PROFILE, 'data', { instagramHandle: sanitized });
+    if (result.error) {
+      Alert.alert('Save failed', 'Could not save your Instagram handle. Please try again.');
+      setSavingInstagram(false);
+      return;
+    }
+    await updatePublicProfile({ instagramHandle: sanitized });
+    updateProfile({ instagramHandle: sanitized });
+    analytics.track(AnalyticsEvent.INSTAGRAM_LINKED, { handle: sanitized });
+    setSavingInstagram(false);
+    setInstagramEditing(false);
   }
 
   // ── Name handlers ────────────────────────────────────────────────────────
@@ -711,6 +766,44 @@ export default function SettingsScreen() {
           <TouchableOpacity onPress={startBioEdit}>
             <Text style={[styles.bioText, { color: userProfile.bio ? colors.textPrimary : colors.textSecondary }]}>
               {userProfile.bio || 'Add a short bio'}
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Instagram section */}
+        {instagramEditing ? (
+          <View style={styles.bioEditBlock}>
+            <View style={styles.instagramInputRow}>
+              <Ionicons name="logo-instagram" size={18} color={Colors.accent} style={styles.instagramIcon} />
+              <TextInput
+                style={[styles.instagramInput, { color: colors.textPrimary, borderColor: instagramError ? '#E53935' : colors.border, backgroundColor: colors.background }]}
+                value={draftInstagram}
+                onChangeText={(t) => { setDraftInstagram(t); setInstagramError(''); }}
+                placeholder="your_handle"
+                placeholderTextColor={colors.textSecondary}
+                autoCapitalize="none"
+                autoCorrect={false}
+                maxLength={31}
+                autoFocus
+              />
+            </View>
+            {!!instagramError && (
+              <Text style={styles.instagramError}>{instagramError}</Text>
+            )}
+            <View style={styles.nameEditBtns}>
+              <TouchableOpacity onPress={() => { setInstagramEditing(false); setInstagramError(''); }} style={styles.cancelBtn}>
+                <Text style={[styles.cancelBtnText, { color: colors.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={saveInstagram} style={[styles.saveBtn, { backgroundColor: Colors.accent }]} disabled={savingInstagram}>
+                {savingInstagram ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.saveBtnText}>Save</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <TouchableOpacity onPress={startInstagramEdit} style={styles.instagramRow}>
+            <Ionicons name="logo-instagram" size={16} color={userProfile.instagramHandle ? Colors.accent : colors.textSecondary} />
+            <Text style={[styles.instagramRowText, { color: userProfile.instagramHandle ? colors.textPrimary : colors.textSecondary }]}>
+              {userProfile.instagramHandle ? `@${userProfile.instagramHandle}` : 'Link Instagram'}
             </Text>
           </TouchableOpacity>
         )}
@@ -1216,6 +1309,36 @@ const styles = StyleSheet.create({
   charCount: { fontSize: 11, alignSelf: 'flex-end' },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   badgeText: { fontSize: 12, fontWeight: '700' },
+
+  // Instagram
+  instagramRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  instagramRowText: {
+    fontSize: 14,
+  },
+  instagramInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  instagramIcon: {
+    marginTop: 1,
+  },
+  instagramInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+  },
+  instagramError: {
+    fontSize: 12,
+    color: '#E53935',
+  },
 
   // Reminder expander
   reminderExpander: {

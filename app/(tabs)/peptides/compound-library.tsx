@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import {
   SafeAreaView,
   SectionList,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -232,12 +231,7 @@ export default function CompoundLibraryScreen() {
         </View>
 
         {/* Category filter chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipList}
-          keyboardShouldPersistTaps="handled"
-        >
+        <View style={styles.chipList}>
           <AnimatedPressable
             onPress={() => setSelectedGroup('All')}
             scaleValue={0.94}
@@ -290,7 +284,7 @@ export default function CompoundLibraryScreen() {
               </AnimatedPressable>
             );
           })}
-        </ScrollView>
+        </View>
 
         {/* Compound list */}
         <SectionList
@@ -359,6 +353,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 8,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
   },
   chip: {
     borderWidth: 1,

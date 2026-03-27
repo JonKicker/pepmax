@@ -72,7 +72,7 @@ export default function CreateCrewScreen() {
       analytics.track(AnalyticsEvent.CREW_CREATED);
       // Navigate to the new crew's detail screen
       router.replace({
-        pathname: '/(tabs)/dashboard/crew-detail',
+        pathname: '/(tabs)/compete/crew-detail',
         params: { crewId: result.data! },
       });
     }

@@ -270,7 +270,7 @@ export default function CreateDuelScreen() {
         durationWeeks: selectedDuration,
       });
       router.replace({
-        pathname: '/(tabs)/dashboard/duel-detail',
+        pathname: '/(tabs)/compete/duel-detail',
         params: { duelId: result.data },
       });
     } finally {

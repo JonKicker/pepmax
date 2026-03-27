@@ -4,6 +4,181 @@
 
 ---
 
+## Wire Orphaned Components & Rebuild Compete Hub
+
+**Status:** ✅ Ray-approved (2026-03-27, 4 phases — A: 1 cycle, B: 1 cycle conditional, C: 2 cycles conditional, D: 2 cycles conditional)
+**Date:** 2026-03-27
+
+### What Was Built
+
+**Phase A — Mount Providers at Root**
+- `app/_layout.tsx` — Mounted `GamificationProvider` (XP toasts, level-up modals) and `CelebrationOverlay` (particle celebrations) at app root. Both systems now fire globally across all screens.
+- Created `CelebrationLayer` bridge component using `useCelebration()` hook.
+
+**Phase B — Rebuild Compete Hub**
+- `app/(tabs)/compete/index.tsx` — Complete rewrite from 4 sections to 7 sections:
+  - Hero (existing + RankProgressBar compact)
+  - Daily Quests (DailyQuestsCard wired to useQuests)
+  - Active Duels (useDuels hook, inline duel cards with progress)
+  - Quick Actions grid (existing)
+  - Achievements Progress (X/15 unlocked bar)
+  - Recent XP Feed (last 3 entries with module dots)
+  - Season/League (existing + EventBanner TODO)
+
+**Phase C — Wire PVP into Duel Detail**
+- `app/(tabs)/compete/duel-detail.tsx` — Wired 3 orphaned components:
+  - `DuelProgressBar` for active duels (tug-of-war visualization)
+  - `DuelResultScreen` overlay for completed duels (victory/defeat reveal + celebration trigger)
+  - `WinStreakBadge` next to user's name (flame/skull at 3+ streak)
+  - Result overlay guarded by ref to prevent re-fire on navigation focus
+
+**Phase D — Wire PVP into Leaderboards**
+- `app/(tabs)/compete/leaderboards.tsx` — Wired 2 orphaned components:
+  - `LeaderboardPodium` as FlatList header (Olympic-style top-3, entries.slice(3) for rest)
+  - `YourRankBanner` as sticky bottom banner (rank, percentile, next opponent)
+
+### Orphaned Components Now Wired
+| Component | Target Screen |
+|-----------|--------------|
+| CelebrationOverlay | Root layout |
+| RankProgressBar | Compete hub |
+| DailyQuestsCard | Compete hub |
+| DuelProgressBar | Duel detail |
+| DuelResultScreen | Duel detail |
+| WinStreakBadge | Duel detail |
+| LeaderboardPodium | Leaderboards |
+| YourRankBanner | Leaderboards |
+
+### Ray's Follow-Up Items (non-blocking)
+1. `#fff` badge text in hub quickBadgeText matches existing DailyQuestsCard convention — tracked for theme sweep
+2. `Colors.recovery ?? Colors.accent` fallback in hub is dead code (Colors.recovery always defined)
+3. `as any` route casts in hub for strict Expo Router typing — track for cleanup
+4. `YourRankBanner` ACCENT constant (#6C5CE7) should import Colors.accent instead of hardcoding
+5. Stale comment in GamificationContext.tsx says "outside PremiumProvider" but now inside
+
+### Still Orphaned (tracked for future work)
+- VSScreen, CompareBattle, CrewVsCrewCard, RankUpCeremony, RankChangeIndicator, ShareCardRenderer, ChallengeDifficultyBadge, EventBanner
+- CelebrationOverlay particle presets: dailyQuest(), seasonReward(), elite(), perfectWeek() — never triggered
+- Animation components: AnimatedToggle, MorphButton, SuccessBurst
+- voice-log.tsx not registered in nutrition _layout.tsx
+
+---
+
+## Compete Tab — Gamification Hub
+
+**Status:** ✅ Ray-approved (2026-03-27, Plan: 1 cycle, Build: 2 cycles conditional — 3 mandatory fixes applied)
+**Date:** 2026-03-27
+
+### What Was Built
+
+Dedicated "Compete" tab replacing the Profile tab in the tab bar. Consolidates all 17 gamification, social, and PVP screens that were previously buried as sub-screens inside the Dashboard tab.
+
+**Files created:**
+- `app/(tabs)/compete/_layout.tsx` — Stack navigator with 18 screens
+- `app/(tabs)/compete/index.tsx` — Compete Hub screen (hero section with level/rank/XP, 2x2 quick actions grid, season/league cards, active challenges preview)
+
+**Files moved (dashboard → compete, routes updated):**
+- `xp-hub.tsx`, `trophy-case.tsx`, `leaderboards.tsx`, `challenges.tsx`, `challenge-detail.tsx`, `create-duel.tsx`, `duel-detail.tsx`, `social.tsx`, `friends.tsx`, `friend-profile.tsx`, `friend-search.tsx`, `crews.tsx`, `crew-detail.tsx`, `create-crew.tsx`, `join-crew.tsx`, `compare.tsx`, `share-preview.tsx`
+
+**Files modified:**
+- `app/(tabs)/_layout.tsx` — Added Compete tab (trophy icon), Profile tab hidden with `href: null`
+- `app/(tabs)/dashboard/_layout.tsx` — Removed 17 moved screen entries
+- `app/(tabs)/dashboard/index.tsx` — GamificationCard → Compete tab, Social/Challenges links → Compete routes, Settings gear → Profile
+- `src/components/social/CompareButton.tsx` — Route updated to Compete
+
+### Architecture Decisions
+- Profile tab hidden via `href: null` (not deleted) — all profile routes still work via `router.push`
+- Dashboard settings gear now navigates to Profile (settings screen)
+- DailyQuestsCard remains on Dashboard as daily engagement driver
+- GamificationCard remains on Dashboard but navigates to Compete tab
+- Community Library stays in Dashboard (content, not competition)
+- Hub derives rank tier from RP via `getTierForRP()` (server-authoritative)
+- No new Firestore reads — all data through existing hooks
+
+### Ray's Follow-Up Items (non-blocking)
+1. Section label `Text` components missing `accessibilityRole="header"` for screen readers
+2. Tab bar has 6 visible tabs — monitor for crowding on smaller phones (iPhone SE)
+3. `crewsHook` destructured but only used for count — could be simplified
+
+---
+
+## Bug Fix — Leaderboard & Community Library Infinite Re-render Loops
+
+**Status:** ✅ Ray-approved (2026-03-27, Plan: 1 cycle conditional, Build: 1 cycle conditional)
+**Date:** 2026-03-27
+
+### What Was Fixed
+
+**Bug 1 — Leaderboard infinite loop:** `friendsHook.friends.map()` created a new array on every render, which destabilized `useLeaderboard`'s `refresh` callback (it depended on `options.friendUids`), which triggered `useFocusEffect` on every render, which called `refresh()`, which set state, causing another render — infinite loop.
+
+**Bug 2 — Community library flicker:** When `queryTemplates` failed (error or null data), `hasMore` was never set to `false`, so FlatList's `onEndReached` kept calling `loadMore`, which restarted the fetch cycle — infinite retry loop with loading skeleton flickering.
+
+### Files Modified
+- `app/(tabs)/dashboard/leaderboards.tsx` — `useMemo` wrapper for `friendUids` array
+- `src/hooks/useLeaderboard.ts` — `optionsRef` pattern (read latest options from ref, not deps), removed eslint-disable, added `refresh` to useEffect deps
+- `src/hooks/useCommunityTemplates.ts` — `setHasMore(false)` on error/null-data early return
+
+### Tests: 29 passing
+- `src/__tests__/useLeaderboard.test.ts` (10 tests)
+- `src/__tests__/useCommunityTemplates.test.ts` (19 tests)
+
+### Ray's Follow-Up Items (non-blocking)
+1. `selectedCrewId` in useEffect dep array (line 134 of useLeaderboard.ts) is never read by `refresh` — pre-existing dead dependency
+2. Tests verify logic but use plain JS reimplementation; `renderHook` integration tests deferred (infrastructure not available)
+
+---
+
+## UI Polish — Card Emoji/Icon + Text Formatting Fixes
+
+**Status:** ✅ Ray-approved (2026-03-27, Build: 1 cycle)
+**Date:** 2026-03-27
+
+### What Was Built
+
+Five targeted style fixes for icon/text alignment, chip navigation, and text centering:
+
+1. **Quick action buttons (training + peptides)** — Changed from `flexDirection: 'row'` to `'column'` so icons sit above centered text labels instead of cramped beside them
+2. **Exercise library chips** — Replaced horizontal `ScrollView` with wrapping `View` grid so all 12 muscle groups + 6 categories are visible without scrolling
+3. **Compound library chips** — Same wrapping grid fix for 15 peptide category chips
+4. **FAB "Energy" button** — Added `marginLeft: 2` optical correction on flash icon
+5. **TrainingCard weekly stats** — Added `textAlign: 'center'` to weekNum, weekLabel, dayDotLabel
+
+### Files (0 new, 5 modified)
+
+Modified: `app/(tabs)/training/index.tsx`, `app/(tabs)/peptides/index.tsx`, `app/(tabs)/training/exercises.tsx`, `app/(tabs)/peptides/compound-library.tsx`, `src/components/dashboard/TrainingCard.tsx`
+
+### Key Decisions
+- Style-only changes, zero logic impact
+- ScrollView removed from imports in exercises.tsx and compound-library.tsx (no longer needed)
+- FAB icon nudge uses inline style (not StyleSheet) since it's icon-specific optical correction
+
+---
+
+## Link Instagram — Social Profile Handle
+
+**Status:** ✅ Ray-approved (2026-03-27, Build: 2 cycles conditional — 1 regex fix applied)
+**Date:** 2026-03-27
+
+### What Was Built
+
+Users can link their Instagram handle in Profile Settings. The handle is visible on their public profile and tappable to open Instagram.
+
+**Files created:** `src/utils/instagramValidation.ts`, `src/__tests__/instagramValidation.test.ts`
+**Files modified:** `src/types/profile.ts`, `src/types/social.ts`, `app/(tabs)/profile/index.tsx`, `src/components/social/UserProfileCard.tsx`, `src/services/publicProfileService.ts`, `firestore.rules`, `src/services/analytics.ts`
+**Tests:** 32 tests (`src/__tests__/instagramValidation.test.ts`)
+
+### Key Decisions
+- Handle stored lowercase, @-stripped — sanitize before validate contract
+- Firestore rule enforces 30-char max server-side (defense-in-depth)
+- UserProfileCard renders Instagram row only when handle is truthy
+- Linking.openURL with hardcoded `https://instagram.com/` prefix — no arbitrary URL construction
+
+### Ray's Follow-Up Items (non-blocking)
+- A: Empty string stored on unlink instead of deleteField() — data hygiene
+- B: Firestore rule allows empty string writes — harmless, UI treats "" as no Instagram
+
+---
+
 ## Adaptive Calorie Coaching Upgrade — Nutrition Score V2 + Voice Logging + Enhanced Weekly Check-In
 
 **Status:** ✅ Ray-approved (2026-03-26, Plan: 1 cycle conditional, Build: 2 cycles)

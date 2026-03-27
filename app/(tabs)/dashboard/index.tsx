@@ -277,7 +277,7 @@ export default function DashboardScreen() {
             todayXP={xp.todayXP}
             latestAchievementTitle={latestAchievement}
             loading={xp.loading}
-            onPress={() => router.push('/(tabs)/dashboard/xp-hub')}
+            onPress={() => router.push('/(tabs)/compete')}
           />
         );
       }
@@ -319,7 +319,7 @@ export default function DashboardScreen() {
         <AnimatedPressable
           haptic
           style={styles.settingsBtn}
-          onPress={() => router.push('/(tabs)/dashboard/settings')}
+          onPress={() => router.push('/(tabs)/profile')}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           accessibilityRole="button"
           accessibilityLabel="Settings"
@@ -355,7 +355,7 @@ export default function DashboardScreen() {
         <AnimatedPressable
           haptic
           style={[styles.communityCard, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
-          onPress={() => router.push('/(tabs)/dashboard/social')}
+          onPress={() => router.push('/(tabs)/compete/social')}
           accessibilityRole="button"
           accessibilityLabel="Social Hub — Friends, crews and leaderboards"
         >
@@ -375,7 +375,7 @@ export default function DashboardScreen() {
         <AnimatedPressable
           haptic
           style={[styles.communityCard, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
-          onPress={() => router.push('/(tabs)/dashboard/challenges')}
+          onPress={() => router.push('/(tabs)/compete/challenges')}
           accessibilityRole="button"
           accessibilityLabel="Challenges — Compete with friends and crews"
         >

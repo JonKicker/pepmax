@@ -62,6 +62,11 @@ export function useLeaderboard(options: UseLeaderboardOptions = {}) {
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
+  // Keep options in a ref so refresh can always read the latest values
+  // without needing to be in the dependency array.
+  const optionsRef = useRef<UseLeaderboardOptions>(options);
+  optionsRef.current = options;
+
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
@@ -76,7 +81,7 @@ export function useLeaderboard(options: UseLeaderboardOptions = {}) {
           setTotalParticipants(0);
         }
       } else if (scope === 'friends') {
-        const friendUids = options.friendUids ?? [];
+        const friendUids = optionsRef.current.friendUids ?? [];
         const result = await getFriendsLeaderboard(category, timeframe, friendUids);
         if (!result.error && result.data) {
           setEntries(result.data);
@@ -86,7 +91,7 @@ export function useLeaderboard(options: UseLeaderboardOptions = {}) {
           setTotalParticipants(0);
         }
       } else if (scope === 'crew') {
-        const memberUids = options.crewMemberUids ?? [];
+        const memberUids = optionsRef.current.crewMemberUids ?? [];
         const result = await getCrewLeaderboard(category, timeframe, memberUids);
         if (!result.error && result.data) {
           setEntries(result.data);
@@ -108,7 +113,7 @@ export function useLeaderboard(options: UseLeaderboardOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [category, timeframe, scope, options.friendUids, options.crewMemberUids]);
+  }, [category, timeframe, scope]);
 
   // Refresh on screen focus
   useFocusEffect(
@@ -126,7 +131,7 @@ export function useLeaderboard(options: UseLeaderboardOptions = {}) {
       return; // Skip initial render — useFocusEffect handles first load
     }
     refresh();
-  }, [category, timeframe, scope, selectedCrewId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [category, timeframe, scope, selectedCrewId, refresh]);
 
   // ── Setters that also trigger refresh ────────────────────────────────────
 

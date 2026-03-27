@@ -127,6 +127,7 @@ export type PublicProfileUpdate = Partial<
     | 'featuredStat'
     | 'topAchievementIds'
     | 'leaderboardOptOut'
+    | 'instagramHandle'
   >
 >;
 

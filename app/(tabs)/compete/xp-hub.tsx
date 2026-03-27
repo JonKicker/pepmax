@@ -102,7 +102,7 @@ export default function XPHubScreen() {
       {/* Trophy Case link */}
       <TouchableOpacity
         style={[styles.trophyLink, { backgroundColor: Colors.gold + '18', borderColor: Colors.gold + '44' }]}
-        onPress={() => router.push('/(tabs)/dashboard/trophy-case')}
+        onPress={() => router.push('/(tabs)/compete/trophy-case')}
         activeOpacity={0.7}
       >
         <Ionicons name="trophy-outline" size={20} color={Colors.gold} />

@@ -84,9 +84,18 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="compete"
+        options={{
+          title: 'Compete',
+          tabBarIcon: ({ color, size }) => (
+            <TabIcon name="trophy" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          href: null,
           tabBarIcon: ({ color, size }) => (
             <TabIcon name="person" color={color} size={size} />
           ),

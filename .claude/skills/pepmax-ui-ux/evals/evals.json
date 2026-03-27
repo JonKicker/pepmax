@@ -1,0 +1,23 @@
+{
+  "skill_name": "pepmax-ui-ux",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Build a body weight logging screen for PepMax. It should let the user enter their weight, show their recent weight trend as a chart, and display their current weight prominently. Include a history list of past entries below the chart.",
+      "expected_output": "A complete React Native screen using GlassBackground, GlassCard, proper typography hierarchy with hero number, SkeletonLoader for loading state, empty state handling, and theme-aware styling.",
+      "files": []
+    },
+    {
+      "id": 1,
+      "prompt": "Add a PR celebration modal that pops up when a user hits a new personal record in training. It should show the exercise name, the old PR and the new PR, and feel exciting and premium.",
+      "expected_output": "A modal component with entrance animation, scale/spring effects, confetti or visual flair, proper glass card usage, gold accent color for achievement, haptic feedback, and smooth dismiss.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Create a dashboard card for the peptide module that shows the next scheduled dose with a countdown timer, the compound name, and dosage. If no doses are scheduled, show a helpful empty state.",
+      "expected_output": "A DashboardCard component using peptide accent color, correct icon, proper typography hierarchy with countdown as hero element, GlassCard intensity heavy, empty state with CTA, and chevron navigation.",
+      "files": []
+    }
+  ]
+}

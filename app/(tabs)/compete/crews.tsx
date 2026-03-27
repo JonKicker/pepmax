@@ -100,7 +100,7 @@ export default function CrewsScreen() {
       analytics.track(AnalyticsEvent.CREW_JOINED);
       setInviteCode('');
       router.push({
-        pathname: '/(tabs)/dashboard/crew-detail',
+        pathname: '/(tabs)/compete/crew-detail',
         params: { crewId: result.data! },
       });
     }
@@ -121,7 +121,7 @@ export default function CrewsScreen() {
               borderColor: canCreateMore ? Colors.accent : colors.border,
             },
           ]}
-          onPress={() => router.push('/(tabs)/dashboard/create-crew')}
+          onPress={() => router.push('/(tabs)/compete/create-crew')}
           disabled={!canCreateMore}
           activeOpacity={0.7}
         >
@@ -158,7 +158,7 @@ export default function CrewsScreen() {
               colors={colors}
               onPress={() =>
                 router.push({
-                  pathname: '/(tabs)/dashboard/crew-detail',
+                  pathname: '/(tabs)/compete/crew-detail',
                   params: { crewId: item.id },
                 })
               }

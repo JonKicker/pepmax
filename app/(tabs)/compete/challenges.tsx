@@ -122,14 +122,14 @@ export default function ChallengesHub(): React.ReactElement {
 
   const handleChallengePress = useCallback(
     (challengeId: string) => {
-      router.push(`/(tabs)/dashboard/challenge-detail?challengeId=${challengeId}`);
+      router.push(`/(tabs)/compete/challenge-detail?challengeId=${challengeId}`);
     },
     [router],
   );
 
   const handleDuelPress = useCallback(
     (duelId: string) => {
-      router.push(`/(tabs)/dashboard/duel-detail?duelId=${duelId}`);
+      router.push(`/(tabs)/compete/duel-detail?duelId=${duelId}`);
     },
     [router],
   );
@@ -328,7 +328,7 @@ export default function ChallengesHub(): React.ReactElement {
       {activeTab === 'duels' && (
         <TouchableOpacity
           style={styles.fab}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/dashboard/create-duel'); }}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/(tabs)/compete/create-duel'); }}
           activeOpacity={0.7}
           accessibilityRole="button"
           accessibilityLabel="Create new duel"

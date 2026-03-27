@@ -30,7 +30,7 @@ export function CompareButton({ opponentId, opponentName, opponentAvatar }: Comp
   function handlePress() {
     analytics.track(AnalyticsEvent.COMPARE_INITIATED, { opponentId });
     router.push({
-      pathname: '/(tabs)/dashboard/compare',
+      pathname: '/(tabs)/compete/compare',
       params: { opponentId, opponentName, ...(opponentAvatar ? { opponentAvatar } : {}) },
     });
   }

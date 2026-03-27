@@ -72,6 +72,8 @@ export type PublicProfile = {
   leaderboardOptOut: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  /** Optional Instagram handle — user-provided, max 30 chars, no leading @ */
+  instagramHandle?: string;
   /**
    * RP value for the V2 rank system — written ONLY by Cloud Functions via Admin SDK.
    * Never written by the client. RP is server-authoritative.

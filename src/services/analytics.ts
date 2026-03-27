@@ -10,8 +10,6 @@
  *   import { analytics, AnalyticsEvent } from './analytics';
  *   analytics.track(AnalyticsEvent.WORKOUT_COMPLETED, { duration_minutes: 45 });
  */
-import { Mixpanel } from 'mixpanel-react-native';
-
 // ─── Event name constants ─────────────────────────────────────────────────────
 
 export const AnalyticsEvent = {
@@ -190,6 +188,8 @@ export const AnalyticsEvent = {
   PROFILE_PICTURE_UPLOADED: 'profile_picture_uploaded',
   PROFILE_PICTURE_REMOVED: 'profile_picture_removed',
   BIO_UPDATED: 'bio_updated',
+  INSTAGRAM_LINKED: 'instagram_linked',
+  INSTAGRAM_UNLINKED: 'instagram_unlinked',
   DOSE_REMINDER_TIME_SET: 'dose_reminder_time_set',
   WORKOUT_REMINDER_TIME_SET: 'workout_reminder_time_set',
   REMINDER_OPTIMIZED_TOGGLED: 'reminder_optimized_toggled',
@@ -270,19 +270,10 @@ function stripPII(props: Record<string, unknown>): Record<string, unknown> {
 }
 
 // ─── Singleton ────────────────────────────────────────────────────────────────
+// Mixpanel SDK removed — analytics is no-op until a provider is re-added.
 
-const TOKEN = process.env.EXPO_PUBLIC_MIXPANEL_TOKEN ?? '';
-
-let _mixpanel: Mixpanel | null = null;
-
-function getInstance(): Mixpanel | null {
-  if (__DEV__) return null; // No-op in dev
-  if (!TOKEN) return null;
-  if (!_mixpanel) {
-    _mixpanel = new Mixpanel(TOKEN, /* trackAutomaticEvents */ false);
-    _mixpanel.init();
-  }
-  return _mixpanel;
+function getInstance(): null {
+  return null;
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────

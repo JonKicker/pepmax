@@ -6,7 +6,6 @@ import {
   FlatList,
   TouchableOpacity,
   TextInput,
-  ScrollView,
   ActivityIndicator,
   Alert,
 } from 'react-native';
@@ -178,11 +177,7 @@ export default function ExercisesScreen() {
       </View>
 
       {/* Filter chips */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chipRow}
-      >
+      <View style={styles.chipRow}>
         {MUSCLE_GROUPS.map((m) => {
           const active = selectedMuscles.includes(m);
           return (
@@ -201,13 +196,9 @@ export default function ExercisesScreen() {
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chipRow}
-      >
+      <View style={styles.chipRow}>
         {CATEGORIES.map((c) => {
           const active = selectedCategories.includes(c);
           return (
@@ -231,7 +222,7 @@ export default function ExercisesScreen() {
             <Text style={[styles.chipText, { color: Colors.error }]}>Clear All</Text>
           </TouchableOpacity>
         )}
-      </ScrollView>
+      </View>
 
       {/* Results count */}
       <Text style={[styles.resultCount, { color: colors.textSecondary }]}>
@@ -295,10 +286,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   searchInput: { flex: 1, marginLeft: 8, fontSize: 15 },
-  chipRow: { paddingHorizontal: 16, paddingVertical: 4, gap: 8 },
+  chipRow: { paddingHorizontal: 16, paddingVertical: 6, gap: 8, flexDirection: 'row', flexWrap: 'wrap' },
   chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
   },
