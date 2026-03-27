@@ -13,6 +13,9 @@ import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors } from '../../../src/constants/theme';
 import { getSessionById, getRecentSessions, detectNewPRs, updateCardioSession } from '../../../src/services/cardioService';
 import { getRecovery } from '../../../src/services/recoveryService';
+import { getDoses } from '../../../src/services/peptideService';
+import { getCycles } from '../../../src/services/cycleService';
+import { getRecoveryScoreHistory } from '../../../src/services/recoveryScoreService';
 import { multiplierColor } from '../../../src/utils/recovery';
 import { toLocalDateKey } from '../../../src/utils/nutrition';
 import { useCardioSettings } from '../../../src/hooks/useCardioSettings';
@@ -21,12 +24,18 @@ import {
   formatDistance,
   formatPace,
 } from '../../../src/utils/cardio';
+import { contextualizePerformance } from '../../../src/utils/recoveryPaceCalc';
+import { buildCardioContext } from '../../../src/utils/cardioInsightCalc';
+import { getActivityMeta } from '../../../src/constants/activityRegistry';
 import RouteMap from '../../../src/components/cardio/RouteMap';
 import PRCelebration from '../../../src/components/cardio/PRCelebration';
 import ManualHREntry from '../../../src/components/cardio/ManualHREntry';
 import TimeInZones from '../../../src/components/cardio/TimeInZones';
 import ShareModal from '../../../src/components/cardio/ShareModal';
+import PostRunInsight from '../../../src/components/cardio/PostRunInsight';
+import ElevationProfileChart from '../../../src/components/cardio/ElevationProfileChart';
 import type { CardioSession, CardioPR } from '../../../src/types/cardio';
+import type { CardioContext } from '../../../src/utils/cardioInsightCalc';
 
 // ─── Stat row ─────────────────────────────────────────────────────────────────
 
@@ -40,13 +49,6 @@ function StatRow({ label, value, colors }: { label: string; value: string; color
 }
 
 // ─── Main screen ───────────────────────────────────────────────────────────────
-
-const ACTIVITY_LABELS: Record<string, string> = {
-  run: 'Run',
-  cycle: 'Cycle',
-  walk: 'Walk',
-  swim: 'Swim',
-};
 
 export default function SessionSummaryScreen() {
   const { colors } = useTheme();
@@ -63,6 +65,9 @@ export default function SessionSummaryScreen() {
   const [hrDismissed, setHrDismissed] = useState(false);
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [recoveryMultiplier, setRecoveryMultiplier] = useState<number | null>(null);
+  const [recoveryScore, setRecoveryScore] = useState<number | null>(null);
+  const [recentAvgPace, setRecentAvgPace] = useState<number>(0);
+  const [cardioCtx, setCardioCtx] = useState<CardioContext | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -83,7 +88,59 @@ export default function SessionSummaryScreen() {
         // Fetch recovery multiplier for this session's date
         const sessionDateKey = toLocalDateKey(result.data.startedAt.toDate());
         const recovery = await getRecovery(sessionDateKey);
-        if (recovery.data) setRecoveryMultiplier(recovery.data.recoveryMultiplier);
+        if (recovery.data) {
+          setRecoveryMultiplier(recovery.data.recoveryMultiplier);
+          // recoveryScore may not exist on old docs (legacy recovery format)
+          const score = (recovery.data as any).recoveryScore ?? null;
+          setRecoveryScore(score);
+        }
+
+        // Build cardio context for PostRunInsight
+        if (allResult.data) {
+          const recentCompleted = allResult.data.filter(
+            (s) => s.status === 'completed' && s.averagePace > 0,
+          );
+          if (recentCompleted.length > 0) {
+            const avgPace =
+              recentCompleted.reduce((sum, s) => sum + s.averagePace, 0) /
+              recentCompleted.length;
+            setRecentAvgPace(avgPace);
+          }
+
+          // Fetch peptide context data for peptide-aware insight checks
+          const [dosesResult, cyclesResult, recoveryHistResult] = await Promise.all([
+            getDoses(),
+            getCycles(),
+            getRecoveryScoreHistory(90),
+          ]);
+
+          const doseRecords = (dosesResult.data ?? []).map((d) => ({
+            date: d.timestamp.toDate().toISOString().slice(0, 10),
+            compoundName: d.peptideName,
+          }));
+
+          const cycleInfos = (cyclesResult.data ?? []).map((c) => ({
+            id: c.id,
+            compoundName: c.compoundName,
+            startDate: c.startDate,
+            status: c.status,
+            durationWeeks: c.durationWeeks ?? undefined,
+          }));
+
+          const recoveryDocs = (recoveryHistResult.data ?? []).map((r) => ({
+            dateKey: r.date,
+            score: r.score,
+            zone: 'green' as const, // history endpoint only returns score; zone not needed for HR recovery check
+          }));
+
+          const ctx = buildCardioContext({
+            cardioSessions: allResult.data,
+            doses: doseRecords,
+            cycles: cycleInfos,
+            recoveryDocs,
+          });
+          setCardioCtx(ctx);
+        }
       }
       setLoading(false);
     })();
@@ -136,7 +193,7 @@ export default function SessionSummaryScreen() {
       <View style={styles.header}>
         <View style={[styles.activityBadge, { backgroundColor: Colors.cardio + '1A' }]}>
           <Text style={[styles.activityLabel, { color: Colors.cardio }]}>
-            {ACTIVITY_LABELS[session.activityType] ?? session.activityType}
+            {getActivityMeta(session.activityType).label}
           </Text>
         </View>
         <Text style={[styles.dateText, { color: colors.textSecondary }]}>{date}</Text>
@@ -226,6 +283,38 @@ export default function SessionSummaryScreen() {
         interactive={false}
         style={styles.routeMap}
       />
+
+      {/* Elevation profile chart — only when elevationGain > 5 */}
+      <ElevationProfileChart
+        route={session.route}
+        elevationGain={session.elevationGain}
+        distanceUnit={unit}
+      />
+
+      {/* Recovery-adjusted pace card */}
+      {(() => {
+        const adjusted = contextualizePerformance({
+          pace: session.averagePace,
+          recoveryScore,
+          recentAvgPace,
+        });
+        if (!adjusted) return null;
+        return (
+          <View style={[styles.statsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <StatRow label="Recovery-Adjusted Pace" value={formatPace(adjusted.adjustedPace, unit)} colors={colors} />
+            <View style={{ paddingHorizontal: 16, paddingBottom: 13 }}>
+              <Text style={{ fontSize: 12, color: colors.textSecondary, lineHeight: 17 }}>
+                {adjusted.message}
+              </Text>
+            </View>
+          </View>
+        );
+      })()}
+
+      {/* Post-run insights */}
+      {cardioCtx && (
+        <PostRunInsight context={cardioCtx} />
+      )}
 
       {/* Action buttons */}
       <View style={styles.buttonRow}>

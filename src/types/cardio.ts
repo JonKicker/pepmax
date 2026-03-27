@@ -1,6 +1,17 @@
 import { Timestamp } from 'firebase/firestore';
 
-export type ActivityType = 'run' | 'cycle' | 'walk' | 'swim';
+export type ActivityType =
+  | 'run'
+  | 'cycle'
+  | 'walk'
+  | 'swim'
+  | 'hike'
+  | 'hiit'
+  | 'rowing'
+  | 'yoga'
+  | 'elliptical'
+  | 'stairclimber'
+  | 'custom';
 
 export type DistanceUnit = 'mi' | 'km';
 

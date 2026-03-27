@@ -53,6 +53,18 @@ export type FoodLogEntry = {
   micronutrients?: Micronutrients;
   healthKitUUID?: string;
   createdAt: Timestamp;
+  /** Dietary fiber in grams for the logged serving. Optional — null when not reported. */
+  fiber?: number | null;
+  /**
+   * NOVA food processing group (1-4). 1 = unprocessed, 4 = ultra-processed.
+   * Sourced from Open Food Facts. Null when unavailable.
+   */
+  novaGroup?: number | null;
+  /**
+   * Meal nutrition score (0-100) computed by scoreMealV2 after logging.
+   * Persisted as a fire-and-forget update — may be absent on older entries.
+   */
+  nutritionScore?: number;
 };
 
 export type FavoriteFood = {
@@ -98,6 +110,11 @@ export type FoodNavPayload = {
   foodSource?: FoodSource;
   micronutrients100g?: Micronutrients;
   portions?: FoodPortion[];
+  /**
+   * NOVA food processing group sourced from Open Food Facts (1-4).
+   * Null when unavailable or not an OFF product.
+   */
+  novaGroup?: number | null;
 };
 
 export type FoodSource = 'usda' | 'off';
@@ -151,4 +168,9 @@ export type FoodSearchResult = {
   portions?: FoodPortion[];
   usdaFullDescription?: string;  // original USDA verbose string (for subtitle)
   usdaDataType?: string;         // 'Foundation' | 'SR Legacy' | etc.
+  /**
+   * NOVA food processing group (1-4). 1 = unprocessed, 4 = ultra-processed.
+   * Sourced from Open Food Facts. Null when unavailable or not an OFF product.
+   */
+  novaGroup?: number | null;
 };

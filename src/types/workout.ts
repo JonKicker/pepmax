@@ -14,6 +14,7 @@ export type SessionSet = {
   completed: boolean;
   completedAt: Timestamp | null;
   isPersonalRecord: boolean;
+  setType?: 'normal' | 'warmup' | 'dropset' | 'failure';
 };
 
 export type SessionExercise = {

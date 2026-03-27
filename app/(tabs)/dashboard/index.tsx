@@ -30,12 +30,15 @@ import { OnboardingChecklist } from '../../../src/components/dashboard/Onboardin
 import { GamificationCard } from '../../../src/components/dashboard/GamificationCard';
 import { DailyQuestsCard } from '../../../src/components/dashboard/DailyQuestsCard';
 import { GlassBackground } from '../../../src/components/GlassBackground';
+import { HydrationCard } from '../../../src/components/dashboard/HydrationCard';
+import { SuggestedWorkoutCard } from '../../../src/components/dashboard/SuggestedWorkoutCard';
 
 import { BodyHubHeroCard } from '../../../src/components/dashboard/BodyHubHeroCard';
 import { useBodyHubMuscles } from '../../../src/hooks/useBodyHubMuscles';
 import { useBodyHubInjections } from '../../../src/hooks/useBodyHubInjections';
 import { useBodyHubCardio } from '../../../src/hooks/useBodyHubCardio';
 import { useSmartInsights } from '../../../src/hooks/useSmartInsights';
+import { useWorkoutSuggestion } from '../../../src/hooks/useWorkoutSuggestion';
 import { useXP } from '../../../src/hooks/useXP';
 import { useQuests } from '../../../src/hooks/useQuests';
 import { ACHIEVEMENT_DEFINITIONS } from '../../../src/utils/achievementDefinitions';
@@ -73,6 +76,9 @@ export default function DashboardScreen() {
   const dashboard = useDashboard(userProfile);
   const { data, loading, refreshing, errors, cardOrder, hiddenCards, onboardingDismissed } = dashboard;
   const smartInsights = useSmartInsights(dashboard.data, userProfile);
+  const recoveryZone = data?.recovery?.zone ?? null;
+  const recoveryScore = data?.recovery?.recoveryScore ?? null;
+  const workoutSuggestion = useWorkoutSuggestion(recoveryZone, recoveryScore);
   const xp = useXP();
   const questData = useQuests();
 
@@ -125,6 +131,22 @@ export default function DashboardScreen() {
             colors={colors}
             onCheckIn={() => router.push('/(tabs)/dashboard/morning-check-in')}
             onDetail={() => router.push('/(tabs)/dashboard/recovery-detail')}
+          />
+        );
+      case 'suggestedWorkout':
+        return (
+          <SuggestedWorkoutCard
+            key={cardId}
+            suggestion={workoutSuggestion.suggestion}
+            loading={workoutSuggestion.isLoading}
+            colors={colors}
+            onStartWorkout={(templateId) => {
+              if (templateId) {
+                router.push({ pathname: '/(tabs)/training/session-preview', params: { templateId } });
+              } else {
+                router.push('/(tabs)/training');
+              }
+            }}
           />
         );
       case 'consistency':
@@ -259,6 +281,14 @@ export default function DashboardScreen() {
           />
         );
       }
+      case 'hydration':
+        return (
+          <HydrationCard
+            key={cardId}
+            colors={colors}
+            onPress={() => router.push('/(tabs)/nutrition')}
+          />
+        );
       default:
         return null;
     }

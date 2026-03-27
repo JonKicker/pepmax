@@ -10,6 +10,8 @@ export interface TemplateExercise {
   restSeconds: number;
   notes?: string;
   supersetGroup?: number;
+  setType?: 'normal' | 'warmup' | 'dropset' | 'failure';
+  circuitRounds?: number; // only meaningful on first exercise of a superset group
 }
 
 export interface WorkoutTemplate {

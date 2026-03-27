@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import { AnimatedPressable } from '../../../src/components/AnimatedPressable';
 import { StaggeredList } from '../../../src/components/StaggeredList';
 import { NutritionSkeleton } from '../../../src/components/SkeletonScreen';
 import { useRouter, useFocusEffect, Stack } from 'expo-router';
+import * as Notifications from 'expo-notifications';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Reanimated, {
@@ -28,6 +29,7 @@ import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors, Theme } from '../../../src/constants/theme';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { getTodaysLog, deleteFood, getLogForDate, copyMealsFromDate } from '../../../src/services/nutritionService';
+import { awardXP } from '../../../src/services/gamificationService';
 import {
   getAdaptiveCoachingData,
   runWeeklyCheckIn,
@@ -36,12 +38,20 @@ import {
 } from '../../../src/services/adaptiveCoachingService';
 import { daysUntilNextCheckIn } from '../../../src/utils/expenditureAlgorithm';
 import { toLocalDateKey } from '../../../src/utils/nutrition';
-import { DEFAULT_MEAL_SLOTS } from '../../../src/types/nutrition';
-import type { FoodLogEntry, MealSlotConfig } from '../../../src/types/nutrition';
+import { DEFAULT_MEAL_SLOTS, MEAL_SLOTS } from '../../../src/types/nutrition';
+import type { FoodLogEntry, MealSlotConfig, MealSlot } from '../../../src/types/nutrition';
+import { useMealScores } from '../../../src/hooks/useMealScores';
+import { MealScoreBadge } from '../../../src/components/nutrition/MealScoreBadge';
+import { MealTips } from '../../../src/components/nutrition/MealTips';
+import { DailyNutritionScoreBanner } from '../../../src/components/nutrition/DailyNutritionScoreBanner';
 import type { AdaptiveTargets, AdaptiveTDEEResult, DataReadiness } from '../../../src/types/adaptiveCoaching';
 import WeeklyCheckInModal from '../../../src/components/nutrition/WeeklyCheckInModal';
+import { Glp1ActiveBanner } from '../../../src/components/nutrition/Glp1ActiveBanner';
+import { ProteinFloorWarning } from '../../../src/components/nutrition/ProteinFloorWarning';
+import { useGlp1Nutrition } from '../../../src/hooks/useGlp1Nutrition';
 import { GlassBackground } from '../../../src/components/GlassBackground';
 import { pushNutritionToWatch } from '../../../src/utils/watchSync';
+import { WaterTracker } from '../../../src/components/nutrition/WaterTracker';
 
 // ─── Calorie Ring ─────────────────────────────────────────────────────────────
 
@@ -271,6 +281,8 @@ function MealSection({
   onDelete,
   onAddFood,
   colors,
+  mealScore,
+  mealTips,
 }: {
   slotId: string;
   label: string;
@@ -278,6 +290,8 @@ function MealSection({
   onDelete: (id: string, name: string) => void;
   onAddFood: (slotId: string) => void;
   colors: Theme['colors'];
+  mealScore?: number;
+  mealTips?: string[];
 }) {
   const [expanded, setExpanded] = useState(true);
   const totalCal = entries.reduce((s, e) => s + e.calories, 0);
@@ -301,6 +315,10 @@ function MealSection({
         <Text style={[styles.mealCal, { color: entries.length ? Colors.nutrition : colors.textSecondary }]}>
           {entries.length ? `${Math.round(totalCal)} kcal` : '—'}
         </Text>
+        {/* Per-meal score badge — only shown for scored default slots with entries */}
+        {mealScore !== undefined && entries.length > 0 && (
+          <MealScoreBadge score={mealScore} size="sm" />
+        )}
       </TouchableOpacity>
 
       {/* Body */}
@@ -314,6 +332,10 @@ function MealSection({
             entries.map((e) => (
               <SwipeableFoodItem key={e.id} entry={e} onDelete={onDelete} colors={colors} />
             ))
+          )}
+          {/* Meal tips — shown below food list when a score is available */}
+          {mealScore !== undefined && entries.length > 0 && mealTips && mealTips.length > 0 && (
+            <MealTips tips={mealTips} score={mealScore} colors={colors} />
           )}
           {/* Add button (not shown in "Other" orphan section) */}
           {slotId !== '__other__' && (
@@ -519,6 +541,13 @@ export default function NutritionScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showCopyModal, setShowCopyModal] = useState(false);
 
+  /**
+   * XP dedup guard for meal_score_80 award.
+   * Keyed by "${dateKey}:${mealSlot}" — resets on app restart.
+   * Ray requirement: award once per meal slot per calendar day.
+   */
+  const xpAwardedSlotsRef = useRef<Set<string>>(new Set());
+
   // Adaptive coaching check-in state
   const [showCheckIn, setShowCheckIn] = useState(false);
   const [checkInData, setCheckInData] = useState<{ result: AdaptiveTDEEResult; targets: AdaptiveTargets } | null>(null);
@@ -529,6 +558,14 @@ export default function NutritionScreen() {
     protein: userProfile?.macros?.proteinG ?? 150,
     carbs: userProfile?.macros?.carbsG ?? 200,
     fat: userProfile?.macros?.fatG ?? 65,
+  };
+
+  // NutritionTargets shape required by useMealScores
+  const nutritionTargets = {
+    calorieTarget: targets.calories,
+    proteinG: targets.protein,
+    carbsG: targets.carbs,
+    fatG: targets.fat,
   };
 
   const load = async (refresh = false) => {
@@ -590,6 +627,60 @@ export default function NutritionScreen() {
     }),
     { calories: 0, protein: 0, carbs: 0, fat: 0 }
   );
+
+  // ─── Meal scores (per-slot + daily aggregate) ──────────────────────────────
+  // Derived via useMemo inside the hook — pure computation, no I/O.
+  // LIMITATION: Only the 4 default slots are scored; custom slots are excluded.
+  const dailyNutritionScore = useMealScores(entries, nutritionTargets);
+
+  // Award 15 XP when a default slot scores 80+ (once per slot per day).
+  useEffect(() => {
+    const dateKey = toLocalDateKey();
+    for (const slot of MEAL_SLOTS) {
+      const slotResult = dailyNutritionScore.slotScores[slot];
+      if (!slotResult || slotResult.score < 80) continue;
+      const dedupKey = `${dateKey}:${slot}`;
+      if (xpAwardedSlotsRef.current.has(dedupKey)) continue;
+      xpAwardedSlotsRef.current.add(dedupKey);
+      // Fire-and-forget — XP award failure is non-critical, errors are swallowed
+      awardXP(15, 'meal_score_80', 'nutrition').catch(() => {});
+    }
+  }, [dailyNutritionScore]);
+
+  // GLP-1 nutrition intelligence — detect active cycles and compute guardrails.
+  // totals.protein is passed so the reminder check has the latest logged value.
+  const { state: glp1State } = useGlp1Nutrition(
+    userProfile,
+    totals.protein,
+  );
+
+  // Session-level dedup guard: tracks the last date a protein reminder was sent
+  // this session. Prevents re-firing when the user navigates away and back.
+  const lastReminderDateRef = useRef<string | null>(null);
+
+  // Schedule a protein reminder notification when the GLP-1 hook signals one.
+  // V1 LIMITATION: Notification scheduling inside a screen useEffect runs on
+  // every render cycle where shouldSendProteinReminder is true. A production
+  // implementation should use a background task (expo-task-manager +
+  // expo-background-fetch) to dedup and schedule at a precise time, and should
+  // track the last-sent timestamp in Firestore to avoid repeat notifications
+  // within the same day.
+  useEffect(() => {
+    if (!glp1State.isActive || !glp1State.shouldSendProteinReminder) return;
+
+    // Fix 1: session-level dedup — skip if we already sent a reminder today.
+    const todayString = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+    if (lastReminderDateRef.current === todayString) return;
+    lastReminderDateRef.current = todayString;
+
+    Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Protein Check-In',
+        body: `You\'re below your GLP-1 protein floor. Aim for ${glp1State.proteinFloorG}g today — your muscles depend on it.`,
+      },
+      trigger: null, // fire immediately
+    }).catch(() => {}); // fire-and-forget: notification permission may be denied
+  }, [glp1State.isActive, glp1State.shouldSendProteinReminder, glp1State.proteinFloorG]);
 
   // Active meal slots from profile, falling back to the 4 defaults
   const activeSlots: MealSlotConfig[] = userProfile?.mealSlots ?? DEFAULT_MEAL_SLOTS;
@@ -750,6 +841,24 @@ export default function NutritionScreen() {
           <MacroBar label="Fat" consumed={totals.fat} target={targets.fat} color={Colors.error} colors={colors} />
         </View>
 
+        {/* GLP-1 active banner — shown when an active GLP-1 cycle is detected */}
+        {glp1State.isActive && (
+          <Glp1ActiveBanner
+            proteinFloorG={glp1State.proteinFloorG}
+            tipOfDay={glp1State.tipOfDay}
+            colors={colors}
+          />
+        )}
+
+        {/* GLP-1 protein floor warning — shown when below the floor */}
+        {glp1State.isActive && totals.protein < glp1State.proteinFloorG && (
+          <ProteinFloorWarning
+            currentProteinG={totals.protein}
+            floorG={glp1State.proteinFloorG}
+            colors={colors}
+          />
+        )}
+
         {/* Adaptive coaching info card */}
         {userProfile?.adaptiveCoaching?.enabled && (
           <AnimatedPressable
@@ -801,19 +910,37 @@ export default function NutritionScreen() {
           <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
         </AnimatedPressable>
 
+        {/* Hydration tracker — quick-log water intake for today */}
+        <WaterTracker colors={colors} />
+
+        {/* Daily nutrition score banner — shown when at least one default slot is logged */}
+        <DailyNutritionScoreBanner
+          dailyScore={dailyNutritionScore.dailyScore}
+          colors={colors}
+        />
+
         {/* Meal sections — dynamic slots from profile, with orphaned entry fallback */}
         <StaggeredList staggerDelay={80} style={styles.mealsContainer}>
-          {activeSlots.map((slot) => (
-            <MealSection
-              key={slot.id}
-              slotId={slot.id}
-              label={slot.label}
-              entries={bySlot[slot.id] ?? []}
-              onDelete={handleDelete}
-              onAddFood={handleAddFood}
-              colors={colors}
-            />
-          ))}
+          {activeSlots.map((slot) => {
+            // Only pass score/tips for the 4 default scored slots
+            const isDefaultSlot = (MEAL_SLOTS as readonly string[]).includes(slot.id);
+            const slotResult = isDefaultSlot
+              ? dailyNutritionScore.slotScores[slot.id as MealSlot]
+              : undefined;
+            return (
+              <MealSection
+                key={slot.id}
+                slotId={slot.id}
+                label={slot.label}
+                entries={bySlot[slot.id] ?? []}
+                onDelete={handleDelete}
+                onAddFood={handleAddFood}
+                colors={colors}
+                mealScore={slotResult?.score}
+                mealTips={slotResult?.tips}
+              />
+            );
+          })}
           {orphaned.length > 0 && (
             <MealSection
               key="__other__"
@@ -850,6 +977,20 @@ export default function NutritionScreen() {
           fatG: targets.fat,
         }}
       />
+
+      {/* Voice Log FAB */}
+      <TouchableOpacity
+        style={[styles.voiceFab, { backgroundColor: colors.nutrition }]}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          router.push('/(tabs)/nutrition/voice-log');
+        }}
+        activeOpacity={0.7}
+        accessibilityLabel="Log food by voice"
+        accessibilityRole="button"
+      >
+        <Ionicons name="mic" size={24} color={colors.textPrimary} />
+      </TouchableOpacity>
     </>
   );
 }
@@ -1001,6 +1142,22 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   addFoodBtnText: { fontSize: 13, fontWeight: '600' },
+
+  // Voice Log FAB
+  voiceFab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 6,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+  },
 });
 
 const copyStyles = StyleSheet.create({

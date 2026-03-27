@@ -19,6 +19,7 @@ import { formatDistance, formatDuration } from '../../../src/utils/cardio';
 import { useCardioSettings } from '../../../src/hooks/useCardioSettings';
 import WeeklySummaryCard from '../../../src/components/cardio/WeeklySummaryCard';
 import { GlassBackground } from '../../../src/components/GlassBackground';
+import { ACTIVITY_REGISTRY } from '../../../src/constants/activityRegistry';
 import type { ActivityType, LastSessionSummary } from '../../../src/types/cardio';
 import type { WeeklyCardioSummary } from '../../../src/services/cardioService';
 
@@ -30,12 +31,12 @@ type Activity = {
   icon: React.ComponentProps<typeof Ionicons>['name'];
 };
 
-const ACTIVITIES: Activity[] = [
-  { type: 'run', label: 'Run', icon: 'walk' },
-  { type: 'cycle', label: 'Cycle', icon: 'bicycle' },
-  { type: 'walk', label: 'Walk', icon: 'footsteps' },
-  { type: 'swim', label: 'Swim', icon: 'water' },
-];
+// Drive activity list from registry (RAY #7 — no hardcoded activity list)
+const ACTIVITIES: Activity[] = ACTIVITY_REGISTRY.map((a) => ({
+  type: a.type,
+  label: a.label,
+  icon: a.icon as React.ComponentProps<typeof Ionicons>['name'],
+}));
 
 // ─── Activity card ─────────────────────────────────────────────────────────────
 
@@ -97,12 +98,9 @@ export default function CardioScreen() {
   const router = useRouter();
   const { settings } = useCardioSettings();
 
-  const [lastSessions, setLastSessions] = useState<Record<ActivityType, LastSessionSummary | null>>({
-    run: null,
-    cycle: null,
-    walk: null,
-    swim: null,
-  });
+  const [lastSessions, setLastSessions] = useState<Partial<Record<ActivityType, LastSessionSummary | null>>>(
+    Object.fromEntries(ACTIVITIES.map((a) => [a.type, null])) as Partial<Record<ActivityType, LastSessionSummary | null>>,
+  );
   const [weeklySummary, setWeeklySummary] = useState<WeeklyCardioSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -115,12 +113,8 @@ export default function CardioScreen() {
 
     setWeeklySummary(weeklyResult.data ?? null);
 
-    const map: Record<ActivityType, LastSessionSummary | null> = {
-      run: null,
-      cycle: null,
-      walk: null,
-      swim: null,
-    };
+    const map: Partial<Record<ActivityType, LastSessionSummary | null>> =
+      Object.fromEntries(ACTIVITIES.map((a) => [a.type, null]));
     ACTIVITIES.forEach((a, i) => {
       const s = activityResults[i].data;
       if (s) {
@@ -183,7 +177,7 @@ export default function CardioScreen() {
             <ActivityCard
               key={activity.type}
               activity={activity}
-              lastSession={lastSessions[activity.type]}
+              lastSession={lastSessions[activity.type] ?? null}
               loading={false}
               onStart={handleStart}
               colors={colors}

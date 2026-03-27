@@ -11,3 +11,8 @@ export { onReportCreate } from './onReportCreate';
 export { sendBeaconSms } from './sendBeaconSms';
 export { beaconTrackingPage } from './beaconTrackingPage';
 export { cleanupBeacons } from './cleanupBeacons';
+
+// ─── PVP Phase 1C: Seasons, Leagues, RP ──────────────────────────────────────
+export { assignWeeklyLeagues } from './assignWeeklyLeagues';
+export { claimSeasonReward } from './claimSeasonReward';
+// Note: updateRP is internal only — NOT exported as a callable endpoint

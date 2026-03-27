@@ -155,6 +155,8 @@ export const AnalyticsEvent = {
   BODY_HUB_REGION_TAPPED: 'body_hub_region_tapped',
   BODY_HUB_SHEET_OPENED: 'body_hub_sheet_opened',
   BODY_HUB_FAB_PRESSED: 'body_hub_fab_pressed',
+  BODY_HUB_HEATMAP_TOGGLED: 'body_hub_heatmap_toggled',
+  BODY_HUB_IMBALANCE_VIEWED: 'body_hub_imbalance_viewed',
 
   // Challenges
   CHALLENGE_HUB_VIEWED: 'challenge_hub_viewed',
@@ -201,6 +203,53 @@ export const AnalyticsEvent = {
   NUTRITION_PROGRESS_VIEWED: 'nutrition_progress_viewed',
   PEPTIDE_PROGRESS_VIEWED: 'peptide_progress_viewed',
   CONSISTENCY_TREND_VIEWED: 'consistency_trend_viewed',
+
+  // Peptide Education Hub
+  COMPOUND_LIBRARY_VIEWED: 'compound_library_viewed',
+  COMPOUND_DETAIL_VIEWED: 'compound_detail_viewed',
+
+  // Superset / Circuit
+  SUPERSET_ROUND_COMPLETED: 'superset_round_completed',
+  CIRCUIT_COMPLETED: 'circuit_completed',
+
+  // Hydration
+  WATER_LOGGED: 'water_logged',
+  WATER_GOAL_REACHED: 'water_goal_reached',
+  WATER_UNDO: 'water_undo',
+  WATER_GOAL_SET: 'water_goal_set',
+
+  // AI-Adaptive Workout Suggestions
+  SUGGESTION_VIEWED: 'suggestion_viewed',
+  SUGGESTION_STARTED: 'suggestion_started',
+  SUGGESTION_DISMISSED: 'suggestion_dismissed',
+
+  // Nutrition Score (v2)
+  NUTRITION_SCORE_COMPUTED: 'nutrition_score_computed',
+  NUTRITION_SCORE_CARD_SHOWN: 'nutrition_score_card_shown',
+  NUTRITION_SCORE_CARD_DISMISSED: 'nutrition_score_card_dismissed',
+
+  // Voice Food Logging
+  VOICE_LOG_STARTED: 'voice_log_started',
+  VOICE_LOG_COMPLETED: 'voice_log_completed',
+  VOICE_LOG_ITEM_PARSED: 'voice_log_item_parsed',
+  VOICE_LOG_FALLBACK_USED: 'voice_log_fallback_used',
+
+  // Weekly Comparison
+  WEEKLY_COMPARISON_VIEWED: 'weekly_comparison_viewed',
+  TOP_TIP_SHOWN: 'top_tip_shown',
+
+  // PVP: Seasons & Weekly Leagues (Phase 1C)
+  SEASON_VIEWED: 'season_viewed',
+  SEASON_REWARD_CLAIMED: 'season_reward_claimed',
+  LEAGUE_VIEWED: 'league_viewed',
+  LEAGUE_STANDINGS_VIEWED: 'league_standings_viewed',
+
+  // PVP: Seasonal Events & Crew PVP (Phase 3)
+  EVENT_VIEWED: 'event_viewed',
+  EVENT_JOINED: 'event_joined',
+  CREW_CHALLENGE_VIEWED: 'crew_challenge_viewed',
+  SHARE_CARD_GENERATED: 'share_card_generated',
+  SHARE_CARD_SHARED: 'share_card_shared',
 } as const;
 
 export type AnalyticsEventName = (typeof AnalyticsEvent)[keyof typeof AnalyticsEvent];

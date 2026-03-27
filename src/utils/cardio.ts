@@ -7,6 +7,7 @@ import type {
   HeartRateZone,
   TimeInZone,
 } from '../types/cardio';
+import { getActivityMeta } from '../constants/activityRegistry';
 
 // ─── Distance ─────────────────────────────────────────────────────────────────
 
@@ -67,32 +68,21 @@ export function formatDistance(meters: number, unit: DistanceUnit): string {
 
 // ─── Calories ─────────────────────────────────────────────────────────────────
 
-const MET: Record<ActivityType, number> = {
-  run: 9.8,
-  cycle: 7.5,
-  walk: 3.5,
-  swim: 6.0,
-};
-
-/** MET-based calorie calculation */
+/** MET-based calorie calculation — reads MET from ACTIVITY_REGISTRY (RAY #7) */
 export function calculateCalories(
   activity: ActivityType,
   weightKg: number,
   durationHours: number
 ): number {
-  return Math.round(MET[activity] * weightKg * durationHours);
+  const meta = getActivityMeta(activity);
+  return Math.round(meta.met * weightKg * durationHours);
 }
 
 // ─── Speed / Drift ────────────────────────────────────────────────────────────
 
-/** Maximum plausible speed in m/s for GPS drift filtering */
+/** Maximum plausible speed in m/s for GPS drift filtering — reads from ACTIVITY_REGISTRY (RAY #7) */
 export function maxSpeedForActivity(activity: ActivityType): number {
-  switch (activity) {
-    case 'run': return 12; // ~43 km/h
-    case 'cycle': return 22; // ~79 km/h
-    case 'walk': return 4;  // ~14 km/h
-    case 'swim': return 3;  // ~11 km/h
-  }
+  return getActivityMeta(activity).maxSpeedMs;
 }
 
 /** Calculate rolling pace from recent RoutePoints (last 30s window), returns sec/km */

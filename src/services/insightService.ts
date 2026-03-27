@@ -1,6 +1,11 @@
 /**
  * insightService — pure functions that compute Smart Insights from dashboard data.
  * Zero Firestore calls. All functions accept data and return Insight | null.
+ *
+ * Priority scheme (RAY #1):
+ *   General insights    → odd  priorities (1, 3, 5, 7, 9, 11)
+ *   Peptide-cardio      → even priorities (2, 4, 6, 8)
+ * Top-N slice naturally alternates categories.
  */
 import type { FoodLogEntry } from '../types/nutrition';
 import type { WorkoutSession } from '../types/workout';
@@ -9,6 +14,14 @@ import type { BodyWeightEntry } from '../types/bodyTracking';
 import type { Peptide, Dose } from '../types/peptide';
 import type { Insight } from '../types/insight';
 import { toLocalDateKey } from '../utils/nutrition';
+import {
+  buildCardioContext,
+  checkPeptidePaceImprovement,
+  checkInjectionDayScheduling,
+  checkPeptideHRRecovery,
+  checkCompoundPerformanceTrend,
+} from '../utils/cardioInsightCalc';
+import type { CycleInfo, DoseRecord, RecoveryDocEntry } from '../utils/cardioInsightCalc';
 
 type DailyTotals = { calories: number; protein: number; carbs: number; fat: number };
 
@@ -69,7 +82,7 @@ export function checkProteinGap(
     emoji: '🥩',
     headline: `Protein gap on ${belowDays} of 7 days`,
     explanation: `You averaged ${avgProtein}g vs your ${Math.round(proteinTargetG)}g target. Consider adding a protein shake or extra serving.`,
-    priority: 1,
+    priority: 1, // odd — general category
   };
 }
 
@@ -116,7 +129,7 @@ export function checkLiftingDayNutrition(
     emoji: '📉',
     headline: 'Underfueling on gym days',
     explanation: `You averaged ~${Math.round(avgGym)}kcal on training days vs ~${Math.round(avgRest)}kcal on rest days.`,
-    priority: 2,
+    priority: 3, // odd — general category
   };
 }
 
@@ -156,7 +169,7 @@ export function checkPeptideWeightTrend(
     emoji: '⚖️',
     headline: `Weight ${direction} ${absDiff} ${unit} since starting ${mostRecent.name}`,
     explanation: `Since you started ${mostRecent.name}, your weight moved from ${firstVal.toFixed(1)} to ${lastVal.toFixed(1)} ${unit}.`,
-    priority: 3,
+    priority: 5, // odd — general category
   };
 }
 
@@ -211,7 +224,7 @@ export function checkCardioAfterInjection(
     emoji: '💉',
     headline: 'Cardio pace dips on injection days',
     explanation: `Your average pace is slower on injection days. Consider scheduling cardio 1–2 days after injections.`,
-    priority: 4,
+    priority: 7, // odd — general category
   };
 }
 
@@ -252,7 +265,7 @@ export function checkWeeklyConsistency(
       emoji: '🔥',
       headline: `This week: ${count} of 7 days active`,
       explanation: `Great consistency! You've logged activity on ${count} out of the last 7 days.`,
-      priority: 5,
+      priority: 9, // odd — general category
     };
   }
 
@@ -262,7 +275,7 @@ export function checkWeeklyConsistency(
       emoji: '📅',
       headline: `This week: ${count} of 7 days active`,
       explanation: `You've only been active on ${count} days this week. Small consistent actions add up — even a short log counts.`,
-      priority: 5,
+      priority: 9, // odd — general category
     };
   }
 
@@ -317,7 +330,7 @@ export function checkVolumeTrend(sessions: WorkoutSession[]): Insight | null {
       emoji: '📈',
       headline: `Volume up ${Math.round(pctChange)}% this week`,
       explanation: `This week's total volume is ${Math.round(pctChange)}% higher than last week. Keep it up!`,
-      priority: 6,
+      priority: 11, // odd — general category
     };
   }
 
@@ -327,11 +340,35 @@ export function checkVolumeTrend(sessions: WorkoutSession[]): Insight | null {
       emoji: '📉',
       headline: `Volume down ${Math.round(Math.abs(pctChange))}% this week`,
       explanation: `This week's total volume is ${Math.round(Math.abs(pctChange))}% lower than last week.`,
-      priority: 6,
+      priority: 11, // odd — general category
     };
   }
 
   return null;
+}
+
+export function checkSuggestedWorkout(
+  recoveryZone: import('../types/recoveryScore').RecoveryZone | null,
+  recoveryScore: number | null,
+): Insight | null {
+  if (!recoveryZone || recoveryScore === null) return null;
+  if (recoveryZone === 'red') return null;
+
+  const zoneMessages: Record<string, string> = {
+    green: 'You\'re fully recovered — great day for a hard session.',
+    yellow: 'Moderate recovery — a solid training session is ready.',
+    orange: 'Light activity is recommended today.',
+  };
+
+  const message = zoneMessages[recoveryZone] ?? 'A workout has been suggested based on your recovery.';
+
+  return {
+    id: 'suggestedWorkout',
+    emoji: '✨',
+    headline: 'Adaptive workout ready',
+    explanation: message,
+    priority: 13, // odd — general category
+  };
 }
 
 // ─── Orchestrator ─────────────────────────────────────────────────────────────
@@ -344,6 +381,13 @@ type ComputeParams = {
   sessions: WorkoutSession[];
   cardioSessions: CardioSession[];
   weights: BodyWeightEntry[];
+  // Optional — peptide-cardio checks return null when absent (RAY #10)
+  cycles?: CycleInfo[];
+  recoveryDocs?: RecoveryDocEntry[];
+  maxResults?: number;
+  // Optional — workout suggestion insight
+  recoveryZone?: import('../types/recoveryScore').RecoveryZone | null;
+  recoveryScore?: number | null;
 };
 
 export function computeInsights(params: ComputeParams): Insight[] {
@@ -355,15 +399,39 @@ export function computeInsights(params: ComputeParams): Insight[] {
     sessions,
     cardioSessions,
     weights,
+    cycles = [],
+    recoveryDocs = [],
+    maxResults = 3,
+    recoveryZone = null,
+    recoveryScore = null,
   } = params;
+
+  // Build DoseRecord array from Dose[] (Dose has timestamp: Timestamp)
+  const doseRecords: DoseRecord[] = doses.map((d) => ({
+    date: d.timestamp.toDate().toISOString().slice(0, 10),
+    compoundName: d.peptideName,
+  }));
+
+  // Build cardio context for peptide-aware checks (RAY #10: pure — accepts pre-fetched)
+  const cardioCtx = buildCardioContext({
+    cardioSessions,
+    doses: doseRecords,
+    cycles,
+    recoveryDocs,
+  });
 
   const checks = [
     () => checkProteinGap(nutritionLogs, proteinTargetG),
+    () => checkPeptidePaceImprovement(cardioCtx),
     () => checkLiftingDayNutrition(nutritionLogs, sessions),
+    () => checkInjectionDayScheduling(cardioCtx),
     () => checkPeptideWeightTrend(peptides, weights),
+    () => checkPeptideHRRecovery(cardioCtx),
     () => checkCardioAfterInjection(doses, cardioSessions),
+    () => checkCompoundPerformanceTrend(cardioCtx),
     () => checkWeeklyConsistency(sessions, cardioSessions, weights, doses),
     () => checkVolumeTrend(sessions),
+    () => checkSuggestedWorkout(recoveryZone, recoveryScore),
   ];
 
   const results: Insight[] = [];
@@ -376,5 +444,5 @@ export function computeInsights(params: ComputeParams): Insight[] {
     }
   }
 
-  return results.sort((a, b) => a.priority - b.priority).slice(0, 3);
+  return results.sort((a, b) => a.priority - b.priority).slice(0, maxResults);
 }

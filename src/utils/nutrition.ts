@@ -52,6 +52,11 @@ export type SanitizedOFFProduct = {
   per100g: NutrientsPer100g;
   servingSizeG: number;  // defaults to 100 if not parseable
   barcode: string;
+  /**
+   * NOVA food processing group (1-4). Null when absent or invalid.
+   * Sourced from the raw OFF product's `nova_group` field.
+   */
+  novaGroup: number | null;
 };
 
 /**
@@ -123,11 +128,22 @@ export function sanitizeOFFProduct(raw: any): SanitizedOFFProduct {
     calories = 0;
   }
 
+  // NOVA group: must be integer in [1, 4] else null
+  const rawNova = raw?.nova_group ?? raw?.nova_groups ?? null;
+  let novaGroup: number | null = null;
+  if (rawNova !== null && rawNova !== undefined) {
+    const parsed = parseInt(String(rawNova), 10);
+    if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 4) {
+      novaGroup = parsed;
+    }
+  }
+
   return {
     name: String(raw?.product_name_en ?? raw?.product_name ?? '').trim() || 'Unknown Food',
     brand: String(raw?.brands ?? '').split(',')[0].trim(),
     barcode: String(raw?.code ?? raw?._id ?? ''),
     servingSizeG: parseServingSizeG(raw?.serving_size),
+    novaGroup,
     per100g: {
       calories: Math.round(calories),
       protein: Math.round(clampNutrient(n['proteins_100g'] ?? n['protein_100g']) * 10) / 10,

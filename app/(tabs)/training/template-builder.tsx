@@ -28,8 +28,7 @@ import {
 } from '../../../src/services/templateService';
 import { TEMPLATE_COLORS, type TemplateExercise, type WorkoutTemplateInput } from '../../../src/types/template';
 import type { Exercise } from '../../../src/types/exercise';
-
-const REST_OPTIONS = [30, 45, 60, 90, 120, 150, 180, 240];
+import { TemplateExerciseRow } from '../../../src/components/training/TemplateExerciseRow';
 
 export default function TemplateBuilderScreen() {
   const { colors } = useTheme();
@@ -231,140 +230,24 @@ export default function TemplateBuilderScreen() {
 
         {exercises.map((ex, index) => {
           const ssColor = ex.supersetGroup != null ? supersetColors[ex.supersetGroup] : null;
+          // Determine whether this exercise is the first in its superset group
+          const isFirstInSupersetGroup = ex.supersetGroup != null &&
+            (index === 0 || exercises[index - 1].supersetGroup !== ex.supersetGroup);
           return (
-            <View
+            <TemplateExerciseRow
               key={`${ex.exerciseId}-${index}`}
-              style={[
-                styles.exerciseCard,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-                ssColor && { borderLeftWidth: 4, borderLeftColor: ssColor },
-              ]}
-            >
-              {/* Header */}
-              <View style={styles.exerciseHeader}>
-                <Text style={[styles.exerciseName, { color: colors.textPrimary }]} numberOfLines={1}>
-                  {ex.exerciseName}
-                </Text>
-                <TouchableOpacity onPress={() => removeExercise(index)}>
-                  <Ionicons name="close-circle" size={22} color={Colors.error} />
-                </TouchableOpacity>
-              </View>
-
-              {/* Config row */}
-              <View style={styles.configRow}>
-                <View style={styles.configItem}>
-                  <Text style={[styles.configLabel, { color: colors.textSecondary }]}>Sets</Text>
-                  <TextInput
-                    style={[styles.configInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-                    value={String(ex.targetSets)}
-                    onChangeText={(v) => {
-                      const n = parseInt(v, 10);
-                      if (!isNaN(n) && n > 0) updateExercise(index, { targetSets: n });
-                      else if (v === '') updateExercise(index, { targetSets: 0 });
-                    }}
-                    keyboardType="number-pad"
-                  />
-                </View>
-                <View style={styles.configItem}>
-                  <Text style={[styles.configLabel, { color: colors.textSecondary }]}>Reps</Text>
-                  <TextInput
-                    style={[styles.configInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-                    value={ex.targetReps}
-                    onChangeText={(v) => updateExercise(index, { targetReps: v })}
-                  />
-                </View>
-                <View style={styles.configItem}>
-                  <Text style={[styles.configLabel, { color: colors.textSecondary }]}>Weight (kg)</Text>
-                  <TextInput
-                    style={[styles.configInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-                    value={ex.targetWeight != null ? String(ex.targetWeight) : ''}
-                    onChangeText={(v) => {
-                      const n = parseFloat(v);
-                      updateExercise(index, { targetWeight: isNaN(n) ? undefined : n });
-                    }}
-                    keyboardType="number-pad"
-                    placeholder="-"
-                    placeholderTextColor={colors.textSecondary}
-                  />
-                </View>
-              </View>
-
-              {/* Rest picker */}
-              <View style={styles.restRow}>
-                <Text style={[styles.configLabel, { color: colors.textSecondary }]}>Rest</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.restChips}>
-                  {REST_OPTIONS.map((s) => {
-                    const active = ex.restSeconds === s;
-                    return (
-                      <TouchableOpacity
-                        key={s}
-                        onPress={() => updateExercise(index, { restSeconds: s })}
-                        style={[
-                          styles.restChip,
-                          { borderColor: active ? Colors.gym : colors.border },
-                          active && { backgroundColor: Colors.gym + '20' },
-                        ]}
-                      >
-                        <Text style={[styles.restChipText, { color: active ? Colors.gym : colors.textSecondary }]}>
-                          {s >= 60 ? `${s / 60}m` : `${s}s`}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-
-              {/* Notes */}
-              <TextInput
-                style={[styles.notesInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
-                placeholder="Notes (optional)"
-                placeholderTextColor={colors.textSecondary}
-                value={ex.notes ?? ''}
-                onChangeText={(v) => updateExercise(index, { notes: v || undefined })}
-              />
-
-              {/* Action buttons */}
-              <View style={styles.actionRow}>
-                <TouchableOpacity
-                  onPress={() => moveExercise(index, 'up')}
-                  disabled={index === 0}
-                  style={[styles.actionBtn, index === 0 && { opacity: 0.3 }]}
-                >
-                  <Ionicons name="arrow-up" size={18} color={colors.textSecondary} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => moveExercise(index, 'down')}
-                  disabled={index === exercises.length - 1}
-                  style={[styles.actionBtn, index === exercises.length - 1 && { opacity: 0.3 }]}
-                >
-                  <Ionicons name="arrow-down" size={18} color={colors.textSecondary} />
-                </TouchableOpacity>
-                {index > 0 && (
-                  <TouchableOpacity
-                    onPress={() => toggleSuperset(index)}
-                    style={[
-                      styles.supersetBtn,
-                      { borderColor: ex.supersetGroup != null ? Colors.gym : colors.border },
-                      ex.supersetGroup != null && { backgroundColor: Colors.gym + '20' },
-                    ]}
-                  >
-                    <Ionicons
-                      name="link"
-                      size={14}
-                      color={ex.supersetGroup != null ? Colors.gym : colors.textSecondary}
-                    />
-                    <Text
-                      style={[
-                        styles.supersetText,
-                        { color: ex.supersetGroup != null ? Colors.gym : colors.textSecondary },
-                      ]}
-                    >
-                      Superset
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
+              exercise={ex}
+              index={index}
+              totalCount={exercises.length}
+              supersetColor={ssColor}
+              isFirstInSupersetGroup={isFirstInSupersetGroup}
+              onUpdate={updateExercise}
+              onRemove={removeExercise}
+              onMoveUp={(i) => moveExercise(i, 'up')}
+              onMoveDown={(i) => moveExercise(i, 'down')}
+              onToggleSuperset={toggleSuperset}
+              colors={colors}
+            />
           );
         })}
 
@@ -430,60 +313,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  exerciseCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 14,
-    marginBottom: 12,
-  },
-  exerciseHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  exerciseName: { fontSize: 15, fontWeight: '700', flex: 1, marginRight: 8 },
-  configRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
-  configItem: { flex: 1 },
-  configLabel: { fontSize: 11, fontWeight: '600', marginBottom: 4 },
-  configInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  restRow: { marginBottom: 8 },
-  restChips: { gap: 6, paddingTop: 4 },
-  restChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  restChipText: { fontSize: 12, fontWeight: '600' },
-  notesInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 13,
-    marginBottom: 8,
-  },
-  actionRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  actionBtn: { padding: 6 },
-  supersetBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginLeft: 'auto',
-  },
-  supersetText: { fontSize: 12, fontWeight: '600' },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',

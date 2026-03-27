@@ -102,3 +102,14 @@ export function getTierProgress(totalXP: number): number {
   const progress = (totalXP - rangeStart) / (rangeEnd - rangeStart);
   return Math.min(1, Math.max(0, progress));
 }
+
+// ─── V2 rank system adapters ──────────────────────────────────────────────────
+
+/**
+ * Re-exports of the V2 rank system mapping helpers.
+ * Imported here for convenience — callers can import from a single location.
+ */
+import type { RankTierV2 } from '../types/rankV2';
+import { mapV2ToLegacy, mapLegacyToV2 } from './rankTierV2';
+export { mapV2ToLegacy, mapLegacyToV2 };
+export type { RankTierV2 };

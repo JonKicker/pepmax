@@ -66,6 +66,17 @@ export const COLLECTIONS = {
   USER_STATS: 'userStats',
   XP_LOG: 'xpLog',
   ACHIEVEMENTS: 'achievements',
+  WATER_LOG: 'waterLog',
+  // ─── PVP Phase 1C ────────────────────────────────────────────────────────
+  SEASONS: 'seasons',
+  WEEKLY_LEAGUES: 'weeklyLeagues',
+  SEASON_PROGRESS: 'seasonProgress',
+  RP_LOG: 'rpLog',
+  // ─── PVP Phase 3: Seasonal Events & Crew PVP ─────────────────────────────
+  EVENTS: 'events',
+  EVENT_PROGRESS: 'eventProgress',
+  CREW_CHALLENGES: 'crewChallenges',
+  CREW_CHALLENGE_ENTRIES: 'crewChallengeEntries',
 } as const;
 
 export type CollectionName = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];

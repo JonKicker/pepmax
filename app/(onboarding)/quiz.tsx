@@ -1,127 +1,348 @@
-import { useState } from 'react';
+/**
+ * quiz.tsx — Onboarding Quiz Orchestrator (v2)
+ *
+ * Manages:
+ * - QuizData state (all 15 screens worth of data)
+ * - Step index with visitedSteps history (for conditional skip + smart back)
+ * - Reduce-motion support via AccessibilityInfo
+ * - Progress bar
+ * - Validation per step
+ * - Save logic: mergeDocument → BuildingPlan → PersonalizedSummary
+ *
+ * Step map (1-indexed, as displayed in the progress bar):
+ *  1  GoalsStep          — multi-select goals
+ *  2  ExperienceStep     — single-select experience level
+ *  3  UnitsStep          — unit preference
+ *  4  BodyStatsStep      — height / weight / age / sex
+ *  5  GoalTypeStep       — lose / maintain / gain
+ *  6  TrainingDaysStep   — days per week (2-6)
+ *  7  TrainTimeStep      — preferred train time
+ *  8  ActivityLevelStep  — activity category → multiplier at save time
+ *  9  ChallengesStep     — multi-select challenges (optional)
+ * 10  VisionStep         — 12-week vision
+ * 11  RecoveryStep       — CONDITIONAL: skipped if no training/cardio goal
+ * 12  PersonalNoteStep   — free text (optional, skip button)
+ * 13  CheckInDayStep     — day of week
+ * 14  RemindersStep      — opt-in
+ * 15  ConfirmStep        — recap + "Build My Plan"
+ *
+ * After step 15: BuildingPlan → PersonalizedSummary → navigate to /(tabs)
+ */
+import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, SafeAreaView,
-  ScrollView, TextInput, ActivityIndicator, Platform,
+  ScrollView, ActivityIndicator, AccessibilityInfo,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { serverTimestamp } from 'firebase/firestore';
 import { useTheme } from '../../src/hooks/useTheme';
-import { Colors, Theme } from '../../src/constants/theme';
+import { Colors } from '../../src/constants/theme';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { mergeDocument, COLLECTIONS } from '../../src/services/firebase/firestore';
 import { analytics, AnalyticsEvent } from '../../src/services/analytics';
-import { calculateTDEE, calculateMacros, lbsToKg, feetInchesToCm } from '../../src/utils/tdee';
+import {
+  calculateTDEE, calculateMacros, lbsToKg, feetInchesToCm,
+} from '../../src/utils/tdee';
+import {
+  shouldSkipRecovery as _shouldSkipRecovery,
+  nextStep as _nextStep,
+  prevStep as _prevStep,
+  sanitisePersonalNote as _sanitisePersonalNote,
+  getActivityMultiplier,
+} from '../../src/utils/quizUtils';
 import type { Goal, ExperienceLevel, Units, Sex } from '../../src/types/profile';
 
-const TOTAL_STEPS = 4;
+// Shared components
+import ProgressBar from '../../src/components/onboarding/ProgressBar';
+import BuildingPlan from '../../src/components/onboarding/BuildingPlan';
+import PersonalizedSummary from '../../src/components/onboarding/PersonalizedSummary';
+
+// Step components
+import GoalsStep from '../../src/components/onboarding/steps/GoalsStep';
+import ExperienceStep from '../../src/components/onboarding/steps/ExperienceStep';
+import UnitsStep from '../../src/components/onboarding/steps/UnitsStep';
+import BodyStatsStep from '../../src/components/onboarding/steps/BodyStatsStep';
+import type { BodyStats } from '../../src/components/onboarding/steps/BodyStatsStep';
+import GoalTypeStep from '../../src/components/onboarding/steps/GoalTypeStep';
+import TrainingDaysStep from '../../src/components/onboarding/steps/TrainingDaysStep';
+import TrainTimeStep from '../../src/components/onboarding/steps/TrainTimeStep';
+import ActivityLevelStep from '../../src/components/onboarding/steps/ActivityLevelStep';
+import type { ActivityCategory } from '../../src/components/onboarding/steps/ActivityLevelStep';
+import ChallengesStep from '../../src/components/onboarding/steps/ChallengesStep';
+import VisionStep from '../../src/components/onboarding/steps/VisionStep';
+import RecoveryStep from '../../src/components/onboarding/steps/RecoveryStep';
+import PersonalNoteStep from '../../src/components/onboarding/steps/PersonalNoteStep';
+import CheckInDayStep, { sanitiseCheckInDay } from '../../src/components/onboarding/steps/CheckInDayStep';
+import RemindersStep from '../../src/components/onboarding/steps/RemindersStep';
+import ConfirmStep from '../../src/components/onboarding/steps/ConfirmStep';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type GoalType = 'lose' | 'maintain' | 'gain';
+type TrainTime = 'morning' | 'midday' | 'afternoon' | 'evening' | 'varies';
+type RecoveryPriority = 'high' | 'medium' | 'low';
+type Vision = 'stronger' | 'leaner' | 'optimized' | 'back_on_track';
 
 type QuizData = {
+  // Step 1
   goals: Goal[];
+  // Step 2
   experienceLevel: ExperienceLevel | null;
-  heightFt: string;
-  heightIn: string;
-  heightCm: string;
-  weightLbs: string;
-  weightKg: string;
-  age: string;
-  sex: Sex | null;
-  inputUnits: Units; // unit toggle for step 3 inputs
+  // Step 3
   units: Units | null;
+  // Step 4 (body stats sub-object)
+  bodyStats: BodyStats;
+  // Step 5
+  goalType: GoalType | null;
+  // Step 6
+  trainingDaysPerWeek: number | null;
+  // Step 7
+  preferredTrainTime: TrainTime | null;
+  // Step 8
+  activityCategory: ActivityCategory | null;
+  // Step 9
+  challenges: string[];
+  // Step 10
+  twelveWeekVision: Vision | null;
+  // Step 11 (conditional)
+  recoveryPriority: RecoveryPriority | null;
+  // Step 12
+  personalGoalNote: string;
+  // Step 13
+  checkInDay: number | null;
+  // Step 14
+  remindersOptIn: boolean | null;
 };
 
-const INITIAL: QuizData = {
-  goals: [],
-  experienceLevel: null,
+const INITIAL_BODY_STATS: BodyStats = {
   heightFt: '', heightIn: '', heightCm: '',
   weightLbs: '', weightKg: '',
   age: '',
   sex: null,
   inputUnits: 'imperial',
-  units: null,
 };
+
+const INITIAL: QuizData = {
+  goals: [],
+  experienceLevel: null,
+  units: null,
+  bodyStats: INITIAL_BODY_STATS,
+  goalType: null,
+  trainingDaysPerWeek: null,
+  preferredTrainTime: null,
+  activityCategory: null,
+  challenges: [],
+  twelveWeekVision: null,
+  recoveryPriority: null,
+  personalGoalNote: '',
+  checkInDay: null,
+  remindersOptIn: null,
+};
+
+const TOTAL_STEPS = 15;
+
+// ── Step-skip logic (re-exported from src/utils/quizUtils for DRY) ────────────
+
+export const shouldSkipRecovery = _shouldSkipRecovery;
+export const prevStep = _prevStep;
+
+/** Adapts the pure nextStep(step, goals) signature to accept QuizData. */
+export function nextStep(currentStep: number, data: QuizData): number {
+  return _nextStep(currentStep, data.goals);
+}
+
+// ── Validation ────────────────────────────────────────────────────────────────
+
+function validateStep(step: number, data: QuizData): string | null {
+  switch (step) {
+    case 1:
+      return data.goals.length === 0 ? 'Select at least one goal.' : null;
+    case 2:
+      return data.experienceLevel === null ? 'Select your experience level.' : null;
+    case 3:
+      return data.units === null ? 'Select your preferred units.' : null;
+    case 4: {
+      const s = data.bodyStats;
+      const imp = s.inputUnits === 'imperial';
+      if (imp) {
+        if (!s.heightFt || !s.heightIn) return 'Enter your height.';
+        if (!s.weightLbs) return 'Enter your weight.';
+      } else {
+        if (!s.heightCm) return 'Enter your height.';
+        if (!s.weightKg) return 'Enter your weight.';
+      }
+      if (!s.age) return 'Enter your age.';
+      const age = parseInt(s.age, 10);
+      if (isNaN(age) || age < 13 || age > 120) return 'Enter a valid age (13–120).';
+      if (!s.sex) return 'Select your biological sex.';
+      return null;
+    }
+    case 5:
+      return data.goalType === null ? 'Select your primary goal.' : null;
+    case 6:
+      return data.trainingDaysPerWeek === null ? 'Select how many days you train.' : null;
+    case 7:
+      return data.preferredTrainTime === null ? 'Select your preferred train time.' : null;
+    case 8:
+      return data.activityCategory === null ? 'Select your activity level.' : null;
+    case 9:
+      return null; // optional
+    case 10:
+      return data.twelveWeekVision === null ? 'Pick your 12-week vision.' : null;
+    case 11:
+      return null; // optional (also conditional)
+    case 12:
+      return null; // optional (has skip button)
+    case 13:
+      return data.checkInDay === null ? 'Pick your weekly check-in day.' : null;
+    case 14:
+      return data.remindersOptIn === null ? 'Choose a reminders preference.' : null;
+    case 15:
+      return null; // confirm screen, no extra validation
+    default:
+      return null;
+  }
+}
+
+// ── Sanitize personalGoalNote (imported from src/utils/quizUtils) ────────────
+export const sanitisePersonalNote = _sanitisePersonalNote;
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+type Phase = 'quiz' | 'building' | 'summary';
 
 export default function QuizScreen() {
   const { colors } = useTheme();
   const { currentUser, refreshProfile } = useAuth();
-  const [step, setStep] = useState(1);
+
+  // Core state
   const [data, setData] = useState<QuizData>(INITIAL);
+  const [step, setStep] = useState(1);
+  const [visitedSteps, setVisitedSteps] = useState<number[]>([]); // history for back nav
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [phase, setPhase] = useState<Phase>('quiz');
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  // Calculated at save time — stored so PersonalizedSummary can display them
+  const [calculatedCalories, setCalculatedCalories] = useState(0);
+  const [calculatedMacros, setCalculatedMacros] = useState({ proteinG: 0, carbsG: 0, fatG: 0 });
+
+  // Check OS reduce-motion preference
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      setReduceMotion(enabled);
+    });
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
+      setReduceMotion(enabled);
+    });
+    return () => sub.remove();
+  }, []);
+
+  // ── Data helpers ─────────────────────────────────────────────────────────
 
   function update<K extends keyof QuizData>(key: K, value: QuizData[K]) {
     setData((prev) => ({ ...prev, [key]: value }));
     setError(null);
   }
 
-  function toggleGoal(goal: Goal) {
+  function updateBodyStats<K extends keyof BodyStats>(key: K, value: BodyStats[K]) {
     setData((prev) => ({
       ...prev,
-      goals: prev.goals.includes(goal)
-        ? prev.goals.filter((g) => g !== goal)
-        : [...prev.goals, goal],
+      bodyStats: { ...prev.bodyStats, [key]: value },
     }));
     setError(null);
   }
 
-  function validateStep(): string | null {
-    if (step === 1 && data.goals.length === 0) return 'Select at least one goal.';
-    if (step === 2 && !data.experienceLevel) return 'Select your experience level.';
-    if (step === 3) {
-      if (data.inputUnits === 'imperial') {
-        if (!data.heightFt || !data.heightIn) return 'Enter your height.';
-        if (!data.weightLbs) return 'Enter your weight.';
-      } else {
-        if (!data.heightCm) return 'Enter your height.';
-        if (!data.weightKg) return 'Enter your weight.';
-      }
-      if (!data.age) return 'Enter your age.';
-      const age = parseInt(data.age);
-      if (isNaN(age) || age < 13 || age > 120) return 'Enter a valid age (13–120).';
-      if (!data.sex) return 'Select your biological sex.';
-    }
-    if (step === 4 && !data.units) return 'Select your preferred units.';
-    return null;
-  }
+  // ── Navigation ───────────────────────────────────────────────────────────
 
-  async function handleNext() {
-    const err = validateStep();
-    if (err) { setError(err); return; }
+  function handleNext() {
+    const err = validateStep(step, data);
+    if (err) {
+      setError(err);
+      return;
+    }
+    setError(null);
 
     if (step < TOTAL_STEPS) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      analytics.track(AnalyticsEvent.ONBOARDING_STEP_VIEWED, { step: step + 1, total_steps: TOTAL_STEPS });
-      setStep((s) => s + 1);
+      analytics.track(AnalyticsEvent.ONBOARDING_STEP_VIEWED, {
+        step: step + 1,
+        total_steps: TOTAL_STEPS,
+      });
+      const next = nextStep(step, data);
+      setVisitedSteps((prev) => [...prev, step]);
+      setStep(next);
       return;
     }
 
-    // Step 4 — Finish
+    // Step 15 — "Build My Plan"
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await saveProfile();
+    setPhase('building');
   }
 
-  async function saveProfile() {
+  function handleBack() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setError(null);
+    const [prev, newVisited] = prevStep(visitedSteps);
+    setVisitedSteps(newVisited);
+    setStep(prev);
+  }
+
+  function handleSkipNote() {
+    // PersonalNoteStep skip button — jump straight to next step
+    setError(null);
+    const next = nextStep(step, data);
+    setVisitedSteps((prev) => [...prev, step]);
+    setStep(next);
+  }
+
+  // ── Save logic ────────────────────────────────────────────────────────────
+
+  const saveProfile = useCallback(async () => {
     if (!currentUser) {
       if (__DEV__) console.log('[quiz] saveProfile: no currentUser, aborting');
       return;
     }
-    setSaving(true);
 
     // Convert body stats to metric
+    const s = data.bodyStats;
     let heightCm: number;
     let weightKg: number;
 
-    if (data.inputUnits === 'imperial') {
-      heightCm = feetInchesToCm(parseInt(data.heightFt) || 0, parseInt(data.heightIn) || 0);
-      weightKg = lbsToKg(parseFloat(data.weightLbs));
+    if (s.inputUnits === 'imperial') {
+      heightCm = feetInchesToCm(parseInt(s.heightFt, 10) || 0, parseInt(s.heightIn, 10) || 0);
+      weightKg = lbsToKg(parseFloat(s.weightLbs));
     } else {
-      heightCm = parseFloat(data.heightCm);
-      weightKg = parseFloat(data.weightKg);
+      heightCm = parseFloat(s.heightCm);
+      weightKg = parseFloat(s.weightKg);
     }
 
-    const age = parseInt(data.age);
-    const sex = data.sex!;
-    const tdee = calculateTDEE(weightKg, heightCm, age, sex);
-    const macros = calculateMacros(tdee);
+    const age = parseInt(s.age, 10);
+    const sex = s.sex!;
+
+    // Ray's requirement: map activityCategory → numeric multiplier for TDEE
+    const activityMultiplier = getActivityMultiplier(data.activityCategory);
+    const tdee = calculateTDEE(weightKg, heightCm, age, sex, activityMultiplier);
+
+    // Apply calorie offset based on goalType
+    const OFFSETS: Record<string, number> = { lose: -500, maintain: 0, gain: 250 };
+    const offset = data.goalType ? (OFFSETS[data.goalType] ?? 0) : 0;
+    const calorieTarget = Math.max(1200, tdee + offset);
+
+    // Macros based on adjusted calorieTarget (not raw TDEE) so they match actual intake
+    const macros = calculateMacros(calorieTarget);
+
+    // Stash for summary screen
+    setCalculatedCalories(calorieTarget);
+    setCalculatedMacros(macros);
+
+    // Ray's requirement: sanitise personalGoalNote
+    const cleanNote = sanitisePersonalNote(data.personalGoalNote);
+
+    // Ray's requirement: sanitise checkInDay
+    const checkInDay = data.checkInDay !== null
+      ? sanitiseCheckInDay(data.checkInDay)
+      : 1; // default Monday
 
     const result = await mergeDocument(COLLECTIONS.PROFILE, 'data', {
       goals: data.goals,
@@ -132,85 +353,241 @@ export default function QuizScreen() {
       age,
       sex,
       tdee,
-      calorieTarget: tdee,
+      calorieTarget,
       macros,
-      onboardingComplete: true,
+      activityLevel: activityMultiplier,    // numeric, for backward compat
+      activityCategory: data.activityCategory, // human-readable category (new)
+      trainingDaysPerWeek: data.trainingDaysPerWeek, // authoritative field
+      preferredTrainTime: data.preferredTrainTime,
+      goalType: data.goalType,
+      challenges: data.challenges.length > 0 ? data.challenges : undefined,
+      twelveWeekVision: data.twelveWeekVision,
+      recoveryPriority: data.recoveryPriority,
+      personalGoalNote: cleanNote.length > 0 ? cleanNote : undefined,
+      checkInDay,
+      remindersOptIn: data.remindersOptIn ?? false,
       quizCompletedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
+      // onboardingComplete is set in PersonalizedSummary after user taps "Let's Go"
     });
 
     if (result.error) {
       console.error('[quiz] Firestore write failed:', result.error);
-      setSaving(false);
       setError('Failed to save. Check your connection and try again.');
+      setPhase('quiz');
       return;
     }
 
-    if (__DEV__) console.log('[quiz] Firestore write confirmed — onboardingComplete: true saved to users/{uid}/profile/data');
-    // Refresh full profile from Firestore — returns onboardingComplete: true + all quiz data (TDEE, macros, etc.)
-    // AuthGuard re-evaluates on profileLoading → false and redirects to /(tabs).
-    await refreshProfile();
+    if (__DEV__) console.log('[quiz] Profile saved. Showing PersonalizedSummary.');
+
     analytics.track(AnalyticsEvent.ONBOARDING_COMPLETED, {
       goals: data.goals.join(','),
       experience_level: data.experienceLevel ?? '',
+      goal_type: data.goalType ?? '',
     });
-    if (__DEV__) console.log('[quiz] refreshProfile complete — AuthGuard should redirect to /(tabs)');
-    setSaving(false);
+
+    // BuildingPlan's Promise.all awaits this + delay(4000)
+    // Once both resolve, BuildingPlan unmounts and we show summary
+    setPhase('summary');
+  }, [data, currentUser]);
+
+  const handleLetsGo = useCallback(async () => {
+    // Final step: mark onboarding complete and refresh profile
+    await mergeDocument(COLLECTIONS.PROFILE, 'data', {
+      onboardingComplete: true,
+      updatedAt: serverTimestamp(),
+    });
+    await refreshProfile();
+    // AuthGuard will redirect to /(tabs) when onboardingComplete becomes true
+    if (__DEV__) console.log('[quiz] onboardingComplete: true — AuthGuard should redirect to /(tabs)');
+  }, [refreshProfile]);
+
+  // ── Rendering ─────────────────────────────────────────────────────────────
+
+  if (phase === 'building') {
+    return (
+      <BuildingPlan
+        onComplete={saveProfile}
+      />
+    );
   }
 
-  function handleBack() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setError(null);
-    setStep((s) => s - 1);
+  if (phase === 'summary') {
+    return (
+      <PersonalizedSummary
+        calories={calculatedCalories}
+        macros={calculatedMacros}
+        trainingDaysPerWeek={data.trainingDaysPerWeek}
+        twelveWeekVision={data.twelveWeekVision}
+        onLetsGo={handleLetsGo}
+      />
+    );
   }
+
+  const isFirstStep = step === 1;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
-      {/* Progress bar */}
-      <View style={styles.progressContainer}>
-        <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
+      <ProgressBar step={step} total={TOTAL_STEPS} reduceMotion={reduceMotion} />
+
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Step content */}
+        {step === 1 && (
+          <GoalsStep
+            goals={data.goals}
+            onChange={(goals) => update('goals', goals)}
+            reduceMotion={reduceMotion}
+          />
+        )}
+        {step === 2 && (
+          <ExperienceStep
+            value={data.experienceLevel}
+            onChange={(v) => update('experienceLevel', v)}
+            reduceMotion={reduceMotion}
+          />
+        )}
+        {step === 3 && (
+          <UnitsStep
+            value={data.units}
+            onChange={(v) => {
+              update('units', v);
+              // Sync input units with display units
+              updateBodyStats('inputUnits', v);
+            }}
+            reduceMotion={reduceMotion}
+          />
+        )}
+        {step === 4 && (
+          <BodyStatsStep
+            stats={data.bodyStats}
+            onChange={updateBodyStats}
+            reduceMotion={reduceMotion}
+          />
+        )}
+        {step === 5 && (
+          <GoalTypeStep
+            value={data.goalType}
+            onChange={(v) => update('goalType', v)}
+            reduceMotion={reduceMotion}
+          />
+        )}
+        {step === 6 && (
+          <TrainingDaysStep
+            value={data.trainingDaysPerWeek}
+            onChange={(v) => update('trainingDaysPerWeek', v)}
+            reduceMotion={reduceMotion}
+          />
+        )}
+        {step === 7 && (
+          <TrainTimeStep
+            value={data.preferredTrainTime}
+            onChange={(v) => update('preferredTrainTime', v)}
+            reduceMotion={reduceMotion}
+          />
+        )}
+        {step === 8 && (
+          <ActivityLevelStep
+            value={data.activityCategory}
+            onChange={(v) => update('activityCategory', v)}
+            reduceMotion={reduceMotion}
+          />
+        )}
+        {step === 9 && (
+          <ChallengesStep
+            selected={data.challenges}
+            onChange={(v) => update('challenges', v)}
+            reduceMotion={reduceMotion}
+          />
+        )}
+        {step === 10 && (
+          <VisionStep
+            value={data.twelveWeekVision}
+            onChange={(v) => update('twelveWeekVision', v)}
+            reduceMotion={reduceMotion}
+          />
+        )}
+        {step === 11 && (
+          <RecoveryStep
+            value={data.recoveryPriority}
+            onChange={(v) => update('recoveryPriority', v)}
+            reduceMotion={reduceMotion}
+          />
+        )}
+        {step === 12 && (
+          <PersonalNoteStep
+            value={data.personalGoalNote}
+            onChange={(v) => update('personalGoalNote', v)}
+            onSkip={handleSkipNote}
+            reduceMotion={reduceMotion}
+          />
+        )}
+        {step === 13 && (
+          <CheckInDayStep
+            value={data.checkInDay}
+            onChange={(v) => update('checkInDay', v)}
+            reduceMotion={reduceMotion}
+          />
+        )}
+        {step === 14 && (
+          <RemindersStep
+            value={data.remindersOptIn}
+            onChange={(v) => update('remindersOptIn', v)}
+            reduceMotion={reduceMotion}
+          />
+        )}
+        {step === 15 && (
+          <ConfirmStep
+            summary={{
+              goals: data.goals,
+              goalType: data.goalType,
+              trainingDaysPerWeek: data.trainingDaysPerWeek,
+              activityCategory: data.activityCategory,
+              twelveWeekVision: data.twelveWeekVision,
+            }}
+            reduceMotion={reduceMotion}
+          />
+        )}
+
+        {/* Error message */}
+        {error && (
           <View
             style={[
-              styles.progressFill,
-              { backgroundColor: Colors.accent, width: `${(step / TOTAL_STEPS) * 100}%` },
+              styles.errorBox,
+              { backgroundColor: Colors.error + '18', borderColor: Colors.error + '40' },
             ]}
-          />
-        </View>
-        <Text style={[styles.progressLabel, { color: colors.textSecondary }]}>
-          Step {step} of {TOTAL_STEPS}
-        </Text>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {step === 1 && <Step1 data={data} colors={colors} onToggleGoal={toggleGoal} />}
-        {step === 2 && <Step2 data={data} colors={colors} onSelect={(v) => update('experienceLevel', v)} />}
-        {step === 3 && <Step3 data={data} colors={colors} onUpdate={update} />}
-        {step === 4 && <Step4 data={data} colors={colors} onSelect={(v) => update('units', v)} />}
-
-        {error && (
-          <View style={[styles.errorBox, { backgroundColor: Colors.error + '18', borderColor: Colors.error + '40' }]}>
+          >
             <Text style={[styles.errorText, { color: Colors.error }]}>{error}</Text>
           </View>
         )}
 
+        {/* Nav row */}
         <View style={styles.navRow}>
-          {step > 1 && (
+          {!isFirstStep && (
             <TouchableOpacity
               style={[styles.backBtn, { borderColor: colors.border }]}
               onPress={handleBack}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
             >
               <Text style={[styles.backBtnText, { color: colors.textPrimary }]}>Back</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity
-            style={[styles.nextBtn, { backgroundColor: Colors.accent, opacity: saving ? 0.7 : 1, flex: step > 1 ? 1 : undefined }]}
+            style={[
+              styles.nextBtn,
+              { backgroundColor: Colors.accent, flex: isFirstStep ? undefined : 1 },
+            ]}
             onPress={handleNext}
-            disabled={saving}
+            accessibilityRole="button"
+            accessibilityLabel={step === TOTAL_STEPS ? 'Build my plan' : 'Next step'}
           >
-            {saving
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.nextBtnText}>{step === TOTAL_STEPS ? 'Finish' : 'Next'}</Text>
-            }
+            <Text style={styles.nextBtnText}>
+              {step === TOTAL_STEPS ? 'Build My Plan 🚀' : 'Next'}
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -218,236 +595,42 @@ export default function QuizScreen() {
   );
 }
 
-// ─── Step components ─────────────────────────────────────────────────────────
-
-function Step1({ data, colors, onToggleGoal }: { data: QuizData; colors: Theme['colors']; onToggleGoal: (g: Goal) => void }) {
-  const OPTIONS: { value: Goal; label: string; color: string }[] = [
-    { value: 'peptides', label: 'Peptide Tracking', color: Colors.peptide },
-    { value: 'nutrition', label: 'Nutrition', color: Colors.nutrition },
-    { value: 'training', label: 'Gym Training', color: Colors.gym },
-    { value: 'cardio', label: 'Cardio / Running', color: Colors.gym },
-  ];
-  return (
-    <View style={styles.stepContainer}>
-      <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>
-        What are you using PepMax for?
-      </Text>
-      <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
-        Select all that apply
-      </Text>
-      {OPTIONS.map((opt) => {
-        const selected = data.goals.includes(opt.value);
-        return (
-          <TouchableOpacity
-            key={opt.value}
-            style={[
-              styles.multiOption,
-              {
-                borderColor: selected ? opt.color : colors.border,
-                backgroundColor: selected ? opt.color + '15' : colors.surface,
-              },
-            ]}
-            onPress={() => onToggleGoal(opt.value)}
-          >
-            <View style={[styles.checkbox, { borderColor: selected ? opt.color : colors.border, backgroundColor: selected ? opt.color : 'transparent' }]}>
-              {selected && <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>✓</Text>}
-            </View>
-            <Text style={[styles.optionText, { color: colors.textPrimary }]}>{opt.label}</Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
-}
-
-function Step2({ data, colors, onSelect }: { data: QuizData; colors: Theme['colors']; onSelect: (v: ExperienceLevel) => void }) {
-  const OPTIONS: { value: ExperienceLevel; label: string; desc: string }[] = [
-    { value: 'beginner', label: 'Beginner', desc: 'New to training and tracking' },
-    { value: 'intermediate', label: 'Intermediate', desc: 'Consistent for 1–3 years' },
-    { value: 'advanced', label: 'Advanced', desc: 'Experienced, optimising performance' },
-  ];
-  return (
-    <View style={styles.stepContainer}>
-      <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Experience level?</Text>
-      {OPTIONS.map((opt) => {
-        const selected = data.experienceLevel === opt.value;
-        return (
-          <TouchableOpacity
-            key={opt.value}
-            style={[
-              styles.singleOption,
-              { borderColor: selected ? Colors.accent : colors.border, backgroundColor: selected ? Colors.accent + '12' : colors.surface },
-            ]}
-            onPress={() => onSelect(opt.value)}
-          >
-            <Text style={[styles.optionText, { color: colors.textPrimary }]}>{opt.label}</Text>
-            <Text style={[styles.optionDesc, { color: colors.textSecondary }]}>{opt.desc}</Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
-}
-
-function Step3({ data, colors, onUpdate }: { data: QuizData; colors: Theme['colors']; onUpdate: <K extends keyof QuizData>(key: K, value: QuizData[K]) => void }) {
-  const imp = data.inputUnits === 'imperial';
-  return (
-    <View style={styles.stepContainer}>
-      <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Your body stats</Text>
-      <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
-        Used to calculate your daily calorie target
-      </Text>
-
-      {/* Unit toggle */}
-      <View style={[styles.segmentRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        {(['imperial', 'metric'] as Units[]).map((u) => (
-          <TouchableOpacity
-            key={u}
-            style={[styles.segment, { backgroundColor: data.inputUnits === u ? Colors.accent : 'transparent' }]}
-            onPress={() => onUpdate('inputUnits', u)}
-          >
-            <Text style={[styles.segmentText, { color: data.inputUnits === u ? '#fff' : colors.textSecondary }]}>
-              {u.charAt(0).toUpperCase() + u.slice(1)}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* Height */}
-      <Text style={[styles.label, { color: colors.textSecondary }]}>Height</Text>
-      {imp ? (
-        <View style={styles.inlineRow}>
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary, flex: 1 }]}
-            placeholder="ft"
-            placeholderTextColor={colors.textSecondary}
-            value={data.heightFt}
-            onChangeText={(v) => onUpdate('heightFt', v)}
-            keyboardType="number-pad"
-          />
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary, flex: 1 }]}
-            placeholder="in"
-            placeholderTextColor={colors.textSecondary}
-            value={data.heightIn}
-            onChangeText={(v) => onUpdate('heightIn', v)}
-            keyboardType="number-pad"
-          />
-        </View>
-      ) : (
-        <TextInput
-          style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-          placeholder="cm"
-          placeholderTextColor={colors.textSecondary}
-          value={data.heightCm}
-          onChangeText={(v) => onUpdate('heightCm', v)}
-          keyboardType="decimal-pad"
-        />
-      )}
-
-      {/* Weight */}
-      <Text style={[styles.label, { color: colors.textSecondary }]}>Weight</Text>
-      <TextInput
-        style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-        placeholder={imp ? 'lbs' : 'kg'}
-        placeholderTextColor={colors.textSecondary}
-        value={imp ? data.weightLbs : data.weightKg}
-        onChangeText={(v) => onUpdate(imp ? 'weightLbs' : 'weightKg', v)}
-        keyboardType="decimal-pad"
-      />
-
-      {/* Age */}
-      <Text style={[styles.label, { color: colors.textSecondary }]}>Age</Text>
-      <TextInput
-        style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-        placeholder="Years"
-        placeholderTextColor={colors.textSecondary}
-        value={data.age}
-        onChangeText={(v) => onUpdate('age', v)}
-        keyboardType="number-pad"
-      />
-
-      {/* Sex */}
-      <Text style={[styles.label, { color: colors.textSecondary }]}>Biological sex</Text>
-      <View style={styles.inlineRow}>
-        {(['male', 'female'] as Sex[]).map((s) => (
-          <TouchableOpacity
-            key={s}
-            style={[
-              styles.singleOption,
-              { flex: 1, borderColor: data.sex === s ? Colors.accent : colors.border, backgroundColor: data.sex === s ? Colors.accent + '12' : colors.surface },
-            ]}
-            onPress={() => onUpdate('sex', s)}
-          >
-            <Text style={[styles.optionText, { color: colors.textPrimary, textAlign: 'center' }]}>
-              {s.charAt(0).toUpperCase() + s.slice(1)}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function Step4({ data, colors, onSelect }: { data: QuizData; colors: Theme['colors']; onSelect: (v: Units) => void }) {
-  const OPTIONS: { value: Units; label: string; desc: string }[] = [
-    { value: 'imperial', label: 'Imperial', desc: 'lbs, inches, miles' },
-    { value: 'metric', label: 'Metric', desc: 'kg, cm, km' },
-  ];
-  return (
-    <View style={styles.stepContainer}>
-      <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Unit preference</Text>
-      <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
-        You can change this later in settings
-      </Text>
-      {OPTIONS.map((opt) => {
-        const selected = data.units === opt.value;
-        return (
-          <TouchableOpacity
-            key={opt.value}
-            style={[
-              styles.singleOption,
-              { borderColor: selected ? Colors.accent : colors.border, backgroundColor: selected ? Colors.accent + '12' : colors.surface },
-            ]}
-            onPress={() => onSelect(opt.value)}
-          >
-            <Text style={[styles.optionText, { color: colors.textPrimary }]}>{opt.label}</Text>
-            <Text style={[styles.optionDesc, { color: colors.textSecondary }]}>{opt.desc}</Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
-}
-
-// ─── Styles ──────────────────────────────────────────────────────────────────
+// ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  progressContainer: { paddingHorizontal: 24, paddingTop: 16, gap: 6 },
-  progressTrack: { height: 4, borderRadius: 2, overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 2 },
-  progressLabel: { fontSize: 12, textAlign: 'right' },
-  scroll: { padding: 24, paddingTop: 16, gap: 12 },
-  stepContainer: { gap: 12 },
-  stepTitle: { fontSize: 22, fontWeight: '700', marginBottom: 4 },
-  stepSubtitle: { fontSize: 14, marginBottom: 4 },
-  multiOption: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, borderWidth: 1.5, padding: 16, gap: 12 },
-  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  singleOption: { borderRadius: 12, borderWidth: 1.5, padding: 16, gap: 4 },
-  optionText: { fontSize: 15, fontWeight: '600' },
-  optionDesc: { fontSize: 13 },
-  label: { fontSize: 13, fontWeight: '600', marginTop: 4 },
-  input: { height: 50, borderRadius: 12, borderWidth: 1, paddingHorizontal: 16, fontSize: 15 },
-  inlineRow: { flexDirection: 'row', gap: 10 },
-  segmentRow: { flexDirection: 'row', borderRadius: 10, borderWidth: 1, overflow: 'hidden', marginBottom: 4 },
-  segment: { flex: 1, height: 40, alignItems: 'center', justifyContent: 'center' },
-  segmentText: { fontSize: 14, fontWeight: '600' },
-  errorBox: { borderRadius: 10, borderWidth: 1, padding: 12 },
+  scroll: {
+    padding: 24,
+    paddingTop: 12,
+    gap: 16,
+    paddingBottom: 40,
+  },
+  errorBox: {
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 12,
+  },
   errorText: { fontSize: 13 },
-  navRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
-  backBtn: { height: 52, borderRadius: 14, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+  navRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  backBtn: {
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
   backBtnText: { fontSize: 15, fontWeight: '600' },
-  nextBtn: { height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', minWidth: 160 },
+  nextBtn: {
+    height: 52,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 160,
+  },
   nextBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

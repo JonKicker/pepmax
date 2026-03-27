@@ -54,6 +54,15 @@ type FoodLogInput = {
   servingUnit: string;
   barcode?: string;
   micronutrients?: Micronutrients;
+  /** Dietary fiber in grams for the logged serving. Optional. */
+  fiber?: number | null;
+  /**
+   * NOVA food processing group (1-4). Null when unavailable.
+   * RAY MANDATORY: validated as integer in [1,4] or absent/null before Firestore write.
+   */
+  novaGroup?: number | null;
+  /** Meal nutrition score (0-100) computed by scoreMealV2. Persisted after logging. */
+  nutritionScore?: number;
 };
 
 type FavoriteFoodInput = {
@@ -274,6 +283,10 @@ export async function copyMealsFromDate(
       servingUnit: entry.servingUnit,
       barcode: entry.barcode,
       micronutrients: entry.micronutrients,
+      // RAY MANDATORY: thread fiber and novaGroup through copyMealsFromDate
+      fiber: entry.fiber,
+      novaGroup: entry.novaGroup,
+      nutritionScore: entry.nutritionScore,
     });
     if (!result.error) copied++;
   }
@@ -353,6 +366,7 @@ async function searchOFF(
           servingSizeG: s.servingSizeG,
           barcode: s.barcode,
           foodSource: 'off' as const,
+          novaGroup: s.novaGroup,
         } satisfies FoodSearchResult;
       })
       .filter((r: FoodSearchResult) => r.name !== 'Unknown Food')
@@ -509,6 +523,7 @@ export async function getFoodByBarcode(
         servingSizeG: s.servingSizeG,
         barcode: s.barcode,
         foodSource: 'off' as const,
+        novaGroup: s.novaGroup,
       } satisfies FoodSearchResult,
       error: null,
     };

@@ -18,6 +18,7 @@ import {
   generateTargets,
   hasEnoughData,
 } from '../utils/expenditureAlgorithm';
+import type { Glp1Override } from '../utils/expenditureAlgorithm';
 import type { ServiceResult } from '../types/service';
 import type { UserProfile } from '../types/profile';
 import type {
@@ -97,10 +98,16 @@ export type CheckInResult = {
  * Run the TDEE + target computation from already-fetched coaching data.
  * Callers should fetch via `getAdaptiveCoachingData()` first and pass it in
  * to avoid a redundant Firestore read.
+ *
+ * Pass `glp1Override` when an active GLP-1 cycle has been detected upstream
+ * (from useGlp1Nutrition or similar). The override is forwarded to
+ * generateTargets to apply protein and calorie guardrails on top of the
+ * standard adaptive logic.
  */
 export async function runWeeklyCheckIn(
   userProfile: UserProfile,
   coachingData: AdaptiveCoachingData,
+  glp1Override?: Glp1Override,
 ): Promise<ServiceResult<CheckInResult>> {
   if (!coachingData.readiness.ready) {
     // Not enough data — caller should show the progress state instead
@@ -135,6 +142,7 @@ export async function runWeeklyCheckIn(
     userProfile.goalType ?? 'maintain',
     userProfile.sex,
     macroPcts,
+    glp1Override,
   );
 
   return { data: { result: tdeeResult, targets, coachingData }, error: null };

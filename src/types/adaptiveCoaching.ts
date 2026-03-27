@@ -45,6 +45,13 @@ export type AdaptiveTargets = {
   tdee: number;
   floorApplied: boolean;    // true when a safety floor clamped the target
   floorWarning?: string;    // human-readable explanation shown in UI
+
+  // ── GLP-1 context ──────────────────────────────────────────────────────────
+  // Present when generateTargets was called with glp1Override. The UI uses
+  // these to show which adjustments were applied and communicate the reasoning.
+  glp1ProteinFloorApplied?: boolean;   // protein was raised to the GLP-1 floor
+  glp1CalorieFloorApplied?: boolean;   // calories were raised to the GLP-1 floor
+  glp1ProteinFloorG?: number;          // the floor value that was applied (g)
 };
 
 // ─── Readiness check ─────────────────────────────────────────────────────────

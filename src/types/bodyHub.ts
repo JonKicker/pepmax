@@ -126,6 +126,22 @@ export type BodyHubSheetContent =
   | { type: 'lungs'; data: LungData }
   | { type: 'legs'; data: LegData };
 
+// ─── Heat Map Types ──────────────────────────────────────────────────────────
+
+export type HeatMapMode = 'volume' | 'recency';
+
+export type ImbalanceResult = {
+  weak: MuscleGroup;
+  strong: MuscleGroup;
+  ratio: number; // 0-1, weak/strong volume ratio
+};
+
+export type VolumeSummary = {
+  totalSets: number;
+  totalVolume: number;
+  imbalanceCount: number;
+};
+
 // ─── FAB Config ─────────────────────────────────────────────────────────────
 
 export const FAB_CONFIG: Record<BodyHubLayer, { label: string; icon: string; route: string }> = {

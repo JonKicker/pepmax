@@ -62,6 +62,31 @@ export type UserProfile = {
   // Default when absent: all 7 days (every day is planned).
   trainingDays?: number[];
 
+  // ── New onboarding quiz fields (quiz v2) ──────────────────────────────────
+  // Activity described as a category (separate from the numeric activityLevel
+  // multiplier stored below — category→multiplier mapping happens at save time).
+  activityCategory?: 'sedentary' | 'light' | 'moderate' | 'active';
+
+  // Authoritative field for how many days per week the user trains.
+  // Used by training scheduler and recovery score. Replaces any per-day array
+  // count for display purposes.
+  trainingDaysPerWeek?: number;
+
+  preferredTrainTime?: 'morning' | 'midday' | 'afternoon' | 'evening' | 'varies';
+  challenges?: string[];
+  twelveWeekVision?: 'stronger' | 'leaner' | 'optimized' | 'back_on_track';
+  recoveryPriority?: 'high' | 'medium' | 'low';
+
+  // Free-text goal note entered by user. Trimmed + control-chars stripped on save.
+  // Firestore rule enforces max 100 chars.
+  personalGoalNote?: string;
+
+  // Day of week for weekly check-in. 0 = Sunday … 6 = Saturday.
+  // Always stored as Math.max(0, Math.min(6, Math.floor(value))).
+  checkInDay?: number;
+
+  remindersOptIn?: boolean;
+
   // Apple HealthKit sync opt-in (iOS only)
   healthKitEnabled?: boolean;
 
@@ -79,6 +104,9 @@ export type UserProfile = {
     workoutReminderHour?: number;         // 0–23, default 17
     workoutReminderMinute?: number;       // 0–59, default 0
     workoutReminderOptimized?: boolean;   // true = HealthKit-adaptive schedule
+    // Hydration reminders — opt-in; toggle triggers permission request
+    hydrationReminders?: boolean;
+    hydrationIntervalHours?: number;      // Hours between reminders, e.g. 2
   };
 
   // Adaptive calorie coaching — optional; absent means feature not yet enabled

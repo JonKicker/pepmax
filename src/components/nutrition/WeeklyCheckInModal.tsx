@@ -23,9 +23,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
 import { useUnits } from '../../hooks/useUnits';
 import { kgToLbs } from '../../utils/tdee';
-import { Colors } from '../../constants/theme';
 import type { AdaptiveTDEEResult, AdaptiveTargets, DataReadiness } from '../../types/adaptiveCoaching';
 import type { NutritionTargets } from '../../types/nutrition';
+import { useWeeklyComparison } from '../../hooks/useWeeklyComparison';
+import { WeekComparisonChart } from './WeekComparisonChart';
+import { DirectionArrow } from './DirectionArrow';
+import { TopTipCard } from './TopTipCard';
+import { analytics, AnalyticsEvent } from '../../services/analytics';
 
 type Props = {
   visible: boolean;
@@ -49,6 +53,17 @@ export default function WeeklyCheckInModal({
   const { isImperial } = useUnits();
   const [howItWorksOpen, setHowItWorksOpen] = useState(false);
 
+  // Fetch weekly comparison data while modal is open
+  const { comparison, loading: comparisonLoading } = useWeeklyComparison(currentTargets, visible);
+
+  // Fire analytics when comparison data loads
+  React.useEffect(() => {
+    if (comparison && visible) {
+      analytics.track(AnalyticsEvent.WEEKLY_COMPARISON_VIEWED);
+      analytics.track(AnalyticsEvent.TOP_TIP_SHOWN, { tip: comparison.topTip.slice(0, 80) });
+    }
+  }, [comparison, visible]);
+
   const isReady = checkInData !== null;
 
   // Trend direction label and icon
@@ -61,7 +76,7 @@ export default function WeeklyCheckInModal({
       return {
         text: `Down ${displayValue.toFixed(1)} ${unit}/week`,
         icon: 'trending-down-outline',
-        color: Colors.nutrition,
+        color: colors.nutrition,
       };
     }
     if (kgPerWeek > threshold) {
@@ -70,14 +85,14 @@ export default function WeeklyCheckInModal({
       return {
         text: `Up ${displayValue.toFixed(1)} ${unit}/week`,
         icon: 'trending-up-outline',
-        color: Colors.error,
+        color: colors.error,
       };
     }
     return { text: 'Stable', icon: 'remove-outline', color: colors.textSecondary };
   }
 
   function confidenceColor(c: AdaptiveTDEEResult['confidence']): string {
-    return c === 'high' ? Colors.nutrition : c === 'medium' ? Colors.warning : Colors.error;
+    return c === 'high' ? colors.nutrition : c === 'medium' ? colors.warning : colors.error;
   }
 
   return (
@@ -90,9 +105,11 @@ export default function WeeklyCheckInModal({
       />
 
       <View style={[styles.sheet, { backgroundColor: colors.surface }]}>
+        {/* Drag handle */}
+        <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginTop: 8, marginBottom: 4 }} />
         {/* Header */}
         <View style={styles.header}>
-          <Ionicons name="analytics-outline" size={20} color={Colors.nutrition} />
+          <Ionicons name="analytics-outline" size={20} color={colors.nutrition} />
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
             Weekly Check-In
           </Text>
@@ -113,6 +130,8 @@ export default function WeeklyCheckInModal({
               onToggleHowItWorks={() => setHowItWorksOpen((v) => !v)}
               onAccept={() => onAccept(checkInData!.targets)}
               onDismiss={onDismiss}
+              comparison={comparison}
+              comparisonLoading={comparisonLoading}
             />
           ) : (
             <ProgressContent
@@ -139,6 +158,8 @@ function ReadyContent({
   onToggleHowItWorks,
   onAccept,
   onDismiss,
+  comparison,
+  comparisonLoading,
 }: {
   result: AdaptiveTDEEResult;
   targets: AdaptiveTargets;
@@ -149,6 +170,8 @@ function ReadyContent({
   onToggleHowItWorks: () => void;
   onAccept: () => void;
   onDismiss: () => void;
+  comparison: import('../../types/weeklyComparison').WeeklyComparisonData | null;
+  comparisonLoading: boolean;
 }) {
   const trend = trendLabel(result.weightChangeKgPerWeek);
 
@@ -187,9 +210,9 @@ function ReadyContent({
 
       {/* Floor warning */}
       {targets.floorApplied && targets.floorWarning && (
-        <View style={[styles.warningBanner, { backgroundColor: Colors.warning + '22', borderColor: Colors.warning }]}>
-          <Ionicons name="warning-outline" size={16} color={Colors.warning} />
-          <Text style={[styles.warningText, { color: Colors.warning }]}>
+        <View style={[styles.warningBanner, { backgroundColor: colors.warning + '22', borderColor: colors.warning }]}>
+          <Ionicons name="warning-outline" size={16} color={colors.warning} />
+          <Text style={[styles.warningText, { color: colors.warning }]}>
             {targets.floorWarning}
           </Text>
         </View>
@@ -202,9 +225,9 @@ function ReadyContent({
           {targets.calorieTarget.toLocaleString()} kcal/day
         </Text>
         <View style={styles.macroRow}>
-          <MacroPill label="Protein" g={targets.macros.proteinG} color="#4A90D9" />
-          <MacroPill label="Carbs" g={targets.macros.carbsG} color={Colors.warning} />
-          <MacroPill label="Fat" g={targets.macros.fatG} color={Colors.error} />
+          <MacroPill label="Protein" g={targets.macros.proteinG} color={colors.primary} />
+          <MacroPill label="Carbs" g={targets.macros.carbsG} color={colors.warning} />
+          <MacroPill label="Fat" g={targets.macros.fatG} color={colors.error} />
         </View>
       </View>
 
@@ -232,13 +255,86 @@ function ReadyContent({
         </Text>
       )}
 
+      {/* ─── Weekly Comparison Section ─────────────────────────────────── */}
+      {comparisonLoading && (
+        <View style={[styles.card, { backgroundColor: colors.background }]}>
+          <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>
+            Loading nutrition comparison...
+          </Text>
+        </View>
+      )}
+
+      {comparison && !comparisonLoading && (
+        <>
+          {/* Plain-English explanation */}
+          <View style={[styles.card, { backgroundColor: colors.background }]}>
+            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>
+              Nutrition Score — This Week vs Last Week
+            </Text>
+            <Text style={[styles.cardSubtext, { color: colors.textSecondary }]}>
+              {comparison.thisWeek.daysLogged > 0
+                ? `You logged ${comparison.thisWeek.daysLogged}/7 days this week.`
+                : 'No logs found for this week yet.'}
+              {comparison.deltas.score !== null
+                ? ` Score ${comparison.deltas.score >= 0 ? 'up' : 'down'} ${Math.abs(Math.round(comparison.deltas.score))} pts vs last week.`
+                : ''}
+            </Text>
+
+            {/* Score comparison row */}
+            <View style={styles.comparisonRow}>
+              <View style={styles.comparisonStat}>
+                <Text style={[styles.comparisonValue, { color: colors.nutrition }]}>
+                  {comparison.thisWeek.avgScore ?? '—'}
+                </Text>
+                <Text style={[styles.comparisonStatLabel, { color: colors.textSecondary }]}>
+                  This week
+                </Text>
+              </View>
+              <DirectionArrow
+                direction={comparison.deltas.direction}
+                label={
+                  comparison.deltas.score !== null
+                    ? `${comparison.deltas.score >= 0 ? '+' : ''}${Math.round(comparison.deltas.score)}`
+                    : undefined
+                }
+                textColor={colors.textSecondary}
+              />
+              <View style={styles.comparisonStat}>
+                <Text style={[styles.comparisonValue, { color: colors.nutrition }]}>
+                  {comparison.lastWeek.avgScore ?? '—'}
+                </Text>
+                <Text style={[styles.comparisonStatLabel, { color: colors.textSecondary }]}>
+                  Last week
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Chart */}
+          <WeekComparisonChart
+            thisWeek={comparison.thisWeek}
+            lastWeek={comparison.lastWeek}
+            textColor={colors.textPrimary}
+            borderColor={colors.border}
+          />
+
+          {/* Top tip */}
+          <TopTipCard
+            tip={comparison.topTip}
+            backgroundColor={colors.background}
+            textPrimary={colors.textPrimary}
+            textSecondary={colors.textSecondary}
+          />
+        </>
+      )}
+
       {/* Action buttons */}
       <TouchableOpacity
-        style={[styles.acceptButton, { backgroundColor: Colors.nutrition }]}
+        style={[styles.acceptButton, { backgroundColor: colors.nutrition }]}
         onPress={onAccept}
         activeOpacity={0.7}
       >
-        <Text style={styles.acceptButtonText}>Accept New Targets</Text>
+        <Text style={[styles.acceptButtonText, { color: colors.textPrimary }]}>Accept New Targets</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -270,7 +366,7 @@ function ProgressContent({
   return (
     <>
       <View style={[styles.card, { backgroundColor: colors.background }]}>
-        <Ionicons name="barbell-outline" size={32} color={Colors.nutrition} style={styles.progressIcon} />
+        <Ionicons name="barbell-outline" size={32} color={colors.nutrition} style={styles.progressIcon} />
         <Text style={[styles.progressTitle, { color: colors.textPrimary }]}>
           Building your baseline
         </Text>
@@ -282,7 +378,7 @@ function ProgressContent({
         {/* Progress bar */}
         <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
           <View
-            style={[styles.progressFill, { backgroundColor: Colors.nutrition, width: `${progress * 100}%` as any }]}
+            style={[styles.progressFill, { backgroundColor: colors.nutrition, width: `${progress * 100}%` as any }]}
           />
         </View>
         <Text style={[styles.progressCount, { color: colors.textSecondary }]}>
@@ -291,11 +387,11 @@ function ProgressContent({
       </View>
 
       <TouchableOpacity
-        style={[styles.acceptButton, { backgroundColor: Colors.nutrition }]}
+        style={[styles.acceptButton, { backgroundColor: colors.nutrition }]}
         onPress={onDismiss}
         activeOpacity={0.7}
       >
-        <Text style={styles.acceptButtonText}>Got it</Text>
+        <Text style={[styles.acceptButtonText, { color: colors.textPrimary }]}>Got it</Text>
       </TouchableOpacity>
     </>
   );
@@ -317,7 +413,7 @@ function MacroPill({ label, g, color }: { label: string; g: number; color: strin
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
   },
   sheet: {
     borderTopLeftRadius: 20,
@@ -402,7 +498,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 4,
   },
-  acceptButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  acceptButtonText: { fontSize: 16, fontWeight: '600' },
   keepButton: {
     paddingVertical: 14,
     borderRadius: 12,
@@ -417,4 +513,15 @@ const styles = StyleSheet.create({
   progressTrack: { height: 8, borderRadius: 4, marginTop: 8 },
   progressFill: { height: 8, borderRadius: 4 },
   progressCount: { fontSize: 13, textAlign: 'center' },
+
+  // Weekly comparison
+  comparisonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingVertical: 4,
+  },
+  comparisonStat: { alignItems: 'center', gap: 2 },
+  comparisonValue: { fontSize: 32, fontWeight: '800', lineHeight: 36 },
+  comparisonStatLabel: { fontSize: 11, fontWeight: '500' },
 });

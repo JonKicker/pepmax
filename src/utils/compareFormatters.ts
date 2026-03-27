@@ -1,5 +1,6 @@
 /**
  * compareFormatters — pure presentation-layer unit conversion utilities.
+ * Also includes PVP battle comparison helpers (determineStatWinner, calculateOverallWinner).
  *
  * All functions are stateless and side-effect free.
  * No Firestore, no auth, no imports from firebase.
@@ -100,4 +101,54 @@ export function formatStat(
     return '--';
   }
   return formatter(value);
+}
+
+// ─── PVP Battle comparison helpers ───────────────────────────────────────────
+
+/**
+ * Determines who wins a single stat comparison.
+ *
+ * @param myValue        My numeric value for this stat
+ * @param theirValue     Opponent's numeric value for this stat
+ * @param higherIsBetter true if a higher number is a better result (e.g. volume lifted)
+ *                       false if lower is better (e.g. pace in min/km)
+ * @returns 'me' | 'them' | 'tie'
+ */
+export function determineStatWinner(
+  myValue: number,
+  theirValue: number,
+  higherIsBetter: boolean,
+): 'me' | 'them' | 'tie' {
+  if (myValue === theirValue) return 'tie';
+
+  if (higherIsBetter) {
+    return myValue > theirValue ? 'me' : 'them';
+  } else {
+    // Lower is better (e.g. rest time, pace)
+    return myValue < theirValue ? 'me' : 'them';
+  }
+}
+
+/**
+ * Calculates the overall winner across multiple stat results.
+ *
+ * @param results  Array of per-stat winners ('me' | 'them' | 'tie')
+ * @returns        { winner, myWins, theirWins }
+ *                 winner is 'tie' when myWins === theirWins (including all-ties case)
+ */
+export function calculateOverallWinner(
+  results: Array<'me' | 'them' | 'tie'>,
+): { winner: 'me' | 'them' | 'tie'; myWins: number; theirWins: number } {
+  let myWins = 0;
+  let theirWins = 0;
+
+  for (const result of results) {
+    if (result === 'me') myWins++;
+    else if (result === 'them') theirWins++;
+    // 'tie' contributes to neither
+  }
+
+  if (myWins > theirWins) return { winner: 'me', myWins, theirWins };
+  if (theirWins > myWins) return { winner: 'them', myWins, theirWins };
+  return { winner: 'tie', myWins, theirWins };
 }

@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated,
+  Modal,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -21,10 +22,14 @@ import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors, Theme } from '../../../src/constants/theme';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { logFood, addFavorite, removeFavorite, getFavorites } from '../../../src/services/nutritionService';
+import { updateDocument, COLLECTIONS } from '../../../src/services/firebase/firestore';
 import { toLocalDateKey, recalculateMacros, recalculateMicronutrients, getRDAPercent, getTrafficLight } from '../../../src/utils/nutrition';
 import { DEFAULT_MEAL_SLOTS, getSlotLabel } from '../../../src/types/nutrition';
 import { MICRONUTRIENT_LABELS, MICRONUTRIENT_UNITS } from '../../../src/constants/nutrition';
-import type { FoodNavPayload, Micronutrients, MealSlotConfig } from '../../../src/types/nutrition';
+import type { FoodNavPayload, Micronutrients, MealSlotConfig, NutritionTargets } from '../../../src/types/nutrition';
+import { MealScoreCard } from '../../../src/components/nutrition/MealScoreCard';
+import { scoreMealV2 } from '../../../src/utils/nutritionScorer';
+import type { NutritionScoreResult } from '../../../src/types/nutritionScore';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
@@ -218,6 +223,10 @@ export default function FoodDetailScreen() {
       ? recalculateMicronutrients(food.micronutrients100g, 100, servingG)
       : food?.micronutrients100g ?? null;
 
+  // MealScoreCard overlay state
+  const [scoreCardVisible, setScoreCardVisible] = useState(false);
+  const [scoreCardResult, setScoreCardResult] = useState<NutritionScoreResult | null>(null);
+
   // Favorite state
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteId, setFavoriteId] = useState<string | null>(null);
@@ -304,6 +313,10 @@ export default function FoodDetailScreen() {
       return;
     }
 
+    // Compute fiber for the logged serving (fiber100g * servingG / 100)
+    const fiberLogged: number | null =
+      food.fiber100g != null ? Math.round((food.fiber100g * servingG) / 100 * 10) / 10 : null;
+
     setSaving(true);
     const result = await logFood({
       date: toLocalDateKey(),
@@ -318,6 +331,8 @@ export default function FoodDetailScreen() {
       servingUnit: servingUnit.trim(),
       barcode: food.barcode || undefined,
       micronutrients: scaledMicro ?? undefined,
+      fiber: fiberLogged,
+      novaGroup: food.novaGroup ?? null,
     });
     setSaving(false);
 
@@ -333,6 +348,48 @@ export default function FoodDetailScreen() {
       calories: Math.round(scaled.calories),
     });
 
+    // Compute and show MealScoreCard for this meal slot.
+    // TODO: Fetch the full meal slot's existing entries via getTodaysLog() and
+    // filter to mealSlot so the score reflects ALL items in the slot, not just
+    // this one. Skipped here because the async fetch would add latency to the
+    // post-log UX. When implemented, replace singleEntry with the full slot array.
+    // The card's mealSlotLabel prop is intentionally set to "this item" below to
+    // make the single-item limitation visible to the user.
+    if (userProfile?.calorieTarget && userProfile?.macros) {
+      const targets: NutritionTargets = {
+        calorieTarget: userProfile.calorieTarget,
+        proteinG: userProfile.macros.proteinG,
+        carbsG: userProfile.macros.carbsG,
+        fatG: userProfile.macros.fatG,
+      };
+      const singleEntry = [{
+        id: 'preview',
+        date: toLocalDateKey(),
+        mealSlot,
+        foodName: food.name,
+        brand: food.brand || undefined,
+        calories: scaled.calories,
+        protein: scaled.protein,
+        carbs: scaled.carbs,
+        fat: scaled.fat,
+        servingSize: servingG,
+        servingUnit: servingUnit.trim(),
+        micronutrients: scaledMicro ?? undefined,
+        fiber: fiberLogged,
+        novaGroup: food.novaGroup ?? null,
+        createdAt: null as any,
+      }];
+      const scoreResult = scoreMealV2(singleEntry as any, targets, mealSlot as any);
+      analytics.track(AnalyticsEvent.NUTRITION_SCORE_COMPUTED, { score: scoreResult.score, meal_slot: mealSlot });
+      setScoreCardResult(scoreResult);
+      // Persist the score back to the food log document (fire-and-forget).
+      if (result.data) {
+        updateDocument(COLLECTIONS.FOOD_LOG, result.data, { nutritionScore: scoreResult.score }).catch(() => {});
+      }
+      setScoreCardVisible(true);
+      analytics.track(AnalyticsEvent.NUTRITION_SCORE_CARD_SHOWN, { meal_slot: mealSlot });
+    }
+
     // If starred, also save/update favorite with current serving
     if (isFavorite && favoriteId) {
       await addFavorite({
@@ -347,16 +404,19 @@ export default function FoodDetailScreen() {
       });
     }
 
-    setToastVisible(true);
-    setTimeout(() => {
-      setToastVisible(false);
-      if (fromScan === 'true') {
-        router.navigate('/(tabs)/nutrition');
-      } else {
-        router.back();
-        router.back(); // back through add-food to dashboard
-      }
-    }, 1200);
+    // When score card is shown, navigation happens from card's onDismiss
+    if (!(userProfile?.calorieTarget && userProfile?.macros)) {
+      setToastVisible(true);
+      setTimeout(() => {
+        setToastVisible(false);
+        if (fromScan === 'true') {
+          router.navigate('/(tabs)/nutrition');
+        } else {
+          router.back();
+          router.back(); // back through add-food to dashboard
+        }
+      }, 1200);
+    }
   };
 
   const hasMicronutrients =
@@ -367,6 +427,28 @@ export default function FoodDetailScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* MealScoreCard overlay */}
+      {scoreCardResult && (
+        <MealScoreCard
+          visible={scoreCardVisible}
+          result={scoreCardResult}
+          mealSlotLabel="this item"
+          enabled
+          onDismiss={() => {
+            setScoreCardVisible(false);
+            analytics.track(AnalyticsEvent.NUTRITION_SCORE_CARD_DISMISSED, { meal_slot: mealSlot });
+            setToastVisible(true);
+            setTimeout(() => {
+              setToastVisible(false);
+              if (fromScan === 'true') {
+                router.navigate('/(tabs)/nutrition');
+              } else {
+                router.back();
+              }
+            }, 1200);
+          }}
+        />
+      )}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
 

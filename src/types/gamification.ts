@@ -17,7 +17,9 @@ export type XPSource =
   | 'duel_won'
   | 'quest_complete'
   | 'quest_bonus'
-  | 'fasting_complete';
+  | 'fasting_complete'
+  | 'meal_score_80'
+  | 'water_goal_reached';
 
 export type XPModule =
   | 'peptides'

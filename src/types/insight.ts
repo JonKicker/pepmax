@@ -4,7 +4,12 @@ export type InsightId =
   | 'peptideWeightTrend'
   | 'cardioAfterInjection'
   | 'weeklyConsistency'
-  | 'volumeTrend';
+  | 'volumeTrend'
+  | 'peptidePaceImprovement'
+  | 'injectionDayScheduling'
+  | 'peptideHRRecovery'
+  | 'compoundPerformanceTrend'
+  | 'suggestedWorkout';
 
 export type Insight = {
   id: InsightId;

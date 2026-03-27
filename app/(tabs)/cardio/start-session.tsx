@@ -20,6 +20,8 @@ import { requestLocationPermission } from '../../../src/utils/locationPermission
 import { Timestamp } from 'firebase/firestore';
 import { useSafetyContacts } from '../../../src/hooks/useSafetyContacts';
 import BeaconToggle from '../../../src/components/cardio/BeaconToggle';
+import RecoveryBanner from '../../../src/components/cardio/RecoveryBanner';
+import { getActivityMeta } from '../../../src/constants/activityRegistry';
 import type { ActivityType, GoalType, PoolLength, SessionGoal } from '../../../src/types/cardio';
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
@@ -76,12 +78,9 @@ function Toggle({
 
 // ─── Main screen ───────────────────────────────────────────────────────────────
 
-const ACTIVITY_LABELS: Record<ActivityType, string> = {
-  run: 'Run',
-  cycle: 'Cycle',
-  walk: 'Walk',
-  swim: 'Swim',
-};
+// Auto-set indoor mode for activities that default to indoor
+const getIndoorDefault = (type: ActivityType): boolean =>
+  getActivityMeta(type).indoorDefault;
 
 const GOAL_OPTIONS: { type: GoalType; label: string }[] = [
   { type: 'none', label: 'No goal' },
@@ -105,7 +104,7 @@ export default function StartSessionScreen() {
 
   const [goalType, setGoalType] = useState<GoalType>('none');
   const [goalValue, setGoalValue] = useState('');
-  const [indoorMode, setIndoorMode] = useState(false);
+  const [indoorMode, setIndoorMode] = useState(() => getIndoorDefault(activityType));
   const [poolLength, setPoolLength] = useState<PoolLength>('25m');
   const [customPoolLength, setCustomPoolLength] = useState('');
   const [starting, setStarting] = useState(false);
@@ -113,12 +112,15 @@ export default function StartSessionScreen() {
   const [permissionNeedsSettings, setPermissionNeedsSettings] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [beaconOn, setBeaconOn] = useState(false);
+  const [recoveryZoneTarget, setRecoveryZoneTarget] = useState<number | null>(null);
 
   const { contacts } = useSafetyContacts();
 
   const isSwim = activityType === 'swim';
-  const showIndoor = activityType === 'run' || activityType === 'cycle';
-  const showBeacon = !isSwim && !indoorMode && contacts.length > 0;
+  // Show indoor toggle for GPS-relevant activities that don't default to indoor
+  const activityMeta = getActivityMeta(activityType);
+  const showIndoor = activityMeta.gpsRelevant && !activityMeta.indoorDefault;
+  const showBeacon = activityMeta.gpsRelevant && !indoorMode && contacts.length > 0;
 
   const buildGoal = (): SessionGoal | null => {
     if (goalType === 'none') return null;
@@ -194,6 +196,8 @@ export default function StartSessionScreen() {
         // Pass contact phones so active-session doesn't need a second Firestore fetch.
         // JSON-serialized array of { id, name, phone } objects.
         beaconContacts: beaconOn ? JSON.stringify(contacts) : '',
+        // Recovery zone target from morning check-in
+        recoveryZoneTarget: recoveryZoneTarget != null ? String(recoveryZoneTarget) : '',
       },
     });
   };
@@ -204,8 +208,10 @@ export default function StartSessionScreen() {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
+      <RecoveryBanner onZoneTarget={(zone) => setRecoveryZoneTarget(zone)} />
+
       <Text style={[styles.activityTitle, { color: colors.textPrimary }]}>
-        {ACTIVITY_LABELS[activityType] ?? 'Session'}
+        {getActivityMeta(activityType)?.label ?? 'Session'}
       </Text>
 
       {/* Permission error banner */}

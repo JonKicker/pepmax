@@ -6,10 +6,14 @@ type Props = {
   currentBpm: number;
   maxHR: number;
   zones: HeartRateZone[];
+  targetZone?: number; // RAY #9: dim non-target zones to 40% opacity, pulse border on target
 };
 
-export default function HeartRateBar({ currentBpm, maxHR, zones }: Props) {
+export default function HeartRateBar({ currentBpm, maxHR, zones, targetZone }: Props) {
   const markerAnim = useRef(new Animated.Value(0)).current;
+  // RAY #9: pulsing border animation for target zone
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
   const pct = maxHR > 0 && currentBpm > 0 ? Math.min(currentBpm / maxHR, 1) : 0;
 
   useEffect(() => {
@@ -20,15 +24,47 @@ export default function HeartRateBar({ currentBpm, maxHR, zones }: Props) {
     }).start();
   }, [pct, markerAnim]);
 
+  // RAY #9: Pulse animation on target zone segment
+  useEffect(() => {
+    if (targetZone == null) return;
+
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.5, duration: 700, useNativeDriver: false }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 700, useNativeDriver: false }),
+      ]),
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [targetZone, pulseAnim]);
+
   return (
     <View style={styles.container}>
       <View style={styles.bar}>
-        {zones.map((z) => (
-          <View
-            key={z.zone}
-            style={[styles.segment, { flex: z.maxPct - z.minPct, backgroundColor: z.color }]}
-          />
-        ))}
+        {zones.map((z) => {
+          const isTarget = targetZone != null && z.zone === targetZone;
+          const isNonTarget = targetZone != null && z.zone !== targetZone;
+          return (
+            <Animated.View
+              key={z.zone}
+              style={[
+                styles.segment,
+                {
+                  flex: z.maxPct - z.minPct,
+                  backgroundColor: z.color,
+                  // RAY #9: dim non-target zones
+                  opacity: isNonTarget ? 0.4 : 1,
+                  // RAY #9: pulsing border on target zone
+                  borderWidth: isTarget ? pulseAnim.interpolate({
+                    inputRange: [1, 1.5],
+                    outputRange: [0, 2],
+                  }) : 0,
+                  borderColor: isTarget ? '#fff' : 'transparent',
+                },
+              ]}
+            />
+          );
+        })}
         {/* Animated position marker */}
         <Animated.View
           style={[

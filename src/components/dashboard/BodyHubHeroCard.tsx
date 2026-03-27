@@ -5,15 +5,17 @@
  * row specific to the active layer, and the body SVG — all visible without tapping.
  * Tapping anywhere still navigates to the full Body Hub screen.
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import BodyHubSVG from '../bodyHub/BodyHubSVG';
+import { MuscleHeatMapControls } from './MuscleHeatMapControls';
 import {
   getBodyPaths,
 } from '../../constants/bodyHubPaths';
+import { getRegionIdsForMuscle } from '../../utils/muscleMapping';
 import { Colors } from '../../constants/theme';
 import { useTheme } from '../../hooks/useTheme';
 import {
@@ -21,7 +23,8 @@ import {
   LAYER_ICONS,
   LAYER_LABELS,
 } from '../../types/bodyHub';
-import type { BodyHubLayer, BodyView, MuscleColorResult } from '../../types/bodyHub';
+import type { BodyHubLayer, BodyView, MuscleColorResult, HeatMapMode, ImbalanceResult, VolumeSummary } from '../../types/bodyHub';
+import { analytics, AnalyticsEvent } from '../../services/analytics';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -30,6 +33,10 @@ type Props = {
   // Muscle data
   muscleRegionColors?: Record<string, MuscleColorResult>;
   muscleRecovery?: number | null;
+  // Heat map data
+  heatMapRegionColors?: Record<string, MuscleColorResult>;
+  imbalances?: ImbalanceResult[];
+  volumeSummary?: VolumeSummary;
   // Injection data
   injectionSitesReady?: number | null;
   // Cardio data
@@ -78,6 +85,9 @@ export function BodyHubHeroCard({
   onPress,
   muscleRegionColors,
   muscleRecovery,
+  heatMapRegionColors,
+  imbalances,
+  volumeSummary,
   injectionSitesReady,
   cardioRegionColors,
   restingHR,
@@ -86,9 +96,13 @@ export function BodyHubHeroCard({
 }: Props) {
   const { colors } = useTheme();
   const [activeLayer, setActiveLayer] = useState<BodyHubLayer>('muscles');
+  const [heatMapMode, setHeatMapMode] = useState<HeatMapMode>('volume');
   // Hero card is front-only — dashboard hooks supply front-view data only.
   // Full front/back toggle available on the Body Hub detail screen.
   const view: BodyView = 'front';
+
+  // Ref guard: fire BODY_HUB_IMBALANCE_VIEWED only once per mount when imbalance regions are present.
+  const imbalanceViewedFiredRef = useRef(false);
 
   // ── Resting colors — built from the sex-specific muscle path keys ─────────
   const bodyPaths = getBodyPaths(sex);
@@ -99,7 +113,11 @@ export function BodyHubHeroCard({
 
   let layerRegionColors: Record<string, MuscleColorResult> | undefined;
   if (activeLayer === 'muscles') {
-    layerRegionColors = muscleRegionColors;
+    // Use volume heat map colors when mode is 'volume' and data is available
+    layerRegionColors =
+      heatMapMode === 'volume' && heatMapRegionColors
+        ? heatMapRegionColors
+        : muscleRegionColors;
   } else if (activeLayer === 'cardio') {
     layerRegionColors = cardioRegionColors;
   }
@@ -109,6 +127,36 @@ export function BodyHubHeroCard({
   const regionColors: Record<string, MuscleColorResult> = layerRegionColors
     ? { ...fallbackColors, ...layerRegionColors }
     : fallbackColors;
+
+  // Build imbalance region set from imbalance results (used by BodyHubSVG overlay)
+  const imbalanceRegions = (() => {
+    if (!imbalances || imbalances.length === 0) return undefined;
+    const set = new Set<string>();
+    for (const imbalance of imbalances) {
+      const regionIds = getRegionIdsForMuscle(imbalance.weak);
+      for (const regionId of regionIds) {
+        set.add(regionId);
+      }
+    }
+    return set.size > 0 ? set : undefined;
+  })();
+
+  // Fire BODY_HUB_IMBALANCE_VIEWED once per mount when imbalance regions are non-empty.
+  useEffect(() => {
+    if (!imbalanceViewedFiredRef.current && imbalanceRegions && imbalanceRegions.size > 0) {
+      analytics.track(AnalyticsEvent.BODY_HUB_IMBALANCE_VIEWED, {
+        imbalance_count: imbalanceRegions.size,
+      });
+      imbalanceViewedFiredRef.current = true;
+    }
+  }, [imbalanceRegions]);
+
+  // Default VolumeSummary for when the prop is not yet loaded
+  const activeSummary: VolumeSummary = volumeSummary ?? {
+    totalSets: 0,
+    totalVolume: 0,
+    imbalanceCount: 0,
+  };
 
   // ── Stats for active layer ────────────────────────────────────────────────
 
@@ -227,6 +275,20 @@ export function BodyHubHeroCard({
               );
             })}
           </View>
+
+          {/* Heat map controls — only shown when muscles layer is active */}
+          {activeLayer === 'muscles' && (
+            <MuscleHeatMapControls
+              mode={heatMapMode}
+              onToggleMode={() => {
+                const newMode: HeatMapMode = heatMapMode === 'volume' ? 'recency' : 'volume';
+                setHeatMapMode(newMode);
+                analytics.track(AnalyticsEvent.BODY_HUB_HEATMAP_TOGGLED, { mode: newMode });
+              }}
+              volumeSummary={activeSummary}
+              imbalanceCount={activeSummary.imbalanceCount}
+            />
+          )}
         </View>
 
         {/* Stats row — layer-specific, above the SVG */}
@@ -241,6 +303,7 @@ export function BodyHubHeroCard({
             onRegionPress={() => { /* no-op in preview */ }}
             selectedRegion={null}
             sex={sex}
+            imbalanceRegions={activeLayer === 'muscles' ? imbalanceRegions : undefined}
           />
         </View>
       </LinearGradient>
@@ -265,7 +328,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   title: {
     color: '#FFFFFF',
@@ -276,7 +339,7 @@ const styles = StyleSheet.create({
   tabStrip: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 12,
     gap: 4,
   },
   tabPill: {
@@ -285,9 +348,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 4,
     borderRadius: 10,
+    minHeight: 44, // ensure >= 44pt touch target
   },
   tabLabel: {
     fontSize: 10,

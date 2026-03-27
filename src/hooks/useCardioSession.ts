@@ -37,6 +37,7 @@ export function useCardioSession(
   const [elevationLoss, setElevationLoss] = useState(0);
   const [lapCount, setLapCount] = useState(0);
   const [newSplit, setNewSplit] = useState<Split | null>(null);
+  const [currentAltitude, setCurrentAltitude] = useState<number | null>(null); // RAY #F5
 
   const watcher = useRef<Location.LocationSubscription | null>(null);
   const pauseStartRef = useRef<number>(0);
@@ -176,6 +177,11 @@ export function useCardioSession(
     routeRef.current = [...routeRef.current, point];
     setRoute([...routeRef.current]);
     setDistance(distanceRef.current);
+
+    // RAY #F5: update altitude display — handle null gracefully
+    if (point.altitude !== null) {
+      setCurrentAltitude(point.altitude);
+    }
 
     // Rolling pace
     const roll = rollingPace(routeRef.current);
@@ -441,6 +447,7 @@ export function useCardioSession(
     elevationLoss,
     lapCount,
     newSplit,
+    currentAltitude,
     start,
     pause,
     resume,

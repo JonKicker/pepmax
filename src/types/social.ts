@@ -3,8 +3,12 @@
  *
  * Covers all types required for the leaderboards, friends, and crews feature set.
  * Phase 1 scope: username claiming, public profile CRUD, rank tiers, profile cards.
+ *
+ * Phase 1B: Added rankRP and rankTierV2 fields for RP-based rank system (additive,
+ * not breaking). Existing `tier` field continues to be updated by XP logic.
  */
 import { Timestamp, FieldValue } from 'firebase/firestore';
+import type { RankTierV2 } from './rankV2';
 
 // ─── Username ────────────────────────────────────────────────────────────────
 
@@ -68,6 +72,16 @@ export type PublicProfile = {
   leaderboardOptOut: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  /**
+   * RP value for the V2 rank system — written ONLY by Cloud Functions via Admin SDK.
+   * Never written by the client. RP is server-authoritative.
+   */
+  rankRP?: number;
+  /**
+   * RP-based tier for the V2 rank system — written ONLY by Cloud Functions via Admin SDK.
+   * Display fallback chain: rankTierV2 ?? mapLegacyToV2(tier) ?? bronze.
+   */
+  rankTierV2?: RankTierV2;
   /**
    * Materialised stat counters — written ONLY by Cloud Functions via Admin SDK.
    * Never written by the client. Firestore rules intentionally exclude these

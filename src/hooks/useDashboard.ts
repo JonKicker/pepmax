@@ -105,6 +105,10 @@ export function useDashboard(userProfile?: UserProfile | null) {
               }
             }
           }
+          // Migration: append hydration if not present
+          if (!result.includes('hydration')) {
+            result.push('hydration');
+          }
           return result;
         })(),
         hiddenCards: prefs?.hiddenCards ?? [],

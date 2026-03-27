@@ -11,7 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Calendar } from 'react-native-calendars';
@@ -776,6 +776,17 @@ function Step4({
 export default function CyclePlannerScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const {
+    prefillCompoundId,
+    prefillCompoundName,
+    prefillDose,
+    prefillUnit,
+  } = useLocalSearchParams<{
+    prefillCompoundId?: string;
+    prefillCompoundName?: string;
+    prefillDose?: string;
+    prefillUnit?: string;
+  }>();
 
   const [step, setStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
@@ -801,8 +812,26 @@ export default function CyclePlannerScreen() {
 
   useEffect(() => {
     getPeptides().then((result) => {
-      setPeptides(result.data ?? []);
+      const loaded = result.data ?? [];
+      setPeptides(loaded);
       setLoadingPeptides(false);
+
+      // Pre-fill from Education Hub "Start Protocol" navigation
+      if (prefillCompoundId && prefillCompoundName) {
+        const match = loaded.find(
+          (p) => p.name === prefillCompoundName || p.presetId === prefillCompoundId,
+        );
+        if (match) {
+          setData((prev) => ({
+            ...prev,
+            compoundId: match.id,
+            compoundName: match.name,
+            unit: (prefillUnit as CycleWizardData['unit']) || match.unit || prev.unit,
+            startingDose: prefillDose || '',
+          }));
+          setStep(2);
+        }
+      }
     });
   }, []);
 

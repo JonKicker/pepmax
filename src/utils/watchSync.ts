@@ -8,7 +8,7 @@
 import { updateWatchState, sendToWatch, isWatchConnectivityAvailable } from '../services/watchConnectivity';
 import { createCardioSession } from '../services/cardioService';
 import { addDose } from '../services/peptideService';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, increment, arrayUnion } from 'firebase/firestore';
 import { orderBy, limit, where } from 'firebase/firestore';
 import { analytics, AnalyticsEvent } from '../services/analytics';
 import { awardXP } from '../services/gamificationService';
@@ -16,6 +16,7 @@ import { decrementInventoryOnDose } from '../services/inventoryService';
 import { getTodayRecoveryScore } from '../services/recoveryScoreService';
 import { mergeDocument, queryDocuments, COLLECTIONS } from '../services/firebase/firestore';
 import { toLocalDateKey } from './nutrition';
+import { DEFAULT_WATER_GOAL_OZ } from '../types/water';
 import type { FoodLogEntry } from '../types/nutrition';
 import type { WorkoutSession } from '../types/workout';
 import type { ActivityType, RoutePoint, Split, HeartRatePoint, TimeInZone } from '../types/cardio';
@@ -421,11 +422,23 @@ export async function handleWatchWaterLogged(
   }
 
   const today = toLocalDateKey(new Date()); // YYYY-MM-DD in local timezone
-  const totalOz = typeof payload.totalOz === 'number' ? payload.totalOz : payload.ozLogged;
+  const loggedAt = Timestamp.fromMillis(payload.timestamp as number);
+
+  // Use FieldValue.increment() to avoid race conditions when phone and watch
+  // log simultaneously. arrayUnion() appends the entry to the log array.
+  const entry = {
+    oz: payload.ozLogged as number,
+    loggedAt,
+    source: 'watch',
+  };
 
   await mergeDocument(COLLECTIONS.WATER_LOG, today, {
-    totalOz,
-    lastLoggedAt: Timestamp.fromMillis(payload.timestamp as number),
+    totalOz: increment(payload.ozLogged as number),
+    entries: arrayUnion(entry),
+    lastLoggedAt: loggedAt,
+    // goalOz is only set on first write (merge won't overwrite an existing value).
+    // Ensures docs created by the watch before the phone loads today have a valid goal.
+    goalOz: DEFAULT_WATER_GOAL_OZ,
     source: 'watch',
   });
 }

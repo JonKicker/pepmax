@@ -23,7 +23,9 @@ export type DashboardCardId =
   | 'bodyWeight'
   | 'smartInsights'
   | 'aiInsight'
-  | 'gamification';
+  | 'gamification'
+  | 'hydration'
+  | 'suggestedWorkout';
 
 export type DashboardPreferences = {
   cardOrder: DashboardCardId[];
@@ -54,6 +56,7 @@ export type DashboardData = {
 export const DEFAULT_CARD_ORDER: DashboardCardId[] = [
   'greeting',
   'recovery',
+  'suggestedWorkout',
   'bodyHub',
   'quests',
   'consistency',
@@ -62,6 +65,7 @@ export const DEFAULT_CARD_ORDER: DashboardCardId[] = [
   'training',
   'cardio',
   'bodyWeight',
+  'hydration',
   'smartInsights',
   'aiInsight',
 ];

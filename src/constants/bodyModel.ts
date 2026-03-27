@@ -106,6 +106,9 @@ export const MUSCLE_GROUP_TO_ZONES: Record<MuscleGroup, ZoneContribution[]> = {
   Glutes: [{ zone: 'glutes', weight: 1.0 }],
   Calves: [{ zone: 'calves', weight: 1.0 }],
   Core: [{ zone: 'coreAbs', weight: 1.0 }],
+  Traps: [{ zone: 'rearDeltsTraps', weight: 1.0 }],
+  Adductors: [{ zone: 'hamstrings', weight: 0.5 }, { zone: 'glutes', weight: 0.5 }],
+  Abductors: [{ zone: 'glutes', weight: 0.6 }, { zone: 'hamstrings', weight: 0.4 }],
   'Full Body': [
     // Distribute across the 5 largest muscle groups at equal weight
     { zone: 'chest', weight: 0.2 },

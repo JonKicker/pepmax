@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Path, G, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { useTheme } from '../../hooks/useTheme';
+import { Colors } from '../../constants/theme';
 import {
   getBodyPaths,
   MUSCLE_DETAIL_LINES,
@@ -27,6 +28,8 @@ type Props = {
   getRegionLabel?: (regionId: string) => string;
   /** User sex — selects the correct body model silhouette and muscle paths. Defaults to 'male'. */
   sex?: 'male' | 'female';
+  /** Region IDs that have detected imbalances — renders a dashed amber overlay stroke. */
+  imbalanceRegions?: Set<string>;
 };
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -40,6 +43,7 @@ export default function BodyHubSVG({
   children,
   getRegionLabel,
   sex = 'male',
+  imbalanceRegions,
 }: Props) {
   const { colors, dark } = useTheme();
 
@@ -125,13 +129,36 @@ export default function BodyHubSVG({
                 >
                   <Path
                     d={pathData}
+                    // Resting region fill — intentionally static for SVG rendering
                     fill={isHighlighted ? `url(#grad-${regionId})` : '#2a3a4a'}
                     fillOpacity={isHighlighted ? 1 : 0.4}
+                    // White stroke for selection contrast on dark SVG background
                     stroke={isSelected ? '#FFFFFF' : 'transparent'}
                     strokeWidth={isSelected ? 1.5 : 0}
                     strokeLinejoin="round"
                   />
                 </G>
+              );
+            })}
+          </G>
+        )}
+
+        {/* Layer 3.5: Imbalance overlay — dashed amber stroke over imbalanced regions */}
+        {showRegionPaths && imbalanceRegions && imbalanceRegions.size > 0 && (
+          <G>
+            {Array.from(imbalanceRegions).map((regionId) => {
+              const pathData = musclePaths[regionId];
+              if (!pathData) return null;
+              return (
+                <Path
+                  key={`imbalance-${regionId}`}
+                  d={pathData}
+                  fill="none"
+                  stroke={Colors.warning}
+                  strokeWidth={1.5}
+                  strokeDasharray={[4, 3]}
+                  strokeOpacity={0.8}
+                />
               );
             })}
           </G>

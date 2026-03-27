@@ -101,6 +101,7 @@ function foodNavPayload(
     foodSource: s.foodSource,
     micronutrients100g: s.micronutrients100g,
     portions: s.portions,
+    novaGroup: s.novaGroup,
   };
   return JSON.stringify(payload);
 }

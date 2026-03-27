@@ -1,6 +1,852 @@
 # PepMax Feature Tracker
 
-## Active Branch: `feature/recovery-readiness-score`
+## Active Branch: `main`
+
+---
+
+## Adaptive Calorie Coaching Upgrade — Nutrition Score V2 + Voice Logging + Enhanced Weekly Check-In
+
+**Status:** ✅ Ray-approved (2026-03-26, Plan: 1 cycle conditional, Build: 2 cycles)
+**Date:** 2026-03-26
+
+### What Was Built
+
+**Upgrade 1 — Nutrition Score V2 Per Meal**
+- **`src/types/nutritionScore.ts`** — NutritionScoreResult, NutritionScoreBreakdown (protein/fiber/balance/micro/processed), DailyNutritionScoreV2
+- **`src/utils/nutritionScorer.ts`** — `scoreMealV2()` with 5-component formula: Protein (0-25), Fiber (0-25), Balance (0-25), Micro Bonus (0-25, for VitD/Iron/Ca/K/Mg), Processed Penalty (0 to -15 from NOVA group data)
+- **`src/components/nutrition/MealScoreCard.tsx`** — Animated post-log overlay with SVG ring fill, score counter, auto-dismiss 5s, expandable breakdown bars, `enabled` prop for future toggle
+- **`src/types/nutrition.ts`** — Added `fiber` and `novaGroup` to FoodLogEntry + FoodSearchResult + FoodNavPayload
+- **`src/utils/nutrition.ts`** — `sanitizeOFFProduct()` extracts `nova_group` from OFF API (validated int 1-4)
+- **`src/services/nutritionService.ts`** — FoodLogInput gains fiber/novaGroup; threaded through copyMealsFromDate
+- **`src/hooks/useMealScores.ts`** — Swapped to v2 scorer; fiber+novaGroup in memo dependency key
+- **`src/utils/mealTips.ts`** — New tip generators for fiber, micros, processed penalty
+- **`src/utils/mealScore.ts`** — @deprecated JSDoc (kept for reference, no longer called from main UI)
+- **`firestore.rules`** — Server-side validation: novaGroup (int 1-4 or null), fiber (0-200 or null)
+
+**Upgrade 2 — Voice Food Logging**
+- **`src/types/voiceLog.ts`** — ParsedFoodItem (name, quantity, unit, confidence)
+- **`src/utils/voiceFoodParser.ts`** — NLP-lite parser: splits on "and"/commas/"with"/"plus", extracts quantities/units/sizes
+- **`src/services/speechService.ts`** — STT abstraction with text-input fallback for v1 (no expo-av module-level import)
+- **`src/hooks/useVoiceRecording.ts`** — expo-av recording lifecycle (dynamic require), stopRecording returns URI directly
+- **`app/(tabs)/nutrition/voice-log.tsx`** — Modal screen: pulsing mic button, transcript display, parsed item cards with quantity steppers, "Search & Add All" flow
+- **`app/(tabs)/nutrition/index.tsx`** — Mic FAB button added
+
+**Upgrade 3 — Enhanced Weekly Check-In**
+- **`src/types/weeklyComparison.ts`** — WeekSummary, WeekDeltas, WeeklyComparisonData
+- **`src/utils/weeklyComparisonCalc.ts`** — Pure functions: computeWeekSummary (500-entry cap), computeWeekDeltas, generateTopTip; weight trend uses actual date difference (not reading count)
+- **`src/hooks/useWeeklyComparison.ts`** — Fetches 14-day food logs, splits into weeks, computes scores/deltas
+- **`src/components/nutrition/WeekComparisonChart.tsx`** — Victory Native grouped bar chart (this week vs last week daily scores), useTheme() with accentColor prop
+- **`src/components/nutrition/DirectionArrow.tsx`** — Color-coded trend arrows (up/down/flat)
+- **`src/components/nutrition/TopTipCard.tsx`** — Lightbulb icon + actionable tip text
+- **`src/components/nutrition/WeeklyCheckInModal.tsx`** — Added comparison section: chart, direction arrows, plain-English explanation, top tip card; existing Accept/Keep buttons preserved
+
+### Files (17 new, 11 modified, 3 test files)
+
+New: `nutritionScore.ts`, `voiceLog.ts`, `weeklyComparison.ts`, `nutritionScorer.ts`, `voiceFoodParser.ts`, `weeklyComparisonCalc.ts`, `speechService.ts`, `useVoiceRecording.ts`, `useWeeklyComparison.ts`, `MealScoreCard.tsx`, `WeekComparisonChart.tsx`, `DirectionArrow.tsx`, `TopTipCard.tsx`, `voice-log.tsx`
+Modified: `nutrition.ts` (types), `nutrition.ts` (utils), `mealScore.ts`, `mealTips.ts`, `useMealScores.ts`, `nutritionService.ts`, `analytics.ts`, `firestore.rules`, `food-detail.tsx`, `nutrition/index.tsx`, `WeeklyCheckInModal.tsx`
+Tests: `nutritionScorer.test.ts` (25), `voiceFoodParser.test.ts` (28), `weeklyComparisonCalc.test.ts` (25)
+
+### Tests: 78 passing
+
+### Key Decisions
+- New v2 scorer replaces old mealScore.ts in UI (old file kept with @deprecated, not deleted)
+- NOVA group data only available from Open Food Facts (not USDA) — processed penalty gracefully skipped when null
+- Fiber not previously stored on FoodLogEntry — added as optional field, computed from fiber100g at log time
+- Voice STT ships as text-input fallback for v1 — architecture ready for real STT engine
+- MealScoreCard shows "this item" score (not full slot) with TODO for full-slot scoring in follow-up
+- Weekly comparison fetches 14 days and splits — uses existing getLogsForDateRange (no new Firestore index needed)
+
+### Post-Approval Fix: Score Persistence (2026-03-26)
+- Added `nutritionScore?: number` to FoodLogEntry + FoodLogInput
+- Fire-and-forget `updateDocument` writes score to Firestore after computing in food-detail.tsx
+- Firestore rule validates nutritionScore in [0, 100]
+- Score threaded through copyMealsFromDate
+
+### Ray's Follow-Up Items (non-blocking)
+- A: `voiceFoodParser.ts` splits on "with" inside food names (e.g., "chicken with skin" → 2 items) — NLP limitation, documented
+- B: `DirectionArrow.tsx` and `TopTipCard.tsx` use Colors constant instead of useTheme() — minor inconsistency
+- C: `food-detail.tsx` SourceBadge uses hardcoded #888 hex — pre-existing, not part of this feature
+- D: MealScoreCard preview scores single item, not full meal slot — documented with TODO, honest "this item" label
+- E: expo-av not yet installed — run `npx expo install expo-av` before using voice recording feature
+
+---
+
+## PVP Overhaul Phase 3 — Events, Crew PVP, Share Cards & Accessibility Polish
+
+**Status:** ✅ Ray-approved (2026-03-26, Build: 2 cycles conditional — 1 security fix applied)
+**Date:** 2026-03-26
+**Branch:** `main`
+
+### What was built
+
+Seasonal events system with difficulty-tiered challenges, crew vs crew competition cards, share card generation for PVP moments (rank-up, duel victory, season summary, league standing), and accessibility polish across all Phase 2 PVP components.
+
+**Files created:** `src/types/pvpEvents.ts`, `src/utils/pvpEventUtils.ts`, `src/services/eventService.ts`, `src/components/pvp/EventBanner.tsx`, `src/components/pvp/ChallengeDifficultyBadge.tsx`, `src/components/pvp/CrewVsCrewCard.tsx`, `src/utils/shareCardUtils.ts`, `src/components/pvp/ShareCardRenderer.tsx`
+**Files modified:** `src/components/pvp/VSScreen.tsx` (a11y), `src/components/pvp/DuelResultScreen.tsx` (a11y), `src/components/pvp/CompareBattle.tsx` (a11y), `src/components/pvp/YourRankBanner.tsx` (a11y), `src/services/analytics.ts` (5 events), `src/services/firebase/firestore.ts` (4 constants), `firestore.rules` (4 collection rules + wildcard exclusion)
+**Tests:** 48 tests (`src/__tests__/pvpEvents.test.ts`)
+
+### Architecture decisions
+- eventProgress Firestore rule: create-only with validation (challengeProgress={}, completedChallenges=[], badgeClaimed=false) — updates are CF-only via Admin SDK
+- Share card uses static dark palette (not system theme) for consistent camera roll images
+- DIFFICULTY_COLORS and RANK_COLORS as named constants with comments (semantically fixed, not theme-responsive)
+- react-native-view-shot 4.0.3 already installed — zero new packages
+- Accessibility roles/labels added to all interactive elements across VSScreen, DuelResultScreen, CompareBattle, YourRankBanner
+
+### Ray security fix applied
+- eventProgress rule changed from unrestricted write to create-only + update:false — prevents client self-completing challenges or claiming badges
+
+### Ray follow-ups (tracked, non-blocking)
+1. EventChallenge.type is raw string instead of union type (server-authored data, low risk)
+2. event.themeColor + '33' alpha append could produce garbage if themeColor is malformed (admin-authored, low risk)
+3. ACCENT constant in YourRankBanner should ideally be colors.accent from theme
+
+---
+
+## PVP Overhaul Phase 1C — Weekly Leagues, Seasons & Cloud Functions
+
+**Status:** ✅ Ray-approved (2026-03-26, Build: 1 cycle conditional — 0 mandatory fixes, 4 non-blocking follow-ups)
+**Date:** 2026-03-26
+**Branch:** `main`
+
+### What was built
+
+Server-authoritative PVP infrastructure: monthly seasons with percentile-based rewards, weekly Duolingo-style leagues with RP bracket matchmaking, 3 Cloud Functions (updateRP internal, assignWeeklyLeagues scheduled, claimSeasonReward callable), Firestore rules for all new collections, client-side read-only service + hook + 2 UI components.
+
+**Files created:** `src/types/pvp.ts`, `src/utils/pvpLeagueUtils.ts`, `src/services/pvpService.ts`, `src/hooks/usePvpSeason.ts`, `src/components/pvp/WeeklyLeagueCard.tsx`, `src/components/pvp/SeasonBanner.tsx`, `functions/src/updateRP.ts`, `functions/src/assignWeeklyLeagues.ts`, `functions/src/claimSeasonReward.ts`, `functions/src/shared/rankTierV2.ts`
+**Files modified:** `firestore.rules` (4 new collection rules + seasonProgress wildcard exclusion), `src/services/firebase/firestore.ts` (4 collection constants), `src/services/analytics.ts` (4 events), `functions/src/index.ts` (exports)
+**Tests:** 52 tests (`src/__tests__/pvpLeagueUtils.test.ts`)
+
+### Architecture decisions
+- updateRP is internal CF only — NOT exported in index.ts, no HTTP/callable surface
+- claimSeasonReward accepts ONLY seasonId — reward tier 100% server-derived from percentile
+- assignWeeklyLeagues is scheduler-only (onSchedule), Fisher-Yates shuffle within RP brackets, groups of 20
+- RP decay is lazy: stored lastActiveAt, computed on read as -5/day (max -35/week), floor at 0
+- Season duration: 1 month
+- seasonProgress excluded from users wildcard write rule (waterLog pattern)
+- All new collections: allow write: if false (Admin SDK bypasses)
+- memberUids flat array on league docs enables array-contains queries for client lookup
+- Season progress update inside updateRP is best-effort (non-fatal catch)
+
+### Security verification (all 4 mandatory checks PASS)
+1. claimSeasonReward accepts no client-supplied tier/reward param ✅
+2. updateRP not exported as callable ✅
+3. seasonProgress wildcard exclusion matches waterLog pattern ✅
+4. assignWeeklyLeagues has no client endpoint ✅
+
+### Ray follow-ups (tracked, non-blocking)
+1. assignWeeklyLeagues idempotency guard needed before Season 2 (re-run on same Monday creates duplicates)
+2. claimReward in usePvpSeason hook silently drops errors — surface to UI
+3. updateRP read-then-write should use Firestore transaction for atomicity at scale
+4. PVP component hardcoded hex colors — tech debt ticket for theme migration pass
+
+---
+
+## PVP Overhaul Phase 2 — VS Screen Drama + Leaderboard Revamp + Compare Battle
+
+**Status:** ✅ Ray-approved (2026-03-26, Build: 2 cycles conditional)
+**Date:** 2026-03-26
+**Branch:** `main`
+
+### What was built
+
+Dramatic PVP visual overhaul: full-screen VS reveal for duels, horizontal tug-of-war progress bar, victory/defeat/draw result screens with celebration engine integration, win streak badges, Olympic-style leaderboard podium, rank change arrows, sticky rank banner, and animated head-to-head compare battle with stat-by-stat reveals and winner declaration.
+
+**Files created:** `src/components/pvp/VSScreen.tsx`, `src/components/pvp/DuelProgressBar.tsx`, `src/components/pvp/DuelResultScreen.tsx`, `src/components/pvp/WinStreakBadge.tsx`, `src/components/pvp/LeaderboardPodium.tsx`, `src/components/pvp/RankChangeIndicator.tsx`, `src/components/pvp/YourRankBanner.tsx`, `src/components/pvp/CompareBattle.tsx`
+**Files modified:** `src/utils/compareFormatters.ts` (added determineStatWinner, calculateOverallWinner)
+**Tests:** 33 tests (`src/__tests__/pvpVisuals.test.ts`) + 25 existing compareFormatters tests unbroken
+
+### Architecture decisions
+- VSScreen uses TouchableWithoutFeedback for tap-to-dismiss + 2500ms auto-dismiss timer
+- DuelProgressBar uses flex-based tug-of-war (not pixel widths) for smooth animated split
+- DuelResultScreen triggers celebration engine but does NOT mount CelebrationOverlay — caller renders provider
+- CompareBattle reveals stats sequentially via setTimeout chain with mountedRef + timersRef cleanup guards
+- Full-screen PVP overlays use hardcoded dark theme (intentional — cinematic dark-only screens)
+- YourRankBanner uses useTheme() for dynamic light/dark context
+
+### Ray follow-ups (tracked, non-blocking)
+1. No accessibilityRole/accessibilityLabel on interactive elements (VSScreen tap, REVENGE button, Challenge to Duel, YourRankBanner tap)
+2. Hardcoded ACCENT in YourRankBanner despite using useTheme() elsewhere
+3. Dimensions.get('window') at module level in VSScreen + DuelResultScreen
+
+---
+
+## PVP Overhaul Phase 1B — Rank System V2
+
+**Status:** ✅ Ray-approved (2026-03-26, Plan: approved in Phase 1A cycle, Build: 2 cycles conditional)
+**Date:** 2026-03-26
+**Branch:** `main`
+
+### What was built
+
+RP-based rank system replacing XP-based 5-tier system. 6 tiers (Bronze→Silver→Gold→Platinum→Diamond→Legendary) with RP thresholds. SVG rank badges, animated progress bars, and rank-up/demotion ceremonies integrated with the Phase 1A celebration engine. Fully server-authoritative — no client writes to RP.
+
+**Files created:** `src/types/rankV2.ts`, `src/utils/rankTierV2.ts`, `src/components/pvp/RankBadge.tsx`, `src/components/pvp/RankProgressBar.tsx`, `src/components/pvp/RankUpCeremony.tsx`
+**Files modified:** `src/types/social.ts` (additive: rankRP?, rankTierV2? on PublicProfile), `src/utils/rankTier.ts` (re-exported V2 adapters)
+**Tests:** 72 tests (`src/__tests__/rankTierV2.test.ts`)
+
+### Architecture decisions
+- Additive migration: new fields alongside existing `tier` field, fallback chain `rankTierV2 ?? mapLegacyToV2(tier) ?? bronze`
+- mapLegacyToV2('elite') → 'diamond' (legendary requires earned RP, not legacy XP)
+- RP floor at 0 (negative RP clamps to bronze)
+- RankUpCeremony fires ONLY after server-confirmed RP change (no optimistic display)
+- RankBadge glow uses withRepeat opacity pulse; static at 0.6 when reduced motion enabled
+- setTimeout cleanup via dismissed useRef guard prevents stale onComplete calls
+
+### Ray follow-ups (tracked, non-blocking)
+1. `as any` cast on Ionicons name in RankBadge — add IoniconsName type assertion
+2. Tick mark logic in RankProgressBar full mode is dead code — rethink or remove
+3. Cloud Function updateRP spec ready but not deployed — required for Phase 1C
+
+---
+
+## PVP Overhaul Phase 1A — Celebration Engine
+
+**Status:** ✅ Ray-approved (2026-03-26, Plan: 2 cycles conditional, Build: 2 cycles conditional)
+**Date:** 2026-03-26
+**Branch:** `main`
+
+### What was built
+
+Tiered celebration system (micro/medium/major/legendary) for all PVP features. Accessibility-first with useReducedMotion in every animation component. Queue-managed with priority ordering.
+
+**Files created:** `src/hooks/useReducedMotion.ts`, `src/types/celebration.ts`, `src/utils/celebrationPresets.ts`, `src/components/celebrations/ParticleSystem.tsx`, `src/components/celebrations/ScreenFlash.tsx`, `src/components/celebrations/CelebrationOverlay.tsx`, `src/hooks/useCelebration.ts`, `src/hooks/useMicroCelebration.ts`
+**Files modified:** `src/components/animations/SuccessBurst.tsx`, `src/components/animations/AnimatedToggle.tsx`, `src/components/animations/MorphButton.tsx`, `src/components/GradientButton.tsx`
+**Tests:** 53 tests (`src/__tests__/celebrationEngine.test.ts`)
+
+### Architecture decisions
+- Particle counts hard-capped at 40 (legendary max); deterministic angles (i * 360/count), no Math.random
+- All particle/decorative colors use Colors.* theme tokens (no hardcoded hex)
+- Queue: max depth 3, drop-oldest, priority ordering (rank-up > season > duel > challenge > XP), 3500ms safety timeout
+- useReducedMotion() shared hook retrofitted to 4 existing animation components (SuccessBurst, AnimatedToggle, MorphButton, GradientButton)
+- CelebrationProvider wraps app root, renders CelebrationOverlay
+- useMicroCelebration for inline scale/opacity pulse (no modal, no particles)
+- reducedMotionRef pattern eliminates stale closure in queue advance logic
+
+### Ray follow-ups (tracked, non-blocking)
+1. renderHook tests for useCelebration hook behavior (queue overflow, safety timeout, haptic firing) — deferred to Phase 1B
+2. Module-level itemCounter is shared across hook instances (documented, harmless for key deduplication)
+3. Queue drop-oldest policy drops by addedAt not priority — document edge case behavior
+
+### Remaining PVP phases
+- Phase 1B: Rank System V2 (6 RP-based tiers, RankBadge SVG, updateRP Cloud Function, DuelDoc rule updates)
+- Phase 1C: Weekly Leagues + Seasons (Duolingo-style 30-user groups, monthly seasons, assignWeeklyLeagues CF, claimSeasonReward callable)
+- Phase 2: VS Screen drama, leaderboard podiums, compare head-to-head battles
+- Phase 3: Seasonal events, crew vs crew, share cards, global animation polish
+
+---
+
+## Peptide Education Hub — Compound Education & Browsable Library
+
+**Status:** ✅ Ray-approved (2026-03-26, Plan: 1 cycle, Build: 1 cycle conditional)
+**Date:** 2026-03-26
+
+### What Was Built
+- **`src/types/education.ts`** — Type definitions (ProtocolInfo, Reference, FAQ, CompoundEducation)
+- **`src/data/compoundEducation.ts`** — Static education content for all 38 compounds (~1,800 lines, tiered by popularity)
+- **`src/components/peptides/EducationCard.tsx`** — Expandable section card with LayoutAnimation
+- **`src/components/peptides/ProtocolCard.tsx`** — Protocol display with "Start Protocol" CTA
+- **`app/(tabs)/peptides/compound-library.tsx`** — Searchable, category-filtered compound library with Popular section
+- **`app/(tabs)/peptides/compound-detail.tsx`** — 5-tab education detail (Overview, Protocols, Safety, Stacking, FAQ)
+- **`app/(tabs)/peptides/cycle-planner.tsx`** — Added prefill route params for Start Protocol integration
+
+### Key Decisions
+- All education data is static/bundled — zero Firestore reads, works offline
+- Compound library is a separate screen (not modifying the peptide management index)
+- Custom horizontal ScrollView tab bar (5 tabs too many for SegmentedControl)
+- Cross-compound linking via stacking tab for Wikipedia-like browsing
+- GLP-1 compounds get thorough content (Tier 1), popular research compounds standard (Tier 2), rest minimum (Tier 3)
+
+### Ray's Follow-Up Items (tech debt)
+- A: ESLint exhaustive-deps warning in cycle-planner prefill useEffect
+- B: "Start Protocol" should handle case where compound not yet in user's library
+- C: Fuzzy stack cross-link matching could hit wrong compound — consider exact match
+- D: Inline style objects in stacking pills render loop
+
+---
+
+## Premium Animation Components — Whoop-Inspired Micro-Interactions
+
+**Status:** ✅ Ray-approved (2026-03-26, Plan: 1 cycle conditional, Build: 2 cycles)
+**Date:** 2026-03-26
+**Branch:** `feature/recovery-readiness-score`
+
+### What was built
+
+**useHaptic Hook** (`src/hooks/useHaptic.ts`)
+- Semantic haptic mapping: tap (Light), toggle (Medium), success (Success), warning (Warning), error (Error), heavy (Heavy)
+- Platform guard: `Platform.OS === 'web'` bail-out prevents crashes in Expo Web
+- All calls fire-and-forget with `.catch(() => {})` — matches LevelUpModal pattern
+
+**GradientButton Pulse + Loading** (`src/components/GradientButton.tsx` — modified)
+- `pulse` prop: breathing scale animation (1.0→1.04) + opacity (0.85→1.0) via withRepeat + withSequence, ~1500ms loop
+- `loading` prop: shimmer gradient sweep left-to-right, label fades out, ActivityIndicator shown
+- `loading` overrides `pulse` when both true; `loading` suppresses `onPress` (like `disabled`)
+- Shimmer width from `onLayout` — no render until real width measured (no magic fallback)
+- `cancelAnimation` on both pulse shared values in useEffect cleanup (prevents frame drops on nav)
+
+**SuccessBurst** (`src/components/animations/SuccessBurst.tsx`)
+- Animated checkmark (scale 0→1.2→1.0 spring) + 8 deterministic particles radiating at 45° intervals
+- Module-colored via `color` prop (default: `colors.gold` from useTheme)
+- `onComplete` callback fires after animation sequence via runOnJS
+- Haptics.notificationAsync(Success) on visible
+- PARTICLES array exported as module-level constant (no per-render allocations)
+
+**AnimatedToggle** (`src/components/animations/AnimatedToggle.tsx`)
+- Spring-physics thumb: withSpring(damping:10, stiffness:180) with slight overshoot
+- interpolateColor for smooth track background transition
+- Haptics.impactAsync(Medium) at snap point
+- Full accessibility: `accessibilityRole="switch"`, `accessibilityState={{ checked, disabled }}`
+- Drop-in replacement for React Native Switch
+
+**MorphButton** (`src/components/animations/MorphButton.tsx`)
+- Text-to-icon morph: label opacity→0 (150ms), icon scale 0→1.2→1.0 (spring)
+- Auto-reverts after configurable delay (default 1500ms)
+- Error-safe: if onPress throws, morph does NOT fire (early return + console.error)
+- setTimeout cleanup on unmount via useRef
+- Double-press guard: ignores taps while morphed
+
+**Barrel Export** (`src/components/animations/index.ts`)
+- Clean re-exports of SuccessBurst, AnimatedToggle, MorphButton, PARTICLES
+
+### Files (7 total: 5 new, 1 modified, 1 test)
+
+New: `useHaptic.ts`, `SuccessBurst.tsx`, `AnimatedToggle.tsx`, `MorphButton.tsx`, `animations/index.ts`
+Modified: `GradientButton.tsx`
+Tests: `animationComponents.test.ts`
+
+### Tests: 37 passing
+
+All tests import and exercise real modules (no mock copies). Coverage:
+- useHaptic: 10 tests (all 6 styles, default param, web guard, android)
+- PARTICLES: 7 tests (structure, uniqueness, angular range)
+- MorphButton: 5 tests (render, press, error guard, cleanup, double-press)
+- AnimatedToggle: 6 tests (render, toggle, disabled, a11y)
+- GradientButton: 7 tests (render, press, loading, disabled, pulse, spinner, label)
+- Barrel: 2 tests (exports, PARTICLES re-export)
+
+### Architecture decisions
+- All color defaults from `useTheme()` at runtime — zero static Colors imports
+- Pulse wraps AnimatedPressable in outer Animated.View — two animation layers compose cleanly
+- Reanimated shared values stable refs — ESLint exhaustive-deps may warn but functionally correct
+- expo-linear-gradient reused for shimmer (no new deps)
+
+---
+
+## Cardio Module Expansion — Peptide Insights + Recovery Performance + Activities + Elevation
+
+**Status:** ✅ Ray-approved (2026-03-25, Plan: 1 cycle conditional, Build: 2 cycles)
+**Date:** 2026-03-25
+**Branch:** `feature/recovery-readiness-score`
+
+### What was built
+
+**Phase 1A — Peptide-Aware Cardio Insights**
+- `src/utils/cardioInsightCalc.ts` — Shared `buildCardioContext()` pipeline + 4 new pure insight check functions
+- `peptidePaceImprovement` — Compares pace 14 days pre-cycle vs most recent 14 days (priority 2)
+- `injectionDayScheduling` — Day-of-week analysis for injection-day performance dips (priority 4)
+- `peptideHRRecovery` — HR recovery rate on-cycle vs off-cycle comparison (priority 6)
+- `compoundPerformanceTrend` — Per-compound rolling 4-week pace/distance trend (priority 8)
+- Priority interleaving: general insights = odd (1,3,5,7,9,11), peptide-cardio = even (2,4,6,8)
+- `insightService.ts` wired with optional `cycles`, `recoveryDocs`, `maxResults` params
+- `src/components/cardio/PostRunInsight.tsx` — 0-2 contextual insight cards on post-run summary
+
+**Phase 1B — Recovery-Aware Performance**
+- `src/utils/recoveryPaceCalc.ts` — `suggestEffort()` + `contextualizePerformance()` pure functions
+- `src/components/cardio/RecoveryBanner.tsx` — Pre-run recovery score banner with effort recommendations
+- HeartRateBar updated with `targetZone` prop (dim non-target zones to 40%, pulsing border on target)
+- Post-run recovery-adjusted pace card ("8:30 on recovery-62 ≈ 7:24 fully rested")
+- Null-safe throughout: null score → null return, never defaults to multiplier 1.0
+
+**Phase 2C — Expand Supported Activities**
+- `ActivityType` expanded from 4 to 11: run, cycle, walk, swim, hike, hiit, rowing, yoga, elliptical, stairclimber, custom
+- `src/constants/activityRegistry.ts` — Metadata registry (label, icon, MET, maxSpeed, gpsRelevant, paceRelevant, indoorDefault)
+- Phone/Watch type mismatch resolved (hike + custom now recognized on phone)
+- `calculateCalories` and `maxSpeedForActivity` refactored to use registry
+- All hardcoded activity checks replaced with registry lookups
+
+**Phase 2D — Live Elevation Display**
+- `src/components/cardio/ElevationDisplay.tsx` — Current altitude + cumulative gain/loss during active session
+- `src/components/cardio/ElevationProfileChart.tsx` — Victory Native area chart on post-run summary
+- `src/utils/cardioElevation.ts` — `buildElevationProfile()` with 200-point downsampling in the util
+- `useCardioSession` hook exposes `currentAltitude: number | null`
+
+### Files (22 total: 12 new, 10 modified)
+
+New: `cardioInsightCalc.ts`, `recoveryPaceCalc.ts`, `cardioElevation.ts`, `activityRegistry.ts`, `RecoveryBanner.tsx`, `PostRunInsight.tsx`, `ElevationDisplay.tsx`, `ElevationProfileChart.tsx`, + 4 test files
+Modified: `cardio.ts` (types), `insight.ts` (types), `insightService.ts`, `cardio.ts` (utils), `useCardioSession.ts`, `HeartRateBar.tsx`, `index.tsx`, `start-session.tsx`, `active-session.tsx`, `session-summary.tsx`
+
+### Tests: 77 passing (25 + 21 + 13 + 18)
+
+### Architecture decisions
+- Minimal Pick types (CycleInfo, DoseRecord, RecoveryDocEntry) local to cardioInsightCalc — decoupled from peptide module
+- Off-cycle = dates not covered by ANY cycle's date range; no off-cycle data → null
+- `isDateInAnyCycle()` range check replaces materialized date Set for performance
+- buildCardioContext is pure — accepts pre-fetched data, never fetches itself
+- session-summary fetches doses/cycles/recoveryDocs via Promise.all for live PostRunInsight data
+
+### UI/UX Polish Pass (completed)
+All 4 new components rewritten to match PepMax design system:
+- `useTheme()` integration — zero hardcoded hex values
+- `GlassCard` wrappers (subtle for banners/stats, heavy for charts)
+- Reanimated entrance animations with reduced-motion support
+- Accessibility labels and roles on all elements
+- Typography aligned to spec tiers (caption 13/400, micro 11/600, card title 15/700)
+- 4px spacing grid enforced throughout
+- ElevationProfileChart: VictoryVoronoiContainer tooltip, mount animation, cardio accent color
+- Full dark/light mode support via theme tokens
+
+### Ray follow-ups (tracked, non-blocking)
+1. `zone: 'green' as const` hardcoded in session-summary recovery doc mapping (history endpoint lacks zone field; benign since checks only read score)
+2. `color + '22'` string concatenation pattern in RecoveryBanner and ElevationProfileChart — works with current 6-digit hex tokens but fragile; extract `withOpacity()` utility in a future pass
+
+---
+
+## Water & Hydration Tracking — First-Class Daily Metric
+
+**Status:** ✅ Ray-approved (2026-03-25, Plan: 1 cycle conditional, Build: 2 cycles)
+**Date:** 2026-03-25
+**Branch:** `feature/recovery-readiness-score`
+
+### What was built
+
+Full phone-side water/hydration tracking completing the Watch→Phone→Watch sync loop. Quick-log UI on nutrition home, dashboard card, Firestore-backed daily logs with race-safe atomic writes.
+
+**Files created:** `src/types/water.ts`, `src/services/waterService.ts`, `src/hooks/useWater.ts`, `src/components/nutrition/WaterTracker.tsx`, `src/components/dashboard/HydrationCard.tsx`
+**Files modified:** `src/services/firebase/firestore.ts` (WATER_LOG collection), `src/types/profile.ts` (hydration in notificationPrefs), `src/types/dashboard.ts` ('hydration' card), `src/hooks/useDashboard.ts` (migration), `src/types/gamification.ts` ('water_goal_reached' XP source), `src/services/analytics.ts` (4 water events), `app/(tabs)/nutrition/index.tsx` (WaterTracker), `app/(tabs)/dashboard/index.tsx` (HydrationCard), `firestore.rules` (waterLog validation + wildcard exclusion), `src/utils/watchSync.ts` (FieldValue.increment fix + goalOz default)
+**Tests:** 38 tests (`src/__tests__/waterService.test.ts`)
+
+### Architecture decisions
+- `totalOz` maintained via `FieldValue.increment()` — race-safe for concurrent phone + watch writes
+- `entries[]` via `arrayUnion/arrayRemove` — append-only log with undo support
+- Firestore wildcard rule explicitly excludes waterLog paths (`!(request.path[4] == 'waterLog')`) so dedicated validation enforces `totalOz >= 0 && totalOz <= 300`
+- Default goal: 64oz (~1900ml), configurable 1-300oz
+- XP (10) for hitting daily goal, deduped by checking "was below goal before, now at/above"
+- HydrationCard self-contained with its own `useWater()` instance
+- Watch-first writes include `goalOz: DEFAULT_WATER_GOAL_OZ` via merge semantics
+
+### Ray review fixes applied
+- Cycle 1 → 2: Firestore wildcard bypass (path exclusion), totalOz >= 0 lower bound, dead ternary fix (teal vs accent), Watch goalOz default
+
+### Ray follow-ups (tracked, not blockers)
+1. Hydration reminder scheduling not yet implemented (types defined, no scheduling code)
+2. No test coverage for `handleWatchWaterLogged` in watchSync.ts
+3. Dual `useWater()` instances (dashboard + nutrition) = 2 Firestore reads — acceptable, shared context deferred
+
+---
+
+## Nutrition Score per Meal — Instant Feedback on Food Quality
+
+**Status:** ✅ Ray-approved (2026-03-25, Plan: 1 cycle conditional, Build: 2 cycles)
+**Date:** 2026-03-25
+**Branch:** `feature/recovery-readiness-score`
+
+### What was built
+
+Per-meal scoring system (0-100) with actionable tips. Each meal slot scored on macro balance (40%), protein density (25%), calorie appropriateness (25%), sodium moderation (10%) with color-coded animated badges and 1-2 specific improvement tips.
+
+**Files created:** `src/types/mealScore.ts`, `src/utils/mealScore.ts`, `src/utils/mealTips.ts`, `src/hooks/useMealScores.ts`, `src/components/nutrition/MealScoreBadge.tsx`, `src/components/nutrition/MealTips.tsx`, `src/components/nutrition/DailyNutritionScoreBanner.tsx`
+**Files modified:** `src/types/gamification.ts` (`meal_score_80` XP source), `app/(tabs)/nutrition/index.tsx`
+**Tests:** 39 tests (mealScore: 26, mealTips: 13)
+
+### Architecture decisions
+- Client-side only scoring, no Firestore persistence (V1)
+- Custom meal slots not scored (only 4 defaults); sodium absent → macro balance promoted to 50%
+- XP (10) for 80+ meals, deduped per slot per day via in-memory Set
+- `NutritionScoreForRecovery` interface defined for future Recovery Score integration
+
+### Ray review fixes applied
+- Rules of Hooks crash fix, stale memo key (sodium fields), GRAM_UNITS deduplication
+
+### Ray follow-ups (tracked, not blockers)
+1. XP dedup resets on app restart (200/day cap still enforced server-side)
+2. Protein density 40% target aggressive for general fitness — consider softer curve
+3. Recovery Score integration deferred
+
+---
+
+## GLP-1 Specific Nutrition Guidance — Peptide-Aware Calorie & Protein Intelligence
+
+**Status:** ✅ Ray-approved (2026-03-25, Plan: 1 cycle conditional, Build: 2 cycles)
+**Date:** 2026-03-25
+**Branch:** `feature/recovery-readiness-score`
+
+### What was built
+
+GLP-1-aware nutrition intelligence that auto-detects active GLP-1 cycles and enforces protein floors, adjusts calorie guardrails, provides meal timing guidance, and shows a persistent dashboard indicator with contextual tips. **No competitor offers this feature.**
+
+**Types** (`src/types/glp1Nutrition.ts`)
+- `GLP1_CATEGORIES` allowlist: `'GLP-1 Agonist'`, `'GLP-1/GIP Dual Agonist'`, `'GLP-1/GIP/Glucagon Triple Agonist'`
+- `Glp1NutritionState`, `Glp1AdjustedTargets` types
+
+**Pure utilities** (`src/utils/glp1Nutrition.ts`)
+- `isGlp1CycleActive(cycles, peptides)` — checks active cycles against allowlist
+- `calculateProteinFloorG(weightKg, activityLevel)` — 1.0g/kg sedentary → 1.6g/kg active, with `Math.max(0)` defensive clamp
+- `applyGlp1Adjustments(targets, proteinFloorG, sex)` — raises protein floor, redistributes carbs/fat proportionally, applies elevated calorie floor (male: 1600, female: 1400)
+- `getDailyGlp1Tip()` — rotates through ~8 GLP-1 meal guidance tips daily
+- `shouldSendProteinReminder(currentProteinG, floorG, currentHour)` — fires if 2-5 PM and protein < 60% of floor
+
+**Hook** (`src/hooks/useGlp1Nutrition.ts`)
+- Fetches active cycles, detects GLP-1 usage, computes protein floor and adjusted targets
+- `shouldSendProteinReminder` computed live in render body (not stale effect closure)
+- Graceful degradation: errors → inactive state, no warnings shown
+
+**Components**
+- `src/components/nutrition/Glp1ActiveBanner.tsx` — collapsible banner with "GLP-1 Active" indicator, protein floor badge, expanding daily tip
+- `src/components/nutrition/ProteinFloorWarning.tsx` — inline warning below protein bar with severity-based color and remaining grams
+
+**Integration** (`app/(tabs)/nutrition/index.tsx`)
+- GLP-1 banner at top of nutrition home when active
+- Protein floor warning below macro bars
+- Afternoon protein reminder notification with session-level dedup guard (`lastReminderDateRef`)
+
+**Adaptive TDEE integration**
+- `src/utils/expenditureAlgorithm.ts` — `generateTargets()` accepts optional `glp1Override` param (backward-compatible); applies protein floor clamp + elevated calorie floor
+- `src/types/adaptiveCoaching.ts` — added `glp1ProteinFloorApplied`, `glp1CalorieFloorApplied`, `glp1ProteinFloorG` to `AdaptiveTargets`
+- `src/services/adaptiveCoachingService.ts` — passes GLP-1 context through `runWeeklyCheckIn()`
+
+**Tests:** 46 tests (`src/__tests__/glp1Nutrition.test.ts`) — detection, protein floor calculations, macro redistribution, tip rotation, reminder logic, edge cases
+
+### Architecture decisions
+- Allowlist-based detection (3 exact category strings) — no regex, new compounds must be explicitly added
+- Protein floor redistribution preserves carb/fat ratio (proportional scaling)
+- GLP-1 calorie floors (1600/1400) layer on top of standard adaptive floors (1500/1200)
+- `activityLevel === undefined` defaults to sedentary (1.0g/kg) — most conservative
+- No new Firestore writes — detection is read-only from existing cycle/peptide data
+- No new dependencies
+
+### Ray review fixes applied
+- Cycle 1 → 2: Notification dedup (session-level ref guard), stale shouldSendProteinReminder (moved to live render-body computation), calorie floor constant extraction, Math.max(0) defensive clamp
+
+### Ray follow-ups (tracked, not blockers)
+1. Notification scheduling only fires if user visits nutrition tab (V1 limitation, documented in code)
+2. Notification dedup is session-level only — persistent Firestore-based dedup deferred to v2
+3. Recovery score integration deferred (currently uses binary proteinHit, could use GLP-1-aware floor)
+
+---
+
+## AI-Adaptive Workout Suggestions — Dashboard Feature
+
+**Status:** ✅ Ray-approved (2026-03-26, Plan: 1 cycle conditional, Build: 2 cycles)
+**Date:** 2026-03-26
+**Branch:** `feature/recovery-readiness-score`
+
+### What was built
+
+AI-powered workout suggestion system that recommends what to train today based on muscle recovery, overall recovery score, training history, and available equipment.
+
+**Types** (`src/types/workoutSuggestion.ts`)
+- SuggestedWorkout, SuggestedExercise, SuggestionInputs, SuggestionIntensity
+
+**Pure suggestion algorithm** (`src/utils/workoutSuggestion.ts`, 368 lines)
+- Muscle readiness scoring: null (never trained)→100, 0→0, 1→10, >=2→min(days*15, 100)
+- Recovery zone→intensity: green=heavy (3-4 sets), yellow=moderate (2-3), orange=light (2), red=rest (null)
+- Template matching: scores user's templates by muscle readiness affinity, suggests best if score >= TEMPLATE_MATCH_THRESHOLD (50)
+- Generated fallback: picks top 3-4 ready muscles, selects exercises matching available equipment, prefers compounds
+- PROFILE_TO_EXERCISE_EQUIPMENT mapping handles plural→singular divergence between ProfileEquipment and Equipment types
+- isMuscleGroup() type guard validates template muscleGroups (string[] → MuscleGroup)
+- Rationale string explains why these muscles/intensity were chosen
+
+**React hook** (`src/hooks/useWorkoutSuggestion.ts`, 107 lines)
+- Composes useBodyHubMuscles, useEquipmentProfiles, getTemplates
+- Templates fetched via useEffect+useState (async ServiceResult), suggestion computed via useMemo
+- Cleanup flag prevents stale state updates
+
+**Dashboard card** (`src/components/dashboard/SuggestedWorkoutCard.tsx`, 295 lines)
+- Zone-colored accent bar, rationale text, muscle group chips, exercise preview list
+- "Start Workout" button navigates to existing template flow
+- Returns null for red zone (rest day) or while loading
+- SUGGESTION_VIEWED fires on mount, SUGGESTION_STARTED on press
+
+**Smart insight** (`src/services/insightService.ts`)
+- checkSuggestedWorkout at priority 13 (odd, general category)
+- Fires when top muscle readiness >= 80 AND recovery zone is green/yellow
+- Wired into computeInsights orchestrator via optional recoveryZone/recoveryScore params
+
+**Dashboard wiring** (`app/(tabs)/dashboard/index.tsx`, 451 lines)
+- 'suggestedWorkout' in DashboardCardId union + DEFAULT_CARD_ORDER position 2 (after recovery)
+- Card wired in renderCard switch
+
+**Analytics:** SUGGESTION_VIEWED, SUGGESTION_STARTED, SUGGESTION_DISMISSED
+
+**Tests:** 43 tests in `src/__tests__/workoutSuggestion.test.ts`
+
+### Architecture decisions
+- Pure algorithm with no side effects — fully testable
+- Template matching preferred over generation (users' own templates feel more personal)
+- Equipment mapping layer handles ProfileEquipment↔Exercise Equipment divergence
+- Bodyweight exercises always available regardless of equipment profile
+- Red zone returns null (card hidden) — aligns with bare minimum philosophy
+
+### Ray follow-ups (tracked, not blockers)
+1. Duplicate Firestore read: useBodyHubMuscles fetches sessions separately from dashboard Body Hub card
+2. estimatedDuration ?? fallback is unreachable (template field is non-optional)
+
+---
+
+## Superset & Circuit Support — Training Module
+
+**Status:** ✅ Ray-approved (2026-03-25, Plan: 1 cycle conditional, Build: 2 cycles)
+**Date:** 2026-03-25
+**Branch:** `feature/recovery-readiness-score`
+
+### What was built
+
+Full superset and circuit support for the training module with component extraction to fix the oversized active-session screen.
+
+**Component extraction** (active-session.tsx 923 to 489 lines)
+- `src/components/training/SetRow.tsx` — Swipeable set row + RPE selector, set type badges (W/D/F)
+- `src/components/training/ExerciseSection.tsx` — Exercise header + set list + add-set button
+- `src/components/training/RestTimerOverlay.tsx` — Fixed-bottom rest timer overlay, exports formatTime
+- `src/components/training/BarCalcSection.tsx` — Warm-up sets + plate calculator block (eliminated duplication)
+- `src/components/training/TemplateExerciseRow.tsx` — Template exercise card with set type chips + circuit rounds stepper
+- template-builder.tsx reduced from 506 to 335 lines
+
+**Pure superset navigation** (`src/utils/supersetNavigation.ts`)
+- `shouldRestAfterSet()` — false between superset members in same round, true after round completes
+- `groupExercisesBySuperset()` — partitions into solo/grouped for rendering
+- `getNextSupersetExerciseName()` — for "Next: [exercise]" hint banner
+- `getGroupLabel()` — maps 0 to "A", 1 to "B", etc.
+
+**Active session superset flow** (`app/(tabs)/training/active-session.tsx`)
+- Exercises grouped by supersetGroup and wrapped in SupersetGroup component
+- handleCompleteSet checks shouldRestAfterSet — skips rest between superset members
+- "Next: [exercise name]" hint banner on superset-skip (auto-clears after 3s)
+- SUPERSET_ROUND_COMPLETED and CIRCUIT_COMPLETED analytics events
+
+**Set types** — `setType?: 'normal' | 'warmup' | 'dropset' | 'failure'` on SessionSet with color-coded badges
+
+**Template builder** — Set type chip selector + circuit rounds stepper for superset groups
+
+**Tests:** 28 tests in `src/__tests__/supersetNavigation.test.ts`
+
+### Architecture decisions
+- No supersetMeta on WorkoutSession — group info derived from SessionExercise.supersetGroup
+- Rest logic in screen layer, not hook — useWorkoutSession stays unchanged
+- formatTime exported from RestTimerOverlay (no duplication)
+- Superset navigation is pure (no React deps), fully testable
+
+### Ray follow-ups (tracked, not blockers)
+1. `colors: any` prop type on extracted components — define shared ThemeColors type
+2. shouldRestAfterSet doesn't handle out-of-order set completion within a superset
+3. templateTarget prop never passed in active-session (pre-existing)
+4. SupersetGroup circuitRounds/currentRound props accepted but not yet passed from active-session
+5. onCompleteSet data param typed as any in ExerciseSection
+
+---
+
+## Muscle Heat Map Visualization — Volume-Based Body Hub Mode
+
+**Status:** ✅ Ray-approved (2026-03-25, Plan: 1 cycle conditional, Build: 2 cycles)
+**Date:** 2026-03-25
+**Branch:** `feature/recovery-readiness-score`
+
+### What was built
+
+Volume-based heat map visualization mode for the Body Hub muscles layer, with antagonist pair imbalance detection.
+
+**Heat map color engine** (`src/utils/muscleMapping.ts`)
+- `getHeatMapColor(weeklyVolume, maxVolume)` — 5-stop gradient: blue (#3B82F6) → cyan (#06B6D4) → green (#22C55E) → yellow (#EAB308) → red (#EF4444)
+- Volume normalization is relative to user's own max muscle volume (adapts to any training level)
+- Opacity scales 0.25–0.80 so cold muscles are still visible
+- Guard for maxVolume=0 (returns cold-end color)
+
+**Antagonist imbalance detection** (`src/utils/muscleMapping.ts`)
+- `ANTAGONIST_PAIRS`: Chest/Back, Biceps/Triceps, Quads/Hamstrings, Glutes/Core, Shoulders/Traps
+- `detectImbalances(muscleStats)` — flags muscles with <60% of antagonist's weekly volume
+- Skips both-zero pairs; returns `ImbalanceResult[]` with weak/strong muscles and ratio
+- Added Traps, Adductors, Abductors to `allMuscles` array
+
+**Hook update** (`src/hooks/useBodyHubMuscles.ts`)
+- Added `mode: 'volume' | 'recency'` parameter (default: 'recency')
+- Wrapped regionColors in `useMemo` (pre-existing perf issue fixed)
+- Exposes `imbalances: ImbalanceResult[]` and `volumeSummary: VolumeSummary`
+
+**SVG imbalance overlay** (`src/components/bodyHub/BodyHubSVG.tsx`)
+- Optional `imbalanceRegions?: Set<string>` prop
+- Renders dashed amber (#F59E0B) stroke overlay on underworked muscle regions
+- `fill="none"` so overlay doesn't occlude heat map fill
+
+**Dashboard controls** (`src/components/dashboard/MuscleHeatMapControls.tsx`) — NEW
+- Volume/Recency toggle pill
+- Stat chips: total weekly sets, total weekly volume (formatted with k suffix), imbalance warning count
+- Dark gradient overlay context documented (hardcoded white/alpha is intentional)
+
+**Dashboard integration** (`src/components/dashboard/BodyHubHeroCard.tsx`)
+- `heatMapMode` state with Volume/Recency toggle
+- Fires `BODY_HUB_HEATMAP_TOGGLED` analytics on toggle
+- Fires `BODY_HUB_IMBALANCE_VIEWED` once per mount when imbalances detected (useRef guard)
+
+**Tests:** 19 tests in `src/__tests__/muscleHeatMap.test.ts` (7 getHeatMapColor, 7 detectImbalances, 5 buildHeatMapColors including max-volume→hot-end assertion)
+
+### Architecture decisions
+- Heat map is a visualization mode within the muscles layer, not a new layer tab (avoids crowding the 4-tab strip)
+- Normalization is per-view (front/back independently) so each view uses its full color range
+- ImbalanceResult type uses MuscleGroup for type safety
+- Analytics events follow BODY_HUB_* naming convention
+
+### Ray follow-ups (tracked, not blockers)
+1. Hardcoded rgba(255,255,255,...) in MuscleHeatMapControls — documented as intentional dark-overlay-only context
+2. Traps/Adductors/Abductors have no SVG regions — imbalances computed but not visually highlighted on SVG
+
+---
+
+## Peptide Education Hub — Compound Reference Library
+
+**Status:** ✅ Ray-approved (2026-03-25, Plan: 1 cycle, Build: 2 cycles — 1 mandatory fix applied)
+**Date:** 2026-03-25
+**Branch:** `main`
+
+### What was built
+
+Read-only browseable reference library for all 38 compounds in the COMPOUND_DATABASE, accessible from the Peptide Hub via "Education" quick-action button.
+
+**Browse Screen** (`app/(tabs)/peptides/compound-library.tsx`)
+- Search bar with 300ms debounce (searches name, aliases, category, group, userGoal)
+- 14 CompoundCategory filter chips + "All" in horizontal scroll
+- FlatList of compound cards with status badges (FDA=green, Research=orange, Compounded=gray), safety warning icons, "In Library" indicators, route badges
+- Empty state for no-match searches
+
+**Detail Screen** (`app/(tabs)/peptides/compound-detail.tsx`)
+- 6 organized sections in GlassCards: Header, Dosing Information, Pharmacokinetics, Storage & Reconstitution, Science & Safety, Library Status
+- Safety warning banner (orange-tinted) for flagged compounds
+- Common side effects and stacks as pill tags
+- Full mechanism of action text
+- "In Your Library" green banner or "Not in library" guidance
+
+**Hook** (`src/hooks/useUserPeptideIds.ts`)
+- Focus-refreshing hook returning `{ libraryIds, libraryNames, loading }`
+- Dual detection: checks both `presetId` (preset-added) and lowercased name (manually-added)
+- Cancelled flag for async cleanup on unmount
+
+**Navigation & Analytics**
+- 2 Stack.Screens registered in `_layout.tsx`
+- "Education" quick-action button (book-outline icon) added to peptide hub index
+- 2 analytics events: `COMPOUND_LIBRARY_VIEWED`, `COMPOUND_DETAIL_VIEWED`
+
+### Architecture decisions
+- No new data model — leverages existing `COMPOUND_DATABASE` (38 compounds, 24 fields each) and its helper functions (`searchCompounds`, `getCompoundGroups`, `getCompoundById`, `hasSafetyWarning`)
+- No new packages — uses existing GlassBackground, GlassCard, AnimatedPressable, Ionicons, expo-haptics
+- No Firestore rules changes — entirely read-only, data is static in-memory
+- Dual library detection handles both preset-added (via `presetId`) and manually-added (via name match) compounds
+
+### Ray review fixes applied
+- M1: Debounce timer cleanup on unmount added to compound-library.tsx useEffect
+
+### Ray follow-ups (tracked, not blockers)
+1. Category filter chips have `minHeight: 34` — below 44pt guideline (consider `hitSlop`)
+2. `index.tsx` at 572 lines (pre-existing, not from this feature)
+3. `statusBgColor` helper duplicated in both compound-library and compound-detail — extract if third usage appears
+
+---
+
+## Onboarding Quiz Redesign — Psychological Investment Flow
+
+**Status:** ✅ Ray-approved (2026-03-25, Plan: 1 cycle conditional, Build: 2 cycles — 3 blocking + 1 non-blocking fix applied)
+**Date:** 2026-03-25
+**Branch:** `feature/recovery-readiness-score`
+
+### What was built
+
+Complete redesign of the onboarding quiz from 4 bland steps to 15 psychologically-escalating screens + "Building Your Plan" loading screen + "Your Personalized Plan" summary screen.
+
+**Psychology arc:** Easy (screens 1-4) → Personal (5-8) → Emotional (9-12) → Commitment (13-15) → Payoff (Building + Summary)
+
+**Screens:**
+1. Goals (multi-select icon tiles)
+2. Experience level (aspirational labels: "Just Getting Started" / "I Know My Way Around" / "I Live This Lifestyle")
+3. Unit preference (two large tiles, locale auto-default)
+4. Body stats (height/weight/age/sex grouped)
+5. Goal type (lose/maintain/gain)
+6. Training days per week (2-6 pill selector)
+7. Preferred train time (morning/midday/afternoon/evening/varies)
+8. Activity level (sedentary/light/moderate/active → TDEE multiplier)
+9. Biggest challenges (multi-select pain points — **key investment screen**)
+10. 12-week vision (aspirational identity cards)
+11. Recovery priority (conditional — skips if no training/cardio goals)
+12. Personal goal note (free text, optional, 100 char cap)
+13. Weekly check-in day (day pill selector)
+14. Smart reminders opt-in (permission priming)
+15. Confirmation ("Build My Plan" CTA)
+A. Building Your Plan (4-second animated checklist — operational transparency)
+B. Personalized Summary (glass cards showing calories, macros, training schedule, vision)
+
+### Files (22 new, 3 modified)
+
+**New:**
+- `src/utils/quizUtils.ts` — Pure utilities: step navigation, sanitization, activity multiplier mapping
+- `src/components/onboarding/ProgressBar.tsx` — Animated progress bar
+- `src/components/onboarding/StepContainer.tsx` — Shared step wrapper (transitions, a11y)
+- `src/components/onboarding/OptionTile.tsx` — Reusable selection tile (checkbox/radio roles)
+- `src/components/onboarding/BuildingPlan.tsx` — Animated loading screen
+- `src/components/onboarding/PersonalizedSummary.tsx` — Summary with glass cards
+- `src/components/onboarding/steps/` — 15 step components (GoalsStep through ConfirmStep)
+- `src/__tests__/quizUtils.test.ts` — 45 tests
+
+**Modified:**
+- `src/types/profile.ts` — 9 new optional fields (activityCategory, trainingDaysPerWeek, preferredTrainTime, challenges, twelveWeekVision, recoveryPriority, personalGoalNote, checkInDay, remindersOptIn)
+- `app/(onboarding)/quiz.tsx` — Full rewrite as 15-step orchestrator
+- `firestore.rules` — personalGoalNote validation (≤100 chars, null-safe)
+
+### Architecture decisions
+- `activityCategory` (string) separate from `activityLevel` (number) — preserves backward compat
+- `trainingDaysPerWeek` is authoritative; existing `trainingDays` array used for day-of-week specifics later
+- Conditional step skip uses visited-step history array for correct back navigation
+- BuildingPlan uses `Promise.all([save, delay(4000)])` — save must complete before summary
+- `personalGoalNote` sanitized on every keystroke (not just at save) — user sees what will be saved
+- Reduce-motion support via AccessibilityInfo threaded to all step components
+
+### Ray fixes applied
+B1: PersonalNoteStep sanitizes on keystroke + multiline disabled (was allowing newlines stripped on save)
+B2: BuildingPlan.tsx Promise.all has .catch() (was unhandled rejection)
+B3: Firestore rule handles null/delete for personalGoalNote (was blocking FieldValue.delete())
+N6: calculateMacros uses calorieTarget not raw TDEE (macros now match adjusted intake)
+
+### Ray follow-ups (tracked, non-blocking)
+1. Hardcoded `#fff` on accent backgrounds — consider `Colors.onAccent` constant
+2. BuildingPlan re-exports from quizUtils — remove re-exports
+3. ProgressBar useEffect missing `width` in dependency array (Reanimated shared value, no bug)
+4. Local type aliases in GoalTypeStep/VisionStep/TrainTimeStep/RecoveryStep duplicate profile.ts — export and import instead
+5. `s.sex!` non-null assertion in quiz.tsx — justified by prior validation but add comment
+6. StepContainer springify() after duration() — pick one animation style
+7. No test for nextStep past step 11
+
+---
+
+## Welcome Screen Redesign — Premium Glassmorphic Onboarding
+
+**Status:** ✅ Ray-approved (2026-03-25, Plan: 1 cycle, Build: 2 cycles)
+**Date:** 2026-03-25
+**Branch:** `feature/recovery-readiness-score`
+
+### What was built
+
+Complete rewrite of `app/(auth)/welcome.tsx` — transformed the basic 3-slide icon carousel into a 5-slide premium glassmorphic onboarding experience.
+
+**5 slides:**
+1. **Hero / Brand** — "Welcome to PepMax" with tagline, animated gradient background, decorative glass orbs
+2. **Track & Optimize** — Peptides + Nutrition in two GlassCards with module accent colors and feature bullets
+3. **Train & Move** — Training + Cardio in two GlassCards with feature bullets
+4. **Measure & Recover** — Dashboard + Body Hub + Recovery in two GlassCards with feature bullets
+5. **Your Journey Starts Here** — CTA with gamification/Watch/community chips, GradientButton "Get Started" + Log In
+
+**Technical highlights:**
+- `Animated.ScrollView` with `pagingEnabled` + `useAnimatedScrollHandler` for native swipe gestures (no new dependencies)
+- Reanimated-driven animated dot indicators with spring-based width/opacity interpolation
+- Decorative background orbs as plain Views (not BlurView) for performance on older devices
+- Theme-aware text colors via `useTheme()` — works correctly in both light and dark mode
+- `useWindowDimensions()` for responsive layout (replaces static `Dimensions.get`)
+- Accessibility labels on carousel, slides, dots, and all interactive elements
+- 488 lines total (under 500 cap)
+
+### Architecture decisions
+- Single file rewrite — no new files or components needed (reuses GlassBackground, GlassCard, GradientButton)
+- Sub-components (HeroSlide, CardsSlide, CTASlide, Dot) extracted within the file for readability
+- Navigation routes preserved: Get Started → /(auth)/sign-up, Log In → /(auth)/log-in
+- State updates via onMomentumScrollEnd only (no eager setState on skip)
+
+### Ray follow-ups (tracked, not blockers)
+1. `colors` prop type on sub-components uses verbose `ReturnType<typeof useTheme>['colors']`
+2. `logInAccent` style uses static `Colors.accent` instead of theme-derived `colors.accent` (consistent with rest of file)
 
 ---
 

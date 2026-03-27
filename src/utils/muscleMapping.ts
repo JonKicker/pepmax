@@ -5,7 +5,7 @@
 import type { MuscleGroup } from '../types/exercise';
 import type { WorkoutSession } from '../types/workout';
 import { REGION_TO_MUSCLE, FRONT_MUSCLE_PATHS, BACK_MUSCLE_PATHS } from '../constants/bodyHubPaths';
-import type { MuscleColorResult, MuscleRegionData } from '../types/bodyHub';
+import type { MuscleColorResult, MuscleRegionData, ImbalanceResult } from '../types/bodyHub';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -56,6 +56,7 @@ export function computeAllMuscleStats(sessions: WorkoutSession[]): Map<string, M
   const allMuscles: MuscleGroup[] = [
     'Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps',
     'Forearms', 'Quads', 'Hamstrings', 'Glutes', 'Calves', 'Core',
+    'Traps', 'Adductors', 'Abductors',
   ];
 
   // Initialize all muscles
@@ -185,6 +186,137 @@ export function buildRegionColors(
     if (!muscle) continue;
     const stats = muscleStats.get(muscle);
     result[regionId] = getRegionColor(stats);
+  }
+
+  return result;
+}
+
+// ─── Heat Map Engine ─────────────────────────────────────────────────────────
+
+/** 5-stop gradient: blue → cyan → green → yellow → red */
+const HEAT_STOPS: { ratio: number; r: number; g: number; b: number }[] = [
+  { ratio: 0,    r: 0x3B, g: 0x82, b: 0xF6 }, // #3B82F6 blue
+  { ratio: 0.25, r: 0x06, g: 0xB6, b: 0xD4 }, // #06B6D4 cyan
+  { ratio: 0.5,  r: 0x22, g: 0xC5, b: 0x5E }, // #22C55E green
+  { ratio: 0.75, r: 0xEA, g: 0xB3, b: 0x08 }, // #EAB308 yellow
+  { ratio: 1,    r: 0xEF, g: 0x44, b: 0x44 }, // #EF4444 red
+];
+
+/** Linearly interpolate a 0-255 channel value. */
+function lerpChannel(a: number, b: number, t: number): number {
+  return Math.round(a + (b - a) * t);
+}
+
+/** Convert r,g,b (0-255) to a hex color string. */
+function toHex(r: number, g: number, b: number): string {
+  return '#' + [r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Compute fill color for a muscle region based on its weekly volume
+ * relative to the maximum across all muscles.
+ * Guard: if maxVolume === 0, return blue at 0.25 opacity (cold-end).
+ */
+export function getHeatMapColor(weeklyVolume: number, maxVolume: number): MuscleColorResult {
+  if (maxVolume === 0) {
+    return { fill: '#3B82F6', fillOpacity: 0.25 };
+  }
+
+  const ratio = Math.min(Math.max(weeklyVolume / maxVolume, 0), 1);
+
+  // Find the two surrounding stops
+  let lower = HEAT_STOPS[0];
+  let upper = HEAT_STOPS[HEAT_STOPS.length - 1];
+
+  for (let i = 0; i < HEAT_STOPS.length - 1; i++) {
+    if (ratio >= HEAT_STOPS[i].ratio && ratio <= HEAT_STOPS[i + 1].ratio) {
+      lower = HEAT_STOPS[i];
+      upper = HEAT_STOPS[i + 1];
+      break;
+    }
+  }
+
+  const span = upper.ratio - lower.ratio;
+  const t = span === 0 ? 0 : (ratio - lower.ratio) / span;
+
+  const r = lerpChannel(lower.r, upper.r, t);
+  const g = lerpChannel(lower.g, upper.g, t);
+  const b = lerpChannel(lower.b, upper.b, t);
+
+  const fillOpacity = 0.25 + ratio * 0.55; // 0.25 at cold, 0.80 at hot
+
+  return { fill: toHex(r, g, b), fillOpacity };
+}
+
+/** Antagonist muscle pairs for imbalance detection. */
+export const ANTAGONIST_PAIRS: [MuscleGroup, MuscleGroup][] = [
+  ['Chest', 'Back'],
+  ['Biceps', 'Triceps'],
+  ['Quads', 'Hamstrings'],
+  ['Glutes', 'Core'],
+  ['Shoulders', 'Traps'],
+];
+
+/**
+ * Detect muscle imbalances from weekly volume data.
+ * Skips pairs where both muscles have weeklyVolume === 0.
+ * Flags an imbalance when the weaker side's ratio < 0.6.
+ */
+export function detectImbalances(muscleStats: Map<string, MuscleStats>): ImbalanceResult[] {
+  const results: ImbalanceResult[] = [];
+
+  for (const [muscleA, muscleB] of ANTAGONIST_PAIRS) {
+    const statsA = muscleStats.get(muscleA);
+    const statsB = muscleStats.get(muscleB);
+
+    const volA = statsA?.weeklyVolume ?? 0;
+    const volB = statsB?.weeklyVolume ?? 0;
+
+    // Skip pairs where both are zero (no data)
+    if (volA === 0 && volB === 0) continue;
+
+    const maxVol = Math.max(volA, volB);
+    const minVol = Math.min(volA, volB);
+    const ratio = minVol / maxVol;
+
+    if (ratio < 0.6) {
+      const weak: MuscleGroup = volA <= volB ? muscleA : muscleB;
+      const strong: MuscleGroup = volA <= volB ? muscleB : muscleA;
+      results.push({ weak, strong, ratio });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Build region color map using volume-based heat map coloring.
+ * Same signature as buildRegionColors for drop-in replacement.
+ */
+export function buildHeatMapColors(
+  view: 'front' | 'back',
+  muscleStats: Map<string, MuscleStats>,
+): Record<string, MuscleColorResult> {
+  const paths = view === 'front' ? FRONT_MUSCLE_PATHS : BACK_MUSCLE_PATHS;
+  const result: Record<string, MuscleColorResult> = {};
+
+  // Find max weekly volume across all muscles present in this view
+  let maxVolume = 0;
+  for (const regionId of Object.keys(paths)) {
+    const muscle = getMuscleForRegion(regionId);
+    if (!muscle) continue;
+    const stats = muscleStats.get(muscle);
+    if (stats && stats.weeklyVolume > maxVolume) {
+      maxVolume = stats.weeklyVolume;
+    }
+  }
+
+  for (const regionId of Object.keys(paths)) {
+    const muscle = getMuscleForRegion(regionId);
+    if (!muscle) continue;
+    const stats = muscleStats.get(muscle);
+    const weeklyVolume = stats?.weeklyVolume ?? 0;
+    result[regionId] = getHeatMapColor(weeklyVolume, maxVolume);
   }
 
   return result;

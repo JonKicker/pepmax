@@ -21,6 +21,8 @@ import type {
   AdaptiveTargets,
   DataReadiness,
 } from '../types/adaptiveCoaching';
+import { applyGlp1Adjustments } from './glp1Nutrition';
+import type { Glp1AdjustedTargets } from '../types/glp1Nutrition';
 
 // ─── Safety floors ─────────────────────────────────────────────────────────
 // Per blueprint requirements — never suggest below these thresholds.
@@ -119,6 +121,16 @@ export function calculateAdaptiveTDEE(
 // ─── Target generation ─────────────────────────────────────────────────────
 
 /**
+ * GLP-1 override shape passed to generateTargets when an active GLP-1 cycle
+ * is detected. The hook resolves this from the user profile; the service
+ * passes it through transparently.
+ */
+export type Glp1Override = {
+  /** Minimum protein floor in grams (from calculateProteinFloorG) */
+  proteinFloorG: number;
+};
+
+/**
  * Convert an estimated TDEE into a concrete calorie + macro target.
  *
  * Goal offsets match what the user selected in Nutrition Settings:
@@ -128,12 +140,17 @@ export function calculateAdaptiveTDEE(
  *
  * Hard floors are enforced after the offset to prevent dangerous deficits.
  * If the floor kicks in, we surface a warning so the UI can inform the user.
+ *
+ * When `glp1Override` is provided, GLP-1-specific protein and calorie floors
+ * are applied on top of the standard logic. This param is optional and
+ * undefined by default — all existing call sites are unaffected.
  */
 export function generateTargets(
   estimatedTDEE: number,
   goalType: 'lose' | 'maintain' | 'gain',
   sex: Sex,
   macroPcts?: { proteinPct: number; carbsPct: number; fatPct: number },
+  glp1Override?: Glp1Override,
 ): AdaptiveTargets {
   const GOAL_OFFSETS: Record<typeof goalType, number> = {
     lose: -500,
@@ -158,6 +175,39 @@ export function generateTargets(
   }
 
   const macros = buildMacros(calorieTarget, macroPcts);
+
+  // Apply GLP-1 guardrails when an active cycle was detected upstream.
+  // This runs AFTER the standard floor clamp so we layer the adjustments.
+  if (glp1Override) {
+    const glp1: Glp1AdjustedTargets = applyGlp1Adjustments(
+      calorieTarget,
+      macros.proteinG,
+      macros.carbsG,
+      macros.fatG,
+      glp1Override.proteinFloorG,
+      sex,
+    );
+
+    const adjustedMacros: MacroTargets = {
+      ...macros,
+      proteinG: glp1.proteinG,
+      carbsG: glp1.carbsG,
+      fatG: glp1.fatG,
+    };
+
+    return {
+      calorieTarget: glp1.calorieTarget,
+      macros: adjustedMacros,
+      tdee: estimatedTDEE,
+      floorApplied: floorApplied || glp1.calorieFloorApplied,
+      floorWarning: glp1.calorieFloorApplied
+        ? `GLP-1 calorie floor applied (${sex === 'male' ? 1600 : 1400} kcal).`
+        : floorWarning,
+      glp1ProteinFloorApplied: glp1.proteinFloorApplied,
+      glp1CalorieFloorApplied: glp1.calorieFloorApplied,
+      glp1ProteinFloorG: glp1Override.proteinFloorG,
+    };
+  }
 
   return { calorieTarget, macros, tdee: estimatedTDEE, floorApplied, floorWarning };
 }

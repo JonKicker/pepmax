@@ -23,6 +23,7 @@ import { useHeartRateZones } from '../../../src/hooks/useHeartRateZones';
 import { useBeaconSession } from '../../../src/hooks/useBeaconSession';
 import HeartRateBar from '../../../src/components/cardio/HeartRateBar';
 import BeaconIndicator from '../../../src/components/cardio/BeaconIndicator';
+import ElevationDisplay from '../../../src/components/cardio/ElevationDisplay';
 import LiveSegmentBanner from '../../../src/components/cardio/LiveSegmentBanner';
 import { GlassBackground } from '../../../src/components/GlassBackground';
 import { useLiveSegment } from '../../../src/hooks/useLiveSegment';
@@ -80,11 +81,14 @@ function SplitRow({ split, unit, colors }: { split: Split; unit: 'mi' | 'km'; co
 export default function ActiveSessionScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { sessionId, beaconOn, beaconContacts } = useLocalSearchParams<{
+  const { sessionId, beaconOn, beaconContacts, recoveryZoneTarget } = useLocalSearchParams<{
     sessionId: string;
     beaconOn?: string;
     beaconContacts?: string;
+    recoveryZoneTarget?: string;
   }>();
+
+  const parsedRecoveryZone = recoveryZoneTarget ? parseInt(recoveryZoneTarget, 10) || undefined : undefined;
   const { userProfile } = useAuth();
   const { settings } = useCardioSettings();
 
@@ -102,7 +106,9 @@ export default function ActiveSessionScreen() {
     calories,
     splits,
     elevationGain,
+    elevationLoss,
     newSplit,
+    currentAltitude,
     start,
     pause,
     resume,
@@ -280,8 +286,23 @@ export default function ActiveSessionScreen() {
               currentBpm={hrMonitor.currentBpm}
               maxHR={maxHR}
               zones={zones}
+              targetZone={parsedRecoveryZone}
             />
+            {parsedRecoveryZone == null && (
+              <Text style={[styles.recoveryHint, { color: colors.textSecondary }]}>
+                Complete your morning check-in for zone targets
+              </Text>
+            )}
           </View>
+        )}
+
+        {/* Elevation display — outdoor sessions only (RAY #F5) */}
+        {isOutdoor && (
+          <ElevationDisplay
+            currentAltitude={currentAltitude}
+            elevationGain={elevationGain}
+            elevationLoss={elevationLoss}
+          />
         )}
 
         {/* Splits table */}
@@ -403,6 +424,7 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 12, marginTop: 3 },
 
   hrCard: { borderRadius: 14, borderWidth: 1, padding: 14 },
+  recoveryHint: { fontSize: 12, marginTop: 6, textAlign: 'center' },
   splitsCard: { borderRadius: 14, borderWidth: 1, padding: 14 },
   splitsTitle: { fontSize: 15, fontWeight: '700', marginBottom: 10 },
   splitHeaderRow: { flexDirection: 'row', paddingBottom: 8, borderBottomWidth: 1, marginBottom: 4 },

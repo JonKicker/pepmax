@@ -371,6 +371,15 @@ export default function PeptidesScreen() {
           <AnimatedPressable
             haptic
             style={[styles.quickBtn, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+            onPress={() => router.push('/(tabs)/peptides/compound-library')}
+          >
+            <Ionicons name="book-outline" size={18} color={Colors.peptide} />
+            <Text style={[styles.quickBtnText, { color: Colors.peptide }]}>Education</Text>
+          </AnimatedPressable>
+
+          <AnimatedPressable
+            haptic
+            style={[styles.quickBtn, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
             onPress={() => router.push('/(tabs)/peptides/history')}
           >
             <Ionicons name="time-outline" size={18} color={Colors.peptide} />

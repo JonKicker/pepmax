@@ -4,8 +4,61 @@ service cloud.firestore {
 
     // All user data lives under users/{userId}/
     // No user can read or write another user's data — ever.
+    //
+    // NOTE: waterLog is intentionally excluded from this wildcard so that its
+    // own stricter match block (below) is the sole rule governing those paths.
+    // Firestore uses OR semantics — a permissive wildcard would otherwise bypass
+    // the waterLog field-level validation entirely.
     match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // Deny writes to waterLog, seasonProgress, and eventProgress paths here
+      // so their dedicated match blocks (below) are the sole rules governing
+      // those paths.
+      allow write: if request.auth != null && request.auth.uid == userId
+        && !(request.path[4] == 'waterLog')
+        && !(request.path[4] == 'seasonProgress')
+        && !(request.path[4] == 'eventProgress')
+        // personalGoalNote: max 100 chars (Ray's requirement).
+        // The field is optional; when present it must be a string ≤ 100 chars.
+        // Allow field deletion (null) and absent field.
+        && (!request.resource.data.keys().hasAny(['personalGoalNote'])
+          || request.resource.data.personalGoalNote == null
+          || (request.resource.data.personalGoalNote is string
+              && request.resource.data.personalGoalNote.size() <= 100))
+        // RAY MANDATORY: novaGroup must be absent, null, or integer in [1,4].
+        && (!request.resource.data.keys().hasAny(['novaGroup'])
+          || request.resource.data.novaGroup == null
+          || (request.resource.data.novaGroup is int
+              && request.resource.data.novaGroup >= 1
+              && request.resource.data.novaGroup <= 4))
+        // RAY MANDATORY: fiber must be absent, null, or non-negative number <= 200.
+        && (!request.resource.data.keys().hasAny(['fiber'])
+          || request.resource.data.fiber == null
+          || (request.resource.data.fiber is number
+              && request.resource.data.fiber >= 0
+              && request.resource.data.fiber <= 200))
+        // RAY MANDATORY: nutritionScore must be absent, null, or a number in [0, 100].
+        && (!request.resource.data.keys().hasAny(['nutritionScore'])
+          || request.resource.data.nutritionScore == null
+          || (request.resource.data.nutritionScore is number
+              && request.resource.data.nutritionScore >= 0
+              && request.resource.data.nutritionScore <= 100));
+    }
+
+    // ─── Hydration / Water Log ───────────────────────────────────────────────
+    // Keyed by YYYY-MM-DD. totalOz is Firestore-maintained via increment().
+    // Validates: totalOz is a number, >= 0, and <= 300; optional goalOz is
+    // positive and <= 300.
+    // This match is intentionally more specific than the wildcard above so it
+    // takes precedence. The wildcard explicitly rejects waterLog writes to
+    // prevent OR-semantics bypass.
+    match /users/{userId}/waterLog/{date} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.totalOz is number
+        && request.resource.data.totalOz >= 0
+        && request.resource.data.totalOz <= 300
+        && (!request.resource.data.keys().hasAny(['goalOz']) || (request.resource.data.goalOz is number && request.resource.data.goalOz > 0 && request.resource.data.goalOz <= 300));
     }
 
     // ─── Community templates ─────────────────────────────────────────────────
@@ -67,6 +120,33 @@ service cloud.firestore {
         && resource.data.uid == request.auth.uid;
       allow read: if false;   // Admin SDK bypasses rules
       allow delete: if false; // Cleanup via scheduled Cloud Function
+    }
+
+    // ─── PVP: Seasons (read-only for clients) ────────────────────────────────
+    match /seasons/{seasonId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // ─── PVP: Weekly Leagues (read-only for clients) ──────────────────────────
+    match /weeklyLeagues/{leagueId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // ─── PVP: User Season Progress (CF-only writes) ────────────────────────────
+    // Excluded from the users wildcard write rule above.
+    // Clients may read their own; writes are CF-only (Admin SDK bypasses rules).
+    match /users/{userId}/seasonProgress/{seasonId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
+
+    // ─── PVP: RP Audit Log (CF-only writes) ────────────────────────────────────
+    // Clients may read their own log entries; writes are CF-only.
+    match /users/{userId}/rpLog/{logId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
     }
 
     // ─── Compare scores (cross-user reads) ─────────────────────────────────────
@@ -160,6 +240,40 @@ service cloud.firestore {
           && request.resource.data.durationSeconds is int
           && request.resource.data.durationSeconds > 0;
       }
+    }
+
+    // ─── PVP Phase 3: Seasonal Events (read-only for clients, CF manages) ────
+    match /events/{eventId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // ─── PVP Phase 3: Event progress (owner read, create-only join) ──────────
+    // Client can only CREATE (join) with empty progress — cannot self-complete
+    // challenges or claim badges. Updates (progress, completions, badge claims)
+    // are CF-only via Admin SDK which bypasses these rules.
+    // Excluded from the users wildcard write rule above.
+    match /users/{userId}/eventProgress/{eventId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // Client can only CREATE (join) with empty progress
+      allow create: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.challengeProgress == {}
+        && request.resource.data.completedChallenges == []
+        && request.resource.data.badgeClaimed == false;
+      // Updates (progress, completions, badge claims) are CF-only via Admin SDK
+      allow update: if false;
+    }
+
+    // ─── PVP Phase 3: Crew Challenges (read-only for clients) ────────────────
+    match /crewChallenges/{challengeId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // ─── PVP Phase 3: Crew Challenge Entries (read-only, CF aggregates) ──────
+    match /crewChallengeEntries/{entryId} {
+      allow read: if request.auth != null;
+      allow write: if false;
     }
 
     // Deny everything else by default
