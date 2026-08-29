@@ -386,7 +386,9 @@ export default function TrainingScreen() {
           });
         }}
       >
-        <Ionicons name="flash" size={26} color="white" style={{ marginLeft: 2 }} />
+        <View style={{ width: 26, height: 26, alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name="flash" size={26} color="white" />
+        </View>
       </AnimatedPressable>
 
       <EquipmentQuickSwitch

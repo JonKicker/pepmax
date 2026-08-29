@@ -35,6 +35,8 @@ import type {
   DayOfWeek,
 } from '../../../src/types/cycle';
 import type { Peptide } from '../../../src/types/peptide';
+import PresetBrowser from '../../../src/components/peptides/PresetBrowser';
+import type { Compound } from '../../../src/data/compoundDatabase';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -135,6 +137,7 @@ function Step1({
   loading,
   colors,
   router,
+  onBrowsePresets,
 }: {
   data: CycleWizardData;
   onSelect: (p: Peptide) => void;
@@ -142,31 +145,12 @@ function Step1({
   loading: boolean;
   colors: ReturnType<typeof useTheme>['colors'];
   router: ReturnType<typeof useRouter>;
+  onBrowsePresets: () => void;
 }) {
   if (loading) {
     return (
       <View style={styles.stepCentered}>
         <ActivityIndicator color={Colors.peptide} />
-      </View>
-    );
-  }
-
-  if (peptides.length === 0) {
-    return (
-      <View style={styles.stepCentered}>
-        <Ionicons name="eyedrop-outline" size={48} color={colors.textSecondary} />
-        <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-          No compounds in your library
-        </Text>
-        <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-          Add a peptide to your library before planning a cycle.
-        </Text>
-        <TouchableOpacity
-          style={[styles.emptyBtn, { backgroundColor: Colors.peptide }]}
-          onPress={() => router.push('/(tabs)/peptides/peptide-form')}
-        >
-          <Text style={styles.emptyBtnText}>Add Compound</Text>
-        </TouchableOpacity>
       </View>
     );
   }
@@ -177,8 +161,27 @@ function Step1({
         Which compound?
       </Text>
       <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
-        Select the compound you want to plan a cycle for.
+        Select from your library or browse all compounds.
       </Text>
+
+      {/* Browse presets button */}
+      <TouchableOpacity
+        style={[styles.browsePresetsBtn, { backgroundColor: Colors.peptide + '12', borderColor: Colors.peptide }]}
+        onPress={onBrowsePresets}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="flask-outline" size={18} color={Colors.peptide} />
+        <Text style={[styles.browsePresetsBtnText, { color: Colors.peptide }]}>
+          Browse Compound Database
+        </Text>
+        <Ionicons name="chevron-forward" size={16} color={Colors.peptide} />
+      </TouchableOpacity>
+
+      {peptides.length === 0 && (
+        <Text style={[styles.emptyHint, { color: colors.textSecondary }]}>
+          No compounds in your library yet — browse above to pick one.
+        </Text>
+      )}
 
       {peptides.map((p) => {
         const selected = data.compoundId === p.id;
@@ -794,6 +797,7 @@ export default function CyclePlannerScreen() {
   const [peptides, setPeptides] = useState<Peptide[]>([]);
   const [loadingPeptides, setLoadingPeptides] = useState(true);
   const [data, setData] = useState<CycleWizardData>({ ...INITIAL_DATA });
+  const [presetModalVisible, setPresetModalVisible] = useState(false);
 
   function update<K extends keyof CycleWizardData>(key: K, value: CycleWizardData[K]) {
     setData((prev) => ({ ...prev, [key]: value }));
@@ -1053,6 +1057,7 @@ export default function CyclePlannerScreen() {
               loading={loadingPeptides}
               colors={colors}
               router={router}
+              onBrowsePresets={() => setPresetModalVisible(true)}
             />
           )}
 
@@ -1124,6 +1129,22 @@ export default function CyclePlannerScreen() {
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <PresetBrowser
+        visible={presetModalVisible}
+        onClose={() => setPresetModalVisible(false)}
+        onAdd={(compound: Compound, dose: number) => {
+          setPresetModalVisible(false);
+          update('compoundId', compound.id);
+          update('compoundName', compound.name);
+          // Map DoseUnit to cycle Unit — fall back to 'mg' for mg/kg
+          const unitMap: Record<string, CycleWizardData['unit']> = { mg: 'mg', mcg: 'mcg', IU: 'IU' };
+          update('unit', unitMap[compound.unit] ?? 'mg');
+          update('startingDose', String(dose));
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        }}
+        existingPeptideNames={peptides.map((p) => p.name)}
+      />
     </View>
   );
 }
@@ -1239,6 +1260,18 @@ const styles = StyleSheet.create({
   emptySubtitle: { fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
   emptyBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 },
   emptyBtnText: { color: 'white', fontWeight: '700', fontSize: 15 },
+  emptyHint: { fontSize: 14, textAlign: 'center', marginTop: 16, marginBottom: 8, lineHeight: 20 },
+  browsePresetsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginBottom: 16,
+  },
+  browsePresetsBtnText: { fontSize: 15, fontWeight: '700' },
 
   // Day chips (step 3)
   dayChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

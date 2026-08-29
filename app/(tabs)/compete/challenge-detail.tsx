@@ -30,6 +30,16 @@ import type { ChallengeDoc, ChallengeParticipantDoc } from '../../../src/types/c
 import { analytics, AnalyticsEvent } from '../../../src/services/analytics';
 import { ShareButton } from '../../../src/components/sharing/ShareButton';
 import type { ChallengeCardData } from '../../../src/types/shareCard';
+import { ChallengeDifficultyBadge } from '../../../src/components/pvp/ChallengeDifficultyBadge';
+import type { ChallengeDifficulty } from '../../../src/types/pvpEvents';
+import { MorphButton } from '../../../src/components/animations/MorphButton';
+import { Colors } from '../../../src/constants/theme';
+
+// Extend ChallengeDoc locally to account for the optional difficulty field
+// present on newer challenge documents before the type is updated in v2.
+type ChallengeDocWithDifficulty = ChallengeDoc & {
+  difficulty?: ChallengeDifficulty;
+};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -162,11 +172,10 @@ export default function ChallengeDetail(): React.ReactElement {
   const { challengeId } = useLocalSearchParams<{ challengeId: string }>();
   const router = useRouter();
 
-  const [challenge, setChallenge] = useState<ChallengeDoc | null>(null);
+  const [challenge, setChallenge] = useState<ChallengeDocWithDifficulty | null>(null);
   const [participants, setParticipants] = useState<ChallengeParticipantDoc[]>([]);
   const [myProgress, setMyProgress] = useState<ChallengeParticipantDoc | null>(null);
   const [loading, setLoading] = useState(true);
-  const [joining, setJoining] = useState(false);
 
   const uid = auth.currentUser?.uid ?? '';
 
@@ -180,7 +189,7 @@ export default function ChallengeDetail(): React.ReactElement {
       getMyProgress(challengeId),
     ]);
 
-    if (detailResult.data) setChallenge(detailResult.data);
+    if (detailResult.data) setChallenge(detailResult.data as ChallengeDocWithDifficulty);
     if (participantsResult.data) setParticipants(participantsResult.data);
     if (myProgressResult.data) setMyProgress(myProgressResult.data);
 
@@ -194,13 +203,11 @@ export default function ChallengeDetail(): React.ReactElement {
 
   const handleJoin = useCallback(async () => {
     if (!challengeId) return;
-    setJoining(true);
     const result = await joinChallenge(challengeId);
-    setJoining(false);
 
     if (result.error) {
       Alert.alert('Could not join', result.error.message);
-      return;
+      throw result.error; // re-throw so MorphButton does not morph to success
     }
 
     analytics.track(AnalyticsEvent.CHALLENGE_JOINED, { challengeId });
@@ -256,6 +263,13 @@ export default function ChallengeDetail(): React.ReactElement {
               <View style={styles.xpPill}>
                 <Text style={styles.xpPillText}>+{challenge.xpReward} XP</Text>
               </View>
+              {challenge.difficulty && (
+                <ChallengeDifficultyBadge
+                  difficulty={challenge.difficulty}
+                  xpReward={challenge.xpReward}
+                  size="sm"
+                />
+              )}
               <View style={styles.timePill}>
                 <Ionicons name="time-outline" size={13} color={TEXT_SECONDARY} />
                 <Text style={styles.timePillText}>{timeLabel}</Text>
@@ -329,18 +343,13 @@ export default function ChallengeDetail(): React.ReactElement {
       {/* Join button */}
       {showJoinButton && (
         <View style={styles.joinFooter}>
-          <TouchableOpacity
-            style={styles.joinButton}
+          <MorphButton
+            label="Join Challenge"
             onPress={handleJoin}
-            disabled={joining}
-            activeOpacity={0.7}
-          >
-            {joining ? (
-              <ActivityIndicator color="#FFF" />
-            ) : (
-              <Text style={styles.joinButtonText}>Join Challenge</Text>
-            )}
-          </TouchableOpacity>
+            icon="trophy-outline"
+            successIcon="checkmark"
+            color={Colors.accent}
+          />
         </View>
       )}
 

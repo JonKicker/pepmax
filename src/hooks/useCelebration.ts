@@ -1,7 +1,8 @@
 /**
- * useCelebration — celebration queue manager.
+ * useCelebration — shared celebration queue via React Context.
  *
  * Features:
+ * - Single shared queue across the entire app (context-based)
  * - Queue capped at 3 items (drop-oldest when full)
  * - Priority sort: higher priority plays first
  * - Sequential playback with 200ms gap between items
@@ -9,10 +10,10 @@
  * - Reduced motion: cap duration at 1500ms
  *
  * Usage:
+ *   // Wrap app in <CelebrationProvider> (done in _layout.tsx)
  *   const { triggerCelebration, currentItem } = useCelebration();
- *   // Render <CelebrationOverlay> when currentItem != null
  */
-import { useRef, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useRef, useState, useCallback, useEffect } from 'react';
 import { Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useReducedMotion } from './useReducedMotion';
@@ -24,9 +25,6 @@ const GAP_BETWEEN_MS = 200;
 const SAFETY_TIMEOUT_MS = 3500;
 const REDUCED_MAX_MS = 1500;
 
-// itemCounter is module-level intentionally: IDs remain unique across hook
-// re-mounts within the same JS bundle lifetime. Trade-off: resets on full reload,
-// which is acceptable since IDs are only used for React key deduplication.
 let itemCounter = 0;
 function nextId(): string {
   return `cel_${Date.now()}_${++itemCounter}`;
@@ -59,10 +57,10 @@ export type UseCelebrationReturn = {
   onCelebrationComplete: () => void;
 };
 
-export function useCelebration(): UseCelebrationReturn {
+const CelebrationContext = createContext<UseCelebrationReturn | null>(null);
+
+export function CelebrationProvider({ children }: { children: React.ReactNode }) {
   const reducedMotion = useReducedMotion();
-  // Ref keeps reducedMotion current inside timeout callbacks, eliminating the
-  // advance ↔ onCelebrationComplete circular dependency chain.
   const reducedMotionRef = useRef(reducedMotion);
   useEffect(() => {
     reducedMotionRef.current = reducedMotion;
@@ -83,7 +81,6 @@ export function useCelebration(): UseCelebrationReturn {
   const onCelebrationComplete = useCallback(() => {
     clearSafetyTimer();
     setCurrentItem(null);
-    // 200ms gap before next item
     setTimeout(() => {
       advance(); // eslint-disable-line @typescript-eslint/no-use-before-define
     }, GAP_BETWEEN_MS);
@@ -98,7 +95,6 @@ export function useCelebration(): UseCelebrationReturn {
       return;
     }
 
-    // Sort by priority descending, then by addedAt ascending (FIFO for equal priority)
     queueRef.current.sort((a, b) => {
       if (b.config.priority !== a.config.priority) {
         return b.config.priority - a.config.priority;
@@ -111,7 +107,6 @@ export function useCelebration(): UseCelebrationReturn {
     setCurrentItem(next);
     fireHaptic(next.config.hapticPattern);
 
-    // Calculate effective duration — read from ref to avoid stale closure
     const rawDuration = next.config.duration;
     const effectiveDuration = reducedMotionRef.current
       ? Math.min(rawDuration, REDUCED_MAX_MS)
@@ -119,7 +114,6 @@ export function useCelebration(): UseCelebrationReturn {
     const timeout = Math.min(effectiveDuration + 500, SAFETY_TIMEOUT_MS + 500);
 
     safetyTimerRef.current = setTimeout(() => {
-      // Safety fallback: force-advance even if onComplete never fires
       onCelebrationComplete();
     }, timeout);
   }, [onCelebrationComplete]);
@@ -132,7 +126,6 @@ export function useCelebration(): UseCelebrationReturn {
     };
 
     if (queueRef.current.length >= MAX_QUEUE_SIZE) {
-      // Drop-oldest: remove the item with the smallest addedAt
       queueRef.current.sort((a, b) => a.addedAt - b.addedAt);
       queueRef.current.shift();
     }
@@ -144,12 +137,23 @@ export function useCelebration(): UseCelebrationReturn {
     }
   }, [advance]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       clearSafetyTimer();
     };
   }, []);
 
-  return { currentItem, triggerCelebration, onCelebrationComplete };
+  return React.createElement(
+    CelebrationContext.Provider,
+    { value: { currentItem, triggerCelebration, onCelebrationComplete } },
+    children,
+  );
+}
+
+export function useCelebration(): UseCelebrationReturn {
+  const ctx = useContext(CelebrationContext);
+  if (!ctx) {
+    throw new Error('useCelebration must be used within a CelebrationProvider');
+  }
+  return ctx;
 }

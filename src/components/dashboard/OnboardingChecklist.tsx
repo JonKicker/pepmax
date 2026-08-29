@@ -85,9 +85,9 @@ export function OnboardingChecklist({ data, colors, onDismiss }: Props) {
       <View style={styles.header}>
         <Ionicons name="rocket-outline" size={18} color={Colors.accent} />
         <Text style={[styles.title, { color: colors.textPrimary }]}>Get Started</Text>
-        <Text style={[styles.progress, { color: colors.textSecondary }]}>
-          {completedCount}/{CHECKLIST.length}
-        </Text>
+        <TouchableOpacity onPress={onDismiss} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="close-outline" size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
       </View>
 
       {CHECKLIST.map((item) => {
@@ -139,7 +139,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   title: { fontSize: 15, fontWeight: '700', flex: 1 },
-  progress: { fontSize: 13, fontWeight: '600' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

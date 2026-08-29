@@ -11,6 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, useNavigation, useFocusEffect } from 'expo-router';
+import { usePreventRemove } from '@react-navigation/core';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors } from '../../../src/constants/theme';
@@ -189,17 +190,15 @@ export default function ActiveSessionScreen() {
 
   // ─── Back prevention ─────────────────────────────────────────────────────
 
-  useEffect(() => {
-    return navigation.addListener('beforeRemove', (e: any) => {
-      if (!workout.session || workout.session.status !== 'active') return;
-      e.preventDefault();
-      Alert.alert('Active workout', 'You have an active workout. What would you like to do?', [
-        { text: 'Keep Going', style: 'cancel' },
-        { text: 'Save & Finish', onPress: async () => { await workout.finishWorkout('', null); navigation.dispatch(e.data.action); } },
-        { text: 'Discard', style: 'destructive', onPress: async () => { await workout.abandonWorkout(); navigation.dispatch(e.data.action); } },
-      ]);
-    });
-  }, [navigation, workout.session]);
+  const isActive = !!(workout.session && workout.session.status === 'active');
+
+  usePreventRemove(isActive, ({ data }) => {
+    Alert.alert('Active workout', 'You have an active workout. What would you like to do?', [
+      { text: 'Keep Going', style: 'cancel' },
+      { text: 'Save & Finish', onPress: async () => { await workout.finishWorkout('', null); navigation.dispatch(data.action); } },
+      { text: 'Discard', style: 'destructive', onPress: async () => { await workout.abandonWorkout(); navigation.dispatch(data.action); } },
+    ]);
+  });
 
   // ─── Next exercise hint helper ────────────────────────────────────────────
 

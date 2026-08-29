@@ -24,10 +24,10 @@ import {
   Alert,
   Linking,
   Platform,
-  Switch,
   TextInput,
   Image,
 } from 'react-native';
+import { AnimatedToggle } from '../../../src/components/animations/AnimatedToggle';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -851,10 +851,11 @@ export default function SettingsScreen() {
           icon="notifications-outline"
           label="Dose Reminders"
           rightElement={
-            <Switch
+            <AnimatedToggle
               value={notifPrefs.doseReminders}
               onValueChange={(v) => handleNotifToggle('doseReminders', v)}
-              trackColor={{ true: Colors.accent }}
+              activeColor={Colors.accent}
+              accessibilityLabel="Dose Reminders"
             />
           }
           separator
@@ -901,10 +902,11 @@ export default function SettingsScreen() {
           icon="fitness-outline"
           label="Workout Reminders"
           rightElement={
-            <Switch
+            <AnimatedToggle
               value={notifPrefs.workoutReminders}
               onValueChange={(v) => handleNotifToggle('workoutReminders', v)}
-              trackColor={{ true: Colors.accent }}
+              activeColor={Colors.accent}
+              accessibilityLabel="Workout Reminders"
             />
           }
           separator
@@ -951,10 +953,11 @@ export default function SettingsScreen() {
           icon="bed-outline"
           label="Recovery Check-In"
           rightElement={
-            <Switch
+            <AnimatedToggle
               value={notifPrefs.recoveryCheckIn ?? false}
               onValueChange={(v) => handleNotifToggle('recoveryCheckIn', v)}
-              trackColor={{ true: Colors.accent }}
+              activeColor={Colors.accent}
+              accessibilityLabel="Recovery Check-In"
             />
           }
         />
@@ -1155,7 +1158,11 @@ export default function SettingsScreen() {
             icon="heart-outline"
             label="Connect Apple Health"
             rightElement={
-              <Switch value={hkEnabled} onValueChange={handleHealthKitToggle} />
+              <AnimatedToggle
+                value={hkEnabled}
+                onValueChange={handleHealthKitToggle}
+                accessibilityLabel="Connect Apple Health"
+              />
             }
             separator={false}
           />

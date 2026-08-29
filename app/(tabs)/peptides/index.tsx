@@ -447,7 +447,9 @@ export default function PeptidesScreen() {
 
       {/* Floating action button */}
       <AnimatedPressable haptic style={[styles.fab, { backgroundColor: Colors.peptide }]} onPress={handleAdd}>
-        <Ionicons name="add" size={30} color="white" />
+        <View style={{ width: 30, height: 30, alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name="add" size={30} color="white" />
+        </View>
       </AnimatedPressable>
 
       <PresetBrowser

@@ -1,8 +1,9 @@
 /**
  * AnimatedPressable — spring-scale pressable using Animated.View + Pressable.
  *
- * FIX 1: Uses Animated.View as the outer wrapper with Pressable inside.
- * Does NOT use createAnimatedComponent(TouchableOpacity).
+ * Children are rendered directly inside the Animated.View so they inherit its
+ * flexDirection / alignItems / gap / padding. An absolutely-positioned Pressable
+ * overlays everything for touch handling.
  */
 import React from 'react';
 import { Pressable, PressableProps, StyleProp, ViewStyle } from 'react-native';
@@ -56,6 +57,7 @@ export function AnimatedPressable({
 
   return (
     <Animated.View style={[style, animatedStyle]}>
+      {children}
       <Pressable
         {...rest}
         disabled={disabled}
@@ -63,10 +65,14 @@ export function AnimatedPressable({
         onPressOut={handlePressOut}
         onPress={handlePress}
         accessibilityRole="button"
-        style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.9 : 1 })}
-      >
-        {children}
-      </Pressable>
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+        }}
+      />
     </Animated.View>
   );
 }

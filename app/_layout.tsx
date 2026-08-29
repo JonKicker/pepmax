@@ -12,7 +12,7 @@
  *     authenticated, complete  → /(tabs)
  * - router.replace() is used (not push) so the back button never returns to auth screens.
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Stack, useRouter, useSegments, useRootNavigationState } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
@@ -20,12 +20,16 @@ import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { ThemeProvider, useThemeContext } from '../src/contexts/ThemeContext';
 import { PremiumProvider, usePremium } from '../src/contexts/PremiumContext';
 import { GamificationProvider } from '../src/contexts/GamificationContext';
-import { useCelebration } from '../src/hooks/useCelebration';
+import { CelebrationProvider, useCelebration } from '../src/hooks/useCelebration';
 import { CelebrationOverlay } from '../src/components/celebrations/CelebrationOverlay';
+import { RankUpCeremony } from '../src/components/pvp/RankUpCeremony';
+import { usePvpSeason } from '../src/hooks/usePvpSeason';
+import { getTierForRP, RANK_TIERS_V2 } from '../src/utils/rankTierV2';
 import ErrorBoundary from '../src/components/ErrorBoundary';
 import { initSentry, sentryWrap, setUser as sentrySetUser } from '../src/services/errorReporting';
 import { analytics, AnalyticsEvent } from '../src/services/analytics';
 import { loadHKEnabled } from '../src/utils/hkEnabled';
+import type { RankTierV2Info } from '../src/types/rankV2';
 
 // Initialize Sentry once at module load — before any component renders.
 initSentry();
@@ -126,6 +130,25 @@ function ThemedStatusBar() {
   return <StatusBar style={theme.dark ? 'light' : 'dark'} />;
 }
 
+function ThemedStack() {
+  const { theme } = useThemeContext();
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: theme.colors.background },
+      }}
+    >
+      <Stack.Screen name="index" />
+      <Stack.Screen name="(auth)" />
+      <Stack.Screen name="(onboarding)" />
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="paywall" options={{ presentation: 'modal', headerShown: false }} />
+      <Stack.Screen name="go-pro" options={{ presentation: 'modal', headerShown: false }} />
+    </Stack>
+  );
+}
+
 // Syncs subscription plan_type to Mixpanel user properties.
 // Lives inside PremiumProvider so it has access to the plan value.
 function PremiumSync() {
@@ -148,6 +171,50 @@ function CelebrationLayer() {
   );
 }
 
+function RankMonitor() {
+  const pvp = usePvpSeason();
+  const prevTierRef = useRef<string | null>(null);
+  const [ceremony, setCeremony] = useState<{
+    oldTier: RankTierV2Info;
+    newTier: RankTierV2Info;
+    direction: 'up' | 'down';
+  } | null>(null);
+
+  useEffect(() => {
+    if (pvp.loading || !pvp.myStanding) return;
+    const currentRP = pvp.myStanding.member.currentRP;
+    const currentTierInfo = getTierForRP(currentRP);
+
+    if (prevTierRef.current === null) {
+      // First load — just record, don't show ceremony
+      prevTierRef.current = currentTierInfo.tier;
+      return;
+    }
+
+    if (currentTierInfo.tier !== prevTierRef.current) {
+      const oldTierInfo = RANK_TIERS_V2.find((t) => t.tier === prevTierRef.current) ?? RANK_TIERS_V2[0];
+      const oldIndex = RANK_TIERS_V2.indexOf(oldTierInfo);
+      const newIndex = RANK_TIERS_V2.indexOf(currentTierInfo);
+      setCeremony({
+        oldTier: oldTierInfo,
+        newTier: currentTierInfo,
+        direction: newIndex > oldIndex ? 'up' : 'down',
+      });
+      prevTierRef.current = currentTierInfo.tier;
+    }
+  }, [pvp.loading, pvp.myStanding]);
+
+  if (!ceremony) return null;
+  return (
+    <RankUpCeremony
+      oldTier={ceremony.oldTier}
+      newTier={ceremony.newTier}
+      direction={ceremony.direction}
+      onComplete={() => setCeremony(null)}
+    />
+  );
+}
+
 function RootLayout() {
   useEffect(() => {
     analytics.track(AnalyticsEvent.APP_OPENED);
@@ -164,17 +231,13 @@ function RootLayout() {
       <ErrorBoundary>
         <PremiumProvider>
           <PremiumSync />
+          <CelebrationProvider>
           <GamificationProvider>
             <CelebrationLayer />
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="index" />
-              <Stack.Screen name="(auth)" />
-              <Stack.Screen name="(onboarding)" />
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="paywall" options={{ presentation: 'modal', headerShown: false }} />
-              <Stack.Screen name="go-pro" options={{ presentation: 'modal', headerShown: false }} />
-            </Stack>
+            <RankMonitor />
+            <ThemedStack />
           </GamificationProvider>
+          </CelebrationProvider>
         </PremiumProvider>
       </ErrorBoundary>
     </AuthProvider>

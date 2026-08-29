@@ -26,17 +26,15 @@ const DELETE_WIDTH = 80;
 
 // ─── Swipeable profile card ───────────────────────────────────────────────────
 
-function ProfileCard({
-  profile,
-  onPress,
-  onDelete,
-  colors,
-}: {
+interface ProfileCardProps {
   profile: EquipmentProfile;
+  isExpanded: boolean;
   onPress: (id: string) => void;
   onDelete: (id: string) => void;
   colors: any;
-}) {
+}
+
+function ProfileCard({ profile, isExpanded, onPress, onDelete, colors }: ProfileCardProps) {
   const translateX = useRef(new Animated.Value(0)).current;
   const isOpen = useRef(false);
 
@@ -69,18 +67,24 @@ function ProfileCard({
   ).current;
 
   const equipCount = profile.equipment.length;
-  const subtitle = equipCount === 0
-    ? 'No equipment'
-    : equipCount === ALL_EQUIPMENT.length
-    ? 'All equipment'
-    : `${equipCount} item${equipCount !== 1 ? 's' : ''}`;
+  const subtitle =
+    equipCount === 0
+      ? 'No equipment'
+      : equipCount === ALL_EQUIPMENT.length
+      ? 'All equipment'
+      : `${equipCount} item${equipCount !== 1 ? 's' : ''}`;
+
+  const chevronIcon = isExpanded ? 'chevron-up' : 'chevron-down';
 
   return (
     <View style={cardStyles.wrapper}>
       {!profile.isPreset && (
         <View style={[cardStyles.deleteBg, { width: DELETE_WIDTH }]}>
           <TouchableOpacity
-            onPress={() => { close(); onDelete(profile.id); }}
+            onPress={() => {
+              close();
+              onDelete(profile.id);
+            }}
             style={cardStyles.deleteBtn}
           >
             <Ionicons name="trash-outline" size={20} color="white" />
@@ -90,7 +94,10 @@ function ProfileCard({
       )}
       <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
         <TouchableOpacity
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress(profile.id); }}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            onPress(profile.id);
+          }}
           activeOpacity={0.7}
           style={[
             cardStyles.card,
@@ -113,15 +120,34 @@ function ProfileCard({
               )}
               {profile.isPreset && (
                 <View style={[cardStyles.presetBadge, { backgroundColor: colors.border }]}>
-                  <Text style={[cardStyles.presetTxt, { color: colors.textSecondary }]}>Preset</Text>
+                  <Text style={[cardStyles.presetTxt, { color: colors.textSecondary }]}>
+                    Preset
+                  </Text>
                 </View>
               )}
             </View>
             <Text style={[cardStyles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text>
+
+            {/* Accordion: equipment list when expanded */}
+            {isExpanded && profile.equipment.length > 0 && (
+              <View style={cardStyles.equipGrid}>
+                {profile.equipment.map((item) => (
+                  <View
+                    key={item}
+                    style={[cardStyles.equipChip, { backgroundColor: Colors.gym + '18', borderColor: Colors.gym + '55' }]}
+                  >
+                    <Text style={[cardStyles.equipChipTxt, { color: Colors.gym }]}>{item}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            {isExpanded && profile.equipment.length === 0 && (
+              <Text style={[cardStyles.noEquipTxt, { color: colors.textSecondary }]}>
+                No equipment selected for this profile.
+              </Text>
+            )}
           </View>
-          {!profile.isActive && (
-            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-          )}
+          <Ionicons name={chevronIcon} size={18} color={colors.textSecondary} style={cardStyles.chevron} />
         </TouchableOpacity>
       </Animated.View>
     </View>
@@ -144,7 +170,7 @@ const cardStyles = StyleSheet.create({
   deleteTxt: { color: 'white', fontSize: 11, fontWeight: '600' },
   card: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     borderRadius: 12,
     overflow: 'hidden',
   },
@@ -164,9 +190,19 @@ const cardStyles = StyleSheet.create({
   activeTxt: { fontSize: 12, fontWeight: '700' },
   presetBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
   presetTxt: { fontSize: 12, fontWeight: '600' },
+  chevron: { marginTop: 16, marginRight: 12 },
+  equipGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10, gap: 6 },
+  equipChip: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  equipChipTxt: { fontSize: 12, fontWeight: '600' },
+  noEquipTxt: { fontSize: 13, marginTop: 8, fontStyle: 'italic' },
 });
 
-// ─── Equipment chip ───────────────────────────────────────────────────────────
+// ─── Equipment chip (editor) ──────────────────────────────────────────────────
 
 function EquipChip({
   item,
@@ -181,7 +217,10 @@ function EquipChip({
 }) {
   return (
     <TouchableOpacity
-      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onToggle(item); }}
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onToggle(item);
+      }}
       style={[
         chipStyles.chip,
         selected
@@ -213,9 +252,17 @@ const chipStyles = StyleSheet.create({
 
 export default function EquipmentProfilesScreen() {
   const { colors } = useTheme();
-  const { profiles, isLoading, loadProfiles, switchProfile, createCustomProfile, removeProfile } =
-    useEquipmentProfiles();
+  const {
+    profiles,
+    isLoading,
+    error,
+    loadProfiles,
+    switchProfile,
+    createCustomProfile,
+    removeProfile,
+  } = useEquipmentProfiles();
 
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [newName, setNewName] = useState('');
   const [selectedEquip, setSelectedEquip] = useState<ProfileEquipment[]>([]);
@@ -227,10 +274,22 @@ export default function EquipmentProfilesScreen() {
     }, [loadProfiles])
   );
 
-  const handleSwitch = async (id: string) => {
+  const handleCardPress = async (id: string) => {
     const profile = profiles.find((p) => p.id === id);
-    if (!profile || profile.isActive) return;
-    await switchProfile(id);
+    if (!profile) return;
+
+    if (profile.isActive) {
+      // Active card: toggle expand/collapse
+      setExpandedId((prev) => (prev === id ? null : id));
+    } else {
+      // Non-active card: switch active + expand, collapse previous
+      try {
+        await switchProfile(id);
+        setExpandedId(id);
+      } catch {
+        Alert.alert('Switch failed', 'Could not switch equipment profile. Please try again.');
+      }
+    }
   };
 
   const handleDelete = (id: string) => {
@@ -239,7 +298,10 @@ export default function EquipmentProfilesScreen() {
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: () => removeProfile(id),
+        onPress: () => {
+          if (expandedId === id) setExpandedId(null);
+          removeProfile(id);
+        },
       },
     ]);
   };
@@ -256,12 +318,17 @@ export default function EquipmentProfilesScreen() {
       return;
     }
     setSaving(true);
-    await createCustomProfile(newName.trim(), selectedEquip);
-    setSaving(false);
-    setShowEditor(false);
-    setNewName('');
-    setSelectedEquip([]);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    try {
+      await createCustomProfile(newName.trim(), selectedEquip);
+      setShowEditor(false);
+      setNewName('');
+      setSelectedEquip([]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      Alert.alert('Save failed', 'Could not create profile. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -276,15 +343,40 @@ export default function EquipmentProfilesScreen() {
       >
         <Text style={[styles.sectionHeader, { color: colors.textSecondary }]}>PROFILES</Text>
 
+        {/* Error banner */}
+        {error !== null && (
+          <View style={[styles.errorBanner, { backgroundColor: Colors.error + '18', borderColor: Colors.error }]}>
+            <Ionicons name="alert-circle-outline" size={18} color={Colors.error} />
+            <Text style={[styles.errorTxt, { color: Colors.error }]}>{error}</Text>
+            <TouchableOpacity onPress={loadProfiles} style={styles.retryBtn}>
+              <Text style={[styles.retryTxt, { color: Colors.error }]}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {isLoading ? (
           <ActivityIndicator color={Colors.gym} style={{ marginTop: 20 }} />
         ) : (
           <>
+            {/* Empty state */}
+            {profiles.length === 0 && error === null && (
+              <View style={styles.emptyState}>
+                <Ionicons name="barbell-outline" size={40} color={colors.textSecondary} />
+                <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+                  No Profiles Yet
+                </Text>
+                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                  Create a custom profile below to track your equipment.
+                </Text>
+              </View>
+            )}
+
             {profiles.map((profile) => (
               <ProfileCard
                 key={profile.id}
                 profile={profile}
-                onPress={handleSwitch}
+                isExpanded={expandedId === profile.id}
+                onPress={handleCardPress}
                 onDelete={handleDelete}
                 colors={colors}
               />
@@ -295,7 +387,10 @@ export default function EquipmentProfilesScreen() {
         {/* Create custom button */}
         {!showEditor && (
           <TouchableOpacity
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowEditor(true); }}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowEditor(true);
+            }}
             style={[styles.createBtn, { borderColor: Colors.gym }]}
             activeOpacity={0.7}
           >
@@ -306,15 +401,29 @@ export default function EquipmentProfilesScreen() {
 
         {/* Custom profile editor */}
         {showEditor && (
-          <View style={[styles.editor, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.editorTitle, { color: colors.textPrimary }]}>New Custom Profile</Text>
+          <View
+            style={[
+              styles.editor,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.editorTitle, { color: colors.textPrimary }]}>
+              New Custom Profile
+            </Text>
 
             <TextInput
               value={newName}
               onChangeText={setNewName}
               placeholder="Profile name (e.g. My Garage Gym)"
               placeholderTextColor={colors.textSecondary}
-              style={[styles.nameInput, { color: colors.textPrimary, borderColor: colors.border, backgroundColor: colors.background }]}
+              style={[
+                styles.nameInput,
+                {
+                  color: colors.textPrimary,
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                },
+              ]}
               maxLength={40}
             />
 
@@ -336,7 +445,11 @@ export default function EquipmentProfilesScreen() {
 
             <View style={styles.editorBtns}>
               <TouchableOpacity
-                onPress={() => { setShowEditor(false); setNewName(''); setSelectedEquip([]); }}
+                onPress={() => {
+                  setShowEditor(false);
+                  setNewName('');
+                  setSelectedEquip([]);
+                }}
                 style={[styles.cancelBtn, { borderColor: colors.border }]}
               >
                 <Text style={[styles.cancelTxt, { color: colors.textSecondary }]}>Cancel</Text>
@@ -363,6 +476,21 @@ export default function EquipmentProfilesScreen() {
 const styles = StyleSheet.create({
   container: { padding: 16, paddingBottom: 40 },
   sectionHeader: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, marginBottom: 12 },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  errorTxt: { flex: 1, fontSize: 13, fontWeight: '600' },
+  retryBtn: { paddingHorizontal: 8, paddingVertical: 4 },
+  retryTxt: { fontSize: 13, fontWeight: '700', textDecorationLine: 'underline' },
+  emptyState: { alignItems: 'center', paddingVertical: 32, gap: 8 },
+  emptyTitle: { fontSize: 17, fontWeight: '700' },
+  emptySubtitle: { fontSize: 14, textAlign: 'center', paddingHorizontal: 24 },
   createBtn: {
     flexDirection: 'row',
     alignItems: 'center',

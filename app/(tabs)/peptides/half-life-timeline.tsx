@@ -66,7 +66,9 @@ export default function HalfLifeTimelineScreen() {
         }}
         activeOpacity={0.7}
       >
-        <Ionicons name="add" size={28} color="white" />
+        <View style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name="add" size={28} color="white" />
+        </View>
         <Text style={styles.fabLabel}>Side Effect</Text>
       </TouchableOpacity>
 

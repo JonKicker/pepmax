@@ -4,6 +4,212 @@
 
 ---
 
+## Fix Stale Workout Banner + Onboarding Checklist Progress Bar
+
+**Status:** ✅ Ray-approved (2026-03-30, Plan: 1 cycle conditional, Build: 1 cycle conditional)
+**Date:** 2026-03-30
+
+### What Was Built
+
+**Bug 1 — Stale "Unfinished workout" banner always showing on Training tab**
+- Root cause: `getActiveSession()` returned stale `active` sessions from Firestore that were never completed (app crash, force close)
+- Fix: Added `STALE_SESSION_HOURS = 4` constant and `abandonStaleSession()` to `workoutSessionService.ts`. `useWorkoutRecovery` hook now checks session age and auto-abandons sessions older than 4 hours.
+- `getActiveSession()` kept as pure read per Ray's requirement
+
+**Bug 2 — Onboarding checklist progress bar removed, dismiss button added**
+- Removed `{completedCount}/{CHECKLIST.length}` progress text from header
+- Added X dismiss button (close-outline icon) calling existing `onDismiss` prop
+
+**Also fixed:** `usePreventRemove` crash on active-session screen (replaced `beforeRemove` listener with `usePreventRemove` hook, added `gestureEnabled: false` to layout)
+
+### Files Modified
+- `src/services/workoutSessionService.ts` — `STALE_SESSION_HOURS`, `abandonStaleSession()`
+- `src/hooks/useWorkoutRecovery.ts` — staleness detection + auto-abandon logic
+- `src/components/dashboard/OnboardingChecklist.tsx` — dismiss button replaces progress text
+- `app/(tabs)/training/active-session.tsx` — `usePreventRemove` replaces `beforeRemove`
+- `app/(tabs)/training/_layout.tsx` — `gestureEnabled: false` on active-session screen
+
+---
+
+## Equipment Profiles Bug Fix — Empty Cards + No Navigation
+
+**Status:** ✅ Ray-approved (2026-03-30, Plan: 1 cycle conditional, Build: 1 cycle conditional + quick fix)
+**Date:** 2026-03-30
+
+### What Was Built
+
+Fixed two bugs on the equipment-profiles screen:
+
+1. **Empty bordered boxes (no text)** — Added error state display (red banner + retry) and empty state UI when profiles fail to load from Firestore
+2. **Cards don't navigate anywhere** — Added accordion expand/collapse: tapping active card shows equipment list, tapping non-active card switches + expands. Chevron icon indicates expandable state.
+
+**Modified files:**
+- `app/(tabs)/training/equipment-profiles.tsx`
+
+### Design Decisions
+- `expandedId` state lives in parent screen, passed as prop to ProfileCard (Ray's condition)
+- Active card tap toggles expand; non-active tap switches active + expands
+- try/catch on switchProfile and createCustomProfile with user-facing Alert on failure (Ray's condition)
+- Equipment shown as read-only tinted chips inside expanded card
+
+### Ray's Notes
+- LOW: `colors: any` prop type could use actual theme type — deferred
+- LOW: Missing accessibilityLabel/accessibilityRole — deferred
+
+---
+
+## Compete Tab Arena UI/UX Overhaul
+
+**Status:** ✅ Ray-approved (2026-03-27, Plan: 1 cycle conditional, Build: 1 cycle)
+**Date:** 2026-03-27
+
+### What Was Built
+
+Distinct competitive arena visual identity for the Compete tab, separate from the rest of the app's glass morphism design language.
+
+**New files:**
+- `src/constants/competeTheme.ts` — Theme-aware arena colors (dark: navy/purple gradients, light: lavender), arena card factory with colored glow borders, ARENA_GLOW accent palette
+- `src/components/ArenaBackground.tsx` — LinearGradient background replacing GlassBackground on compete screens
+- `src/components/ArenaSectionDivider.tsx` — Gold→purple gradient divider line between sections
+
+**Modified screens:**
+- `app/(tabs)/compete/_layout.tsx` — Dark arena header, no shadow
+- `app/(tabs)/compete/index.tsx` — Full restyling: ArenaBackground, glow-border cards (gold for XP, purple for duels, accent for actions), larger hero (70x70 badge, gold glow shadow), uppercase section labels (800 weight, 1.5 letter-spacing), staggered quick-action entrance animations, pulsing border on active duels, section dividers
+- `app/(tabs)/compete/leaderboards.tsx` — ArenaBackground, arena card styles on filters
+- `app/(tabs)/compete/challenges.tsx` — ArenaBackground, arena card styles on tabs/chips
+- `app/(tabs)/compete/duel-detail.tsx` — Removed hardcoded dark constants, ArenaBackground, arena cards
+
+### Design Decisions
+- Arena uses deep navy/purple gradients (dark: #08081A→#0F0F22, light: #E8E8F4→#F5F5FF) — visually distinct from dashboard's standard glass
+- Glow borders: gold (XP/achievements), purple (PVP/duels), green (quests), red (challenges), accent (general)
+- Shadow glow only renders in dark mode to avoid muddy shadows on light backgrounds
+- All animations on UI thread via useAnimatedStyle, withRepeat cleaned up via cancelAnimation
+- WCAG AA contrast verified: dark sectionText #9A9AB0 = 5.4:1, light #555566 = 5.5:1
+
+### Ray's Notes
+- Remaining 14 compete screens (crews, friends, social, trophy-case, etc.) still use GlassBackground — track as Phase 2 if visual mismatch is noticeable
+- QuickAction entrance animations are one-shot (not withRepeat), no cleanup needed
+
+---
+
+## Final Orphan Wiring — ShareCardRenderer, SuccessBurst, Celebration Presets
+
+**Status:** ✅ Ray-approved (2026-03-27, 2 phases — J: 1 cycle, K: 1 cycle)
+**Date:** 2026-03-27
+
+### What Was Built
+
+**Phase J — ShareCardRenderer Share Flows**
+- `app/(tabs)/compete/duel-detail.tsx` — "Share Victory" button after winning a duel, ShareCardRenderer captures and shares duel_victory card
+- `app/(tabs)/compete/leaderboards.tsx` — "Share Rank" button near YourRankBanner, ShareCardRenderer captures league_standing card
+- `app/(tabs)/compete/index.tsx` — "Share Season" button after claiming season reward, ShareCardRenderer captures season_summary card + seasonReward() celebration fires on claim
+
+**Phase K — SuccessBurst + perfectWeek**
+- `app/(tabs)/compete/index.tsx` — SuccessBurst (gold, 72px) on season reward claim with 800ms auto-hide
+- `app/(tabs)/compete/duel-detail.tsx` — SuccessBurst (green, 72px) on duel accept with 800ms auto-hide
+- `app/(tabs)/dashboard/index.tsx` — perfectWeek() legendary celebration fires once per session when weeklyScore === 100
+
+### All Previously Orphaned Components — Now Wired
+| Component | Target | Wired In |
+|-----------|--------|----------|
+| CelebrationOverlay | Root layout | Phase A |
+| RankProgressBar | Compete hub | Phase B |
+| DailyQuestsCard | Compete hub | Phase B |
+| DuelProgressBar | Duel detail | Phase C |
+| DuelResultScreen | Duel detail | Phase C |
+| WinStreakBadge | Duel detail | Phase C |
+| LeaderboardPodium | Leaderboards | Phase D |
+| YourRankBanner | Leaderboards | Phase D |
+| VSScreen | Duel detail | Phase E |
+| RankUpCeremony | Root layout | Phase E |
+| CompareBattle | Compare screen | Phase F |
+| ChallengeDifficultyBadge | Challenge detail | Phase F |
+| EventBanner | Compete hub | Phase H |
+| CrewVsCrewCard | Crew detail | Phase H |
+| RankChangeIndicator | Compete hub | Phase H |
+| AnimatedToggle | Profile settings | Phase I |
+| MorphButton | Challenge detail | Phase I |
+| ShareCardRenderer | Duel/Leaderboards/Hub | Phase J |
+| SuccessBurst | Hub + Duel detail | Phase K |
+
+### All Celebration Presets — Now Triggered
+| Preset | Trigger | Wired In |
+|--------|---------|----------|
+| duelWin() | DuelResultScreen on win | Phase C |
+| rankUp() | RankUpCeremony on tier change | Phase E |
+| dailyQuest() | Quest bonus claim | Phase G |
+| Level-up | Level-up modal | Phase G |
+| seasonReward() | Season reward claim | Phase J |
+| perfectWeek() | Dashboard weeklyScore === 100 | Phase K |
+
+### Bug Fixes Applied
+- voice-log.tsx registered in nutrition _layout.tsx (Phase I)
+- useCelebration converted from standalone hook → shared CelebrationProvider context (Phase G)
+
+---
+
+## Wire Remaining Orphaned Components — Phase 2
+
+**Status:** ✅ Ray-approved (2026-03-27, 5 phases — E: 1 cycle, F: 1 cycle conditional, G: 2 cycles, H: 2 cycles, I: 1 cycle)
+**Date:** 2026-03-27
+
+### What Was Built
+
+**Phase E — VSScreen + RankUpCeremony**
+- `app/(tabs)/compete/duel-detail.tsx` — VSScreen overlay plays once per session when opening an active duel (2.5s dramatic intro with player tiers)
+- `app/_layout.tsx` — RankMonitor component detects tier changes via prevTierRef, shows RankUpCeremony overlay globally on promotion/demotion
+
+**Phase F — CompareBattle + ChallengeDifficultyBadge**
+- `app/(tabs)/compete/compare.tsx` — CompareBattle head-to-head stat reveal below radar chart (fighting-game style, stat-by-stat with winner highlighting)
+- `app/(tabs)/compete/challenge-detail.tsx` — ChallengeDifficultyBadge in pill row (normal/hard/extreme with XP reward)
+
+**Phase G — Celebration Triggers + Shared Context**
+- `src/hooks/useCelebration.ts` — Converted from standalone hook to shared React Context (CelebrationProvider) so all components share one celebration queue
+- `app/_layout.tsx` — Wrapped with CelebrationProvider
+- `app/(tabs)/compete/index.tsx` — dailyQuest() celebration fires on quest bonus claim
+- `src/contexts/GamificationContext.tsx` — Level-up celebration fires with level-up modal
+
+**Phase H — EventBanner + CrewVsCrewCard + RankChangeIndicator**
+- `app/(tabs)/compete/index.tsx` — EventBanner for active seasonal events (fetched via eventService), RankChangeIndicator in hero section (sum of recent RP deltas)
+- `app/(tabs)/compete/crew-detail.tsx` — CrewVsCrewCard showing active crew challenges with entries and progress
+
+**Phase I — Bug Fixes + Animation Polish**
+- `app/(tabs)/nutrition/_layout.tsx` — Registered voice-log as modal Stack.Screen (was missing)
+- `app/(tabs)/profile/index.tsx` — Replaced 4 Switch toggles with AnimatedToggle (spring physics, theme-aware)
+- `app/(tabs)/compete/challenge-detail.tsx` — Replaced Join button with MorphButton (success morph animation)
+
+### Components Wired in This Pass
+| Component | Target Screen |
+|-----------|--------------|
+| VSScreen | Duel detail |
+| RankUpCeremony | Root layout (global) |
+| CompareBattle | Compare screen |
+| ChallengeDifficultyBadge | Challenge detail |
+| EventBanner | Compete hub |
+| CrewVsCrewCard | Crew detail |
+| RankChangeIndicator | Compete hub |
+| AnimatedToggle | Profile/Settings |
+| MorphButton | Challenge detail |
+
+### Architectural Changes
+- `useCelebration` converted from standalone hook → CelebrationProvider context (shared queue across entire app)
+- CelebrationProvider wraps outside GamificationProvider in root layout
+
+### Ray's Follow-Up Items (non-blocking)
+1. Compare screen pace unit hardcodes 'min/km' — should be unit-aware
+2. CompareBattle wrapper fixed 480px height — consider dynamic sizing
+3. Both tiers default to 'bronze' in compare/duel screens (no RP on docs)
+4. MorphButton nested setTimeout cleanup is cosmetic — only last timeout cleared on unmount
+5. RankUpCeremony container not absolutely positioned — relies on celebration engine for overlay
+
+### Remaining Orphaned (tracked)
+- ShareCardRenderer — needs share flow redesign (separate feature)
+- SuccessBurst — optional polish, composable into MorphButton
+- seasonReward() preset — needs end-of-season flow
+- perfectWeek() preset — needs streak detection hook
+
+---
+
 ## Wire Orphaned Components & Rebuild Compete Hub
 
 **Status:** ✅ Ray-approved (2026-03-27, 4 phases — A: 1 cycle, B: 1 cycle conditional, C: 2 cycles conditional, D: 2 cycles conditional)

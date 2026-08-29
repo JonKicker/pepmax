@@ -38,20 +38,20 @@ export const Colors = {
 
   // Dark mode
   dark: {
-    background: '#121212',
-    surface: '#1E1E1E',
+    background: '#0A0A0F',
+    surface: '#12121A',
     textPrimary: '#E8E8E8',
-    textSecondary: '#A0A0A0',
-    border: '#333333',
+    textSecondary: '#8A8A9A',
+    border: '#1E1E2A',
     success: '#2ECC71',
     glass: {
-      heavy: 'rgba(255, 255, 255, 0.08)',
-      subtle: 'rgba(255, 255, 255, 0.04)',
-      border: 'rgba(255, 255, 255, 0.12)',
+      heavy: 'rgba(255, 255, 255, 0.07)',
+      subtle: 'rgba(255, 255, 255, 0.03)',
+      border: 'rgba(255, 255, 255, 0.10)',
       shadow: 'rgba(0, 0, 0, 0.3)',
-      gradientStart: '#1a1a2e',
-      gradientMid: '#161622',
-      gradientEnd: '#121212',
+      gradientStart: '#111120',
+      gradientMid: '#0D0D16',
+      gradientEnd: '#0A0A0F',
     },
   },
 

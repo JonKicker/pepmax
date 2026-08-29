@@ -177,15 +177,27 @@ export async function searchUSDA(
     }
 
     const json = await response.json();
-    const results: FoodSearchResult[] = (json?.foods ?? [])
-      .filter((f: unknown) => f && typeof f === 'object')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const foods = (json?.foods ?? []).filter((f: unknown) => f && typeof f === 'object');
+
+    // Sort by USDA relevance score (highest first)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    foods.sort((a: any, b: any) => (b?.score ?? 0) - (a?.score ?? 0));
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed: FoodSearchResult[] = foods
       .map((f: any) => parseFoodItem(f))
       .filter((r: FoodSearchResult) => r.name !== 'Unknown Food')
-      .filter(
-        (r: FoodSearchResult) =>
-          !(r.calories100g === 0 && r.protein100g === 0 && r.carbs100g === 0 && r.fat100g === 0),
-      );
+      .filter((r: FoodSearchResult) => r.calories100g > 0);
+
+    // Deduplicate by name — keep the highest-scored entry per name
+    const seen = new Set<string>();
+    const results: FoodSearchResult[] = [];
+    for (const item of parsed) {
+      const key = item.name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      results.push(item);
+    }
 
     return { data: results, error: null };
   } catch (e) {

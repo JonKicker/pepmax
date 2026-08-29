@@ -12,7 +12,7 @@
  *
  * Navigated to from Dashboard → "Leaderboards" entry card.
  */
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -27,7 +27,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../../src/hooks/useTheme';
-import { GlassBackground } from '../../../src/components/GlassBackground';
+import { ArenaBackground } from '../../../src/components/ArenaBackground';
+import { arenaCardStyle, ARENA_GLOW } from '../../../src/constants/competeTheme';
 import { Colors } from '../../../src/constants/theme';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { useFriends } from '../../../src/hooks/useFriends';
@@ -35,6 +36,8 @@ import { useLeaderboard } from '../../../src/hooks/useLeaderboard';
 import { LeaderboardRow } from '../../../src/components/social/LeaderboardRow';
 import { LeaderboardPodium } from '../../../src/components/pvp/LeaderboardPodium';
 import { YourRankBanner } from '../../../src/components/pvp/YourRankBanner';
+import { ShareCardRenderer } from '../../../src/components/pvp/ShareCardRenderer';
+import type { ShareCardData } from '../../../src/utils/shareCardUtils';
 import { LEADERBOARD_CATEGORIES, getCategoryConfig } from '../../../src/utils/leaderboardCategories';
 import { analytics, AnalyticsEvent } from '../../../src/services/analytics';
 import { mapLegacyToV2 } from '../../../src/utils/rankTierV2';
@@ -101,7 +104,7 @@ function LeaderboardSkeleton({ colors }: { colors: ReturnType<typeof useTheme>['
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function LeaderboardsScreen() {
-  const { colors } = useTheme();
+  const { colors, dark } = useTheme();
   const router = useRouter();
   const { currentUser } = useAuth();
   const friendsHook = useFriends();
@@ -126,6 +129,9 @@ export default function LeaderboardsScreen() {
     setScope,
     refresh,
   } = leaderboard;
+
+  // Share card state
+  const [shareVisible, setShareVisible] = useState(false);
 
   // Track screen view
   useEffect(() => {
@@ -228,7 +234,7 @@ export default function LeaderboardsScreen() {
   };
 
   return (
-    <GlassBackground>
+    <ArenaBackground>
     <View style={styles.container}>
 
 
@@ -246,10 +252,9 @@ export default function LeaderboardsScreen() {
               key={cat}
               style={[
                 styles.pill,
-                {
-                  backgroundColor: isActive ? Colors.accent : colors.surface,
-                  borderColor: isActive ? Colors.accent : colors.border,
-                },
+                isActive
+                  ? { backgroundColor: Colors.accent, borderColor: Colors.accent }
+                  : arenaCardStyle(dark),
               ]}
               onPress={() => { Haptics.selectionAsync(); setCategory(cat); }}
               activeOpacity={0.7}
@@ -272,7 +277,7 @@ export default function LeaderboardsScreen() {
       {/* Scope + Timeframe toggles */}
       <View style={styles.togglesRow}>
         {/* Scope */}
-        <View style={[styles.segmentedControl, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.segmentedControl, arenaCardStyle(dark)]}>
           {SCOPES.map((s) => (
             <TouchableOpacity
               key={s.key}
@@ -298,7 +303,7 @@ export default function LeaderboardsScreen() {
         </View>
 
         {/* Timeframe */}
-        <View style={[styles.segmentedControl, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.segmentedControl, arenaCardStyle(dark)]}>
           {TIMEFRAMES.map((tf) => (
             <TouchableOpacity
               key={tf.key}
@@ -403,8 +408,41 @@ export default function LeaderboardsScreen() {
           unit={yourRankBanner.unit}
         />
       )}
+
+      {/* Share Rank button — visible when user has rank data */}
+      {yourRankBanner && !loading && (
+        <TouchableOpacity
+          style={styles.shareRankButton}
+          onPress={() => setShareVisible(true)}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Share your rank"
+        >
+          <Ionicons name="share-outline" size={16} color={Colors.accent} />
+          <Text style={[styles.shareRankText, { color: Colors.accent }]}>Share Rank</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* ShareCardRenderer — off-screen, fires when shareVisible=true */}
+      {shareVisible && yourRankBanner && currentUser && (() => {
+        const userEntry = entries.find((e) => e.uid === currentUser.uid);
+        const shareData: ShareCardData = {
+          username: userEntry?.username ?? currentUser.uid,
+          tier: yourRankBanner.tier,
+          leagueRank: yourRankBanner.rank,
+          leagueSize: yourRankBanner.total,
+        };
+        return (
+          <ShareCardRenderer
+            type="league_standing"
+            data={shareData}
+            visible={shareVisible}
+            onCapture={() => setShareVisible(false)}
+          />
+        );
+      })()}
     </View>
-    </GlassBackground>
+    </ArenaBackground>
   );
 }
 
@@ -488,4 +526,22 @@ const styles = StyleSheet.create({
   skeletonContent: { flex: 1, gap: 6 },
   skeletonLine: { height: 12, borderRadius: 4 },
   skeletonValue: { width: 60, height: 14, borderRadius: 4 },
+  shareRankButton: {
+    position: 'absolute',
+    bottom: 8,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.accent + '18',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: Colors.accent + '55',
+  },
+  shareRankText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
 });

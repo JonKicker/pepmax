@@ -10,17 +10,30 @@
  *   6. Recent XP Feed — last 3 XP log entries with module color dots
  *   7. Season / League — SeasonBanner + WeeklyLeagueCard
  */
-import React from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ScrollView,
   View,
   Text,
   StyleSheet,
+  TouchableOpacity,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withDelay,
+  withSpring,
+  withRepeat,
+  withTiming,
+  cancelAnimation,
+} from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../src/hooks/useTheme';
 import { Colors } from '../../../src/constants/theme';
+import { arenaCardStyle, arenaColors, ARENA_GLOW } from '../../../src/constants/competeTheme';
+import { ArenaBackground } from '../../../src/components/ArenaBackground';
+import { ArenaSectionDivider } from '../../../src/components/ArenaSectionDivider';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { useXP } from '../../../src/hooks/useXP';
 import { useQuests } from '../../../src/hooks/useQuests';
@@ -33,14 +46,24 @@ import { RankBadge } from '../../../src/components/pvp/RankBadge';
 import { RankProgressBar } from '../../../src/components/pvp/RankProgressBar';
 import { WeeklyLeagueCard } from '../../../src/components/pvp/WeeklyLeagueCard';
 import { SeasonBanner } from '../../../src/components/pvp/SeasonBanner';
+import { EventBanner } from '../../../src/components/pvp/EventBanner';
+import { RankChangeIndicator } from '../../../src/components/pvp/RankChangeIndicator';
 import { DailyQuestsCard } from '../../../src/components/dashboard/DailyQuestsCard';
-import { GlassBackground } from '../../../src/components/GlassBackground';
+// GlassBackground replaced by ArenaBackground for compete screens
 import { AnimatedPressable } from '../../../src/components/AnimatedPressable';
 import { getTierForRP } from '../../../src/utils/rankTierV2';
 import { ACHIEVEMENT_DEFINITIONS } from '../../../src/utils/achievementDefinitions';
+import { useCelebration } from '../../../src/hooks/useCelebration';
+import { dailyQuest, seasonReward } from '../../../src/utils/celebrationPresets';
+import { SuccessBurst } from '../../../src/components/animations/SuccessBurst';
+import { ShareCardRenderer } from '../../../src/components/pvp/ShareCardRenderer';
+import type { ShareCardData } from '../../../src/utils/shareCardUtils';
+import { getActiveEvents, joinEvent } from '../../../src/services/eventService';
+import { auth } from '../../../src/services/firebase/index';
 import type { RankTierV2 } from '../../../src/types/rankV2';
 import type { XPModule } from '../../../src/types/gamification';
 import type { DuelDoc } from '../../../src/types/challenges';
+import type { SeasonalEvent } from '../../../src/types/pvpEvents';
 
 // ─── Module colors for XP feed ────────────────────────────────────────────────
 
@@ -93,33 +116,45 @@ type QuickActionProps = {
   badge?: number;
   onPress: () => void;
   colors: ReturnType<typeof useTheme>['colors'];
+  dark: boolean;
+  animIndex: number;
 };
 
-function QuickAction({ icon, label, color, badge, onPress, colors }: QuickActionProps) {
+function QuickAction({ icon, label, color, badge, onPress, colors, dark, animIndex }: QuickActionProps) {
+  const scale = useSharedValue(0.8);
+
+  useEffect(() => {
+    const delay = Math.min(animIndex * 80, 320); // cap stagger at 320ms
+    scale.value = withDelay(delay, withSpring(1, { damping: 14 }));
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
   return (
-    <AnimatedPressable
-      haptic
-      style={[
-        styles.quickCard,
-        {
-          backgroundColor: colors.glass.subtle,
-          borderColor: colors.glass.border,
-        },
-      ]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-    >
-      <View style={[styles.quickIconWrap, { backgroundColor: color + '18' }]}>
-        <Ionicons name={icon as any} size={22} color={color} />
-        {badge !== undefined && badge > 0 && (
-          <View style={styles.quickBadge}>
-            <Text style={styles.quickBadgeText}>{badge > 99 ? '99+' : badge}</Text>
-          </View>
-        )}
-      </View>
-      <Text style={[styles.quickLabel, { color: colors.textPrimary }]}>{label}</Text>
-    </AnimatedPressable>
+    <Animated.View style={[{ width: '47%' }, animStyle]}>
+      <AnimatedPressable
+        haptic
+        style={[
+          styles.quickCard,
+          arenaCardStyle(dark, ARENA_GLOW.accent),
+        ]}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+      >
+        <View style={[styles.quickIconWrap, { backgroundColor: color + '18' }]}>
+          <Ionicons name={icon as any} size={22} color={color} />
+          {badge !== undefined && badge > 0 && (
+            <View style={styles.quickBadge}>
+              <Text style={styles.quickBadgeText}>{badge > 99 ? '99+' : badge}</Text>
+            </View>
+          )}
+        </View>
+        <Text style={[styles.quickLabel, { color: colors.textPrimary }]}>{label}</Text>
+      </AnimatedPressable>
+    </Animated.View>
   );
 }
 
@@ -131,9 +166,10 @@ type DuelCardProps = {
   isPending: boolean;
   onPress: () => void;
   colors: ReturnType<typeof useTheme>['colors'];
+  dark: boolean;
 };
 
-function DuelCard({ duel, myUid, isPending, onPress, colors }: DuelCardProps) {
+function DuelCard({ duel, myUid, isPending, onPress, colors, dark }: DuelCardProps) {
   const isChallenger = duel.challengerUid === myUid;
   const myProgress = isChallenger ? duel.challengerProgress : duel.opponentProgress;
   const theirProgress = isChallenger ? duel.opponentProgress : duel.challengerProgress;
@@ -143,12 +179,34 @@ function DuelCard({ duel, myUid, isPending, onPress, colors }: DuelCardProps) {
   const total = myProgress + theirProgress;
   const myFraction = total > 0 ? myProgress / total : 0.5;
 
+  // Pulsing border opacity for active duels
+  const borderOpacity = useSharedValue(0.3);
+  useEffect(() => {
+    if (duel.status === 'active') {
+      borderOpacity.value = withRepeat(
+        withTiming(0.8, { duration: 1200 }),
+        -1,
+        true,
+      );
+    }
+    return () => {
+      cancelAnimation(borderOpacity);
+    };
+  }, [duel.status]);
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    borderColor: Colors.social + Math.round(borderOpacity.value * 255).toString(16).padStart(2, '0'),
+  }));
+
+  const baseCardStyle = arenaCardStyle(dark, ARENA_GLOW.purple);
+
   return (
+    <Animated.View style={duel.status === 'active' ? [baseCardStyle, pulseStyle] : undefined}>
     <AnimatedPressable
       haptic
       style={[
         styles.duelCard,
-        { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border },
+        duel.status === 'active' ? { backgroundColor: baseCardStyle.backgroundColor } : baseCardStyle,
       ]}
       onPress={onPress}
       accessibilityRole="button"
@@ -197,13 +255,15 @@ function DuelCard({ duel, myUid, isPending, onPress, colors }: DuelCardProps) {
         <Text style={[styles.duelScore, { color: colors.textSecondary }]}>{theirProgress}</Text>
       </View>
     </AnimatedPressable>
+    </Animated.View>
   );
 }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function CompeteHubScreen() {
-  const { colors } = useTheme();
+  const { colors, dark } = useTheme();
+  const arena = arenaColors(dark);
   const router = useRouter();
   const { userProfile, currentUser } = useAuth();
 
@@ -214,12 +274,66 @@ export default function CompeteHubScreen() {
   const friendsHook = useFriends();
   const { activeChallenges } = useChallenges();
 
+  const { triggerCelebration } = useCelebration();
+
+  // Share season state
+  const [seasonShareVisible, setSeasonShareVisible] = useState(false);
+  const [seasonRewardClaimed, setSeasonRewardClaimed] = useState(false);
+  const [showBurst, setShowBurst] = useState(false);
+
+  // Auto-hide SuccessBurst after 800ms
+  useEffect(() => {
+    if (!showBurst) return;
+    const timer = setTimeout(() => setShowBurst(false), 800);
+    return () => clearTimeout(timer);
+  }, [showBurst]);
+
+  // ── Seasonal Events ────────────────────────────────────────────────────────
+  const [activeEvents, setActiveEvents] = useState<SeasonalEvent[]>([]);
+  const [joinedEventIds, setJoinedEventIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    let cancelled = false;
+    getActiveEvents().then((result) => {
+      if (!cancelled && !result.error && result.data) {
+        setActiveEvents(result.data);
+      }
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleClaimBonus = useCallback(async () => {
+    await questsHook.claimBonus();
+    triggerCelebration(dailyQuest());
+  }, [questsHook.claimBonus, triggerCelebration]);
+
+  const handleClaimReward = useCallback(async () => {
+    await pvp.claimReward();
+    triggerCelebration(seasonReward());
+    setSeasonRewardClaimed(true);
+    setShowBurst(true);
+  }, [pvp.claimReward, triggerCelebration]);
+
   const displayName = userProfile?.firstName ?? 'Athlete';
   const myUid = currentUser?.uid ?? '';
 
   // Rank tier from RP
   const currentRP = pvp.myStanding?.member.currentRP ?? 0;
   const rankTier: RankTierV2 = getTierForRP(currentRP).tier;
+
+  // Recent RP change: sum of last 5 match history rpDelta values
+  const recentRpChange = pvp.progress?.matchHistory
+    ? pvp.progress.matchHistory.slice(-5).reduce((sum, m) => sum + m.rpDelta, 0)
+    : 0;
+
+  const handleJoinEvent = useCallback(async (eventId: string) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const result = await joinEvent(uid, eventId);
+    if (!result.error) {
+      setJoinedEventIds((prev) => new Set(prev).add(eventId));
+    }
+  }, []);
 
   // Achievements progress
   const totalAchievements = ACHIEVEMENT_DEFINITIONS.length;
@@ -234,7 +348,7 @@ export default function CompeteHubScreen() {
   const recentXP = recentLog.slice(0, 3);
 
   return (
-    <GlassBackground>
+    <ArenaBackground>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scroll}
@@ -244,14 +358,24 @@ export default function CompeteHubScreen() {
         {/* ── 1. Hero Section ──────────────────────────────────────────────── */}
         <AnimatedPressable
           haptic
-          style={[styles.heroCard, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+          style={[styles.heroCard, arenaCardStyle(dark, ARENA_GLOW.gold)]}
           onPress={() => router.push('/(tabs)/compete/xp-hub')}
           accessibilityRole="button"
           accessibilityLabel="View XP Hub"
         >
           {/* Level badge + Name + Rank row */}
           <View style={styles.heroTop}>
-            <View style={[styles.levelBadge, { borderColor: Colors.gold, backgroundColor: Colors.gold + '14' }]}>
+            <View style={[
+              styles.levelBadge,
+              {
+                borderColor: Colors.gold,
+                backgroundColor: Colors.gold + '14',
+                shadowColor: Colors.gold,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.3,
+                shadowRadius: 12,
+              },
+            ]}>
               <Text style={styles.levelNum}>{level}</Text>
               <Text style={[styles.levelLabel, { color: Colors.gold }]}>LVL</Text>
             </View>
@@ -260,7 +384,10 @@ export default function CompeteHubScreen() {
               <Text style={[styles.heroName, { color: colors.textPrimary }]} numberOfLines={1}>
                 {displayName}
               </Text>
-              <RankBadge tier={rankTier} size="md" glow />
+              <View style={styles.rankRow}>
+                <RankBadge tier={rankTier} size="md" glow />
+                <RankChangeIndicator change={recentRpChange} />
+              </View>
             </View>
 
             {/* Today's XP pill */}
@@ -293,7 +420,8 @@ export default function CompeteHubScreen() {
         </AnimatedPressable>
 
         {/* ── 2. Daily Quests ───────────────────────────────────────────────── */}
-        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>DAILY QUESTS</Text>
+        <ArenaSectionDivider />
+        <Text style={[styles.sectionLabel, { color: arena.sectionText }]}>DAILY QUESTS</Text>
         <DailyQuestsCard
           quests={questsHook.quests}
           completedCount={questsHook.completedCount}
@@ -301,14 +429,15 @@ export default function CompeteHubScreen() {
           bonusClaimed={questsHook.bonusClaimed}
           loading={questsHook.loading}
           colors={colors}
-          onClaimBonus={questsHook.claimBonus}
+          onClaimBonus={handleClaimBonus}
         />
 
         {/* ── 3. Active Duels ───────────────────────────────────────────────── */}
-        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>YOUR DUELS</Text>
+        <ArenaSectionDivider />
+        <Text style={[styles.sectionLabel, { color: arena.sectionText }]}>YOUR DUELS</Text>
 
         {duelsHook.loading ? (
-          <View style={[styles.duelPlaceholder, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}>
+          <View style={[styles.duelPlaceholder, arenaCardStyle(dark, ARENA_GLOW.purple)]}>
             <Text style={[styles.duelPlaceholderText, { color: colors.textSecondary }]}>Loading duels…</Text>
           </View>
         ) : hasDuels ? (
@@ -318,6 +447,7 @@ export default function CompeteHubScreen() {
                 key={duel.id}
                 duel={duel}
                 myUid={myUid}
+                dark={dark}
                 isPending={duelsHook.pendingDuels.some((d) => d.id === duel.id)}
                 onPress={() =>
                   router.push(`/(tabs)/compete/duel-detail?duelId=${duel.id}` as any)
@@ -329,7 +459,7 @@ export default function CompeteHubScreen() {
         ) : (
           <AnimatedPressable
             haptic
-            style={[styles.duelCta, { backgroundColor: colors.glass.subtle, borderColor: Colors.social + '55' }]}
+            style={[styles.duelCta, arenaCardStyle(dark, ARENA_GLOW.purple)]}
             onPress={() => router.push('/(tabs)/compete/create-duel' as any)}
             accessibilityRole="button"
             accessibilityLabel="Challenge a Friend"
@@ -348,7 +478,8 @@ export default function CompeteHubScreen() {
         )}
 
         {/* ── 4. Quick Actions (2×2 grid) ──────────────────────────────────── */}
-        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>COMPETE</Text>
+        <ArenaSectionDivider />
+        <Text style={[styles.sectionLabel, { color: arena.sectionText }]}>COMPETE</Text>
 
         <View style={styles.quickGrid}>
           <QuickAction
@@ -357,6 +488,8 @@ export default function CompeteHubScreen() {
             color={Colors.gold}
             onPress={() => router.push('/(tabs)/compete/trophy-case')}
             colors={colors}
+            dark={dark}
+            animIndex={0}
           />
           <QuickAction
             icon="flash-outline"
@@ -365,6 +498,8 @@ export default function CompeteHubScreen() {
             badge={activeChallenges.length > 0 ? activeChallenges.length : undefined}
             onPress={() => router.push('/(tabs)/compete/challenges')}
             colors={colors}
+            dark={dark}
+            animIndex={1}
           />
           <QuickAction
             icon="podium-outline"
@@ -372,6 +507,8 @@ export default function CompeteHubScreen() {
             color={Colors.accent}
             onPress={() => router.push('/(tabs)/compete/leaderboards')}
             colors={colors}
+            dark={dark}
+            animIndex={2}
           />
           <QuickAction
             icon="people-circle-outline"
@@ -380,15 +517,18 @@ export default function CompeteHubScreen() {
             badge={friendsHook.pendingCount > 0 ? friendsHook.pendingCount : undefined}
             onPress={() => router.push('/(tabs)/compete/social')}
             colors={colors}
+            dark={dark}
+            animIndex={3}
           />
         </View>
 
         {/* ── 5. Achievements Progress ──────────────────────────────────────── */}
-        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>ACHIEVEMENTS</Text>
+        <ArenaSectionDivider />
+        <Text style={[styles.sectionLabel, { color: arena.sectionText }]}>ACHIEVEMENTS</Text>
 
         <AnimatedPressable
           haptic
-          style={[styles.achieveCard, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}
+          style={[styles.achieveCard, arenaCardStyle(dark, ARENA_GLOW.gold)]}
           onPress={() => router.push('/(tabs)/compete/trophy-case')}
           accessibilityRole="button"
           accessibilityLabel={`${unlockedCount} of ${totalAchievements} achievements unlocked`}
@@ -420,9 +560,10 @@ export default function CompeteHubScreen() {
         </AnimatedPressable>
 
         {/* ── 6. Recent XP Feed ─────────────────────────────────────────────── */}
-        <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>RECENT XP</Text>
+        <ArenaSectionDivider />
+        <Text style={[styles.sectionLabel, { color: arena.sectionText }]}>RECENT XP</Text>
 
-        <View style={[styles.xpFeedCard, { backgroundColor: colors.glass.subtle, borderColor: colors.glass.border }]}>
+        <View style={[styles.xpFeedCard, arenaCardStyle(dark)]}>
           {recentXP.length === 0 ? (
             <View style={styles.xpFeedEmpty}>
               <Ionicons name="star-outline" size={24} color={colors.textSecondary} />
@@ -472,22 +613,57 @@ export default function CompeteHubScreen() {
         </View>
 
         {/* ── 7. Season / League Section ───────────────────────────────────── */}
-        {/* TODO: Add EventBanner here once usePvpSeason exposes SeasonalEvent data */}
+
+        {activeEvents.length > 0 && (
+          <>
+            <ArenaSectionDivider />
+            <Text style={[styles.sectionLabel, { color: arena.sectionText }]}>EVENTS</Text>
+            {activeEvents.map((event) => (
+              <EventBanner
+                key={event.id}
+                event={event}
+                userJoined={joinedEventIds.has(event.id)}
+                onJoin={() => handleJoinEvent(event.id)}
+                onViewDetails={() => router.push('/(tabs)/compete/leaderboards')}
+              />
+            ))}
+          </>
+        )}
 
         {!pvp.loading && pvp.season && (
           <>
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>SEASON</Text>
+            <ArenaSectionDivider />
+            <Text style={[styles.sectionLabel, { color: arena.sectionText }]}>SEASON</Text>
             <SeasonBanner
               season={pvp.season}
               progress={pvp.progress}
               timeRemaining={pvp.timeRemaining}
+              onClaimReward={handleClaimReward}
             />
+            {/* SuccessBurst — shown briefly after reward claimed */}
+            <View style={styles.burstWrap}>
+              <SuccessBurst visible={showBurst} color={Colors.gold} size={72} />
+            </View>
+            {/* Share Season button — shown after reward claimed */}
+            {seasonRewardClaimed && (
+              <TouchableOpacity
+                style={styles.shareSeasonButton}
+                onPress={() => setSeasonShareVisible(true)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Share season results"
+              >
+                <Ionicons name="share-outline" size={15} color={Colors.gold} />
+                <Text style={[styles.shareSeasonText, { color: Colors.gold }]}>Share Season</Text>
+              </TouchableOpacity>
+            )}
           </>
         )}
 
         {!pvp.loading && pvp.league && pvp.myStanding && (
           <>
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>YOUR LEAGUE</Text>
+            <ArenaSectionDivider />
+            <Text style={[styles.sectionLabel, { color: arena.sectionText }]}>YOUR LEAGUE</Text>
             <WeeklyLeagueCard
               league={pvp.league}
               standings={pvp.standings}
@@ -500,7 +676,28 @@ export default function CompeteHubScreen() {
         )}
 
       </ScrollView>
-    </GlassBackground>
+
+      {/* ShareCardRenderer for season summary — off-screen, fires when seasonShareVisible=true */}
+
+      {seasonShareVisible && pvp.season && (() => {
+        const shareData: ShareCardData = {
+          username: userProfile?.username ?? displayName,
+          tier: rankTier,
+          seasonName: pvp.season.name,
+          totalRP: currentRP,
+          peakTier: pvp.progress?.peakTier ?? rankTier,
+          rewardTier: pvp.progress?.rewardTier ?? undefined,
+        };
+        return (
+          <ShareCardRenderer
+            type="season_summary"
+            data={shareData}
+            visible={seasonShareVisible}
+            onCapture={() => setSeasonShareVisible(false)}
+          />
+        );
+      })()}
+    </ArenaBackground>
   );
 }
 
@@ -528,18 +725,18 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   levelBadge: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     borderWidth: 3,
     alignItems: 'center',
     justifyContent: 'center',
   },
   levelNum: {
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: '900',
     color: Colors.gold,
-    lineHeight: 24,
+    lineHeight: 28,
   },
   levelLabel: {
     fontSize: 9,
@@ -549,6 +746,11 @@ const styles = StyleSheet.create({
   heroInfo: {
     flex: 1,
     gap: 4,
+  },
+  rankRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   heroName: {
     fontSize: 17,
@@ -578,9 +780,9 @@ const styles = StyleSheet.create({
 
   // ── Section label ─────────────────────────────────────────────────────────
   sectionLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.8,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.5,
     marginTop: 8,
     marginBottom: 4,
   },
@@ -704,7 +906,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   quickCard: {
-    width: '47%',
     borderRadius: 16,
     borderWidth: 1,
     padding: 14,
@@ -837,6 +1038,30 @@ const styles = StyleSheet.create({
   },
   xpViewAllText: {
     fontSize: 13,
+    fontWeight: '700',
+  },
+  burstWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 0,
+    overflow: 'visible',
+  },
+  shareSeasonButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.gold + '18',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: Colors.gold + '55',
+    alignSelf: 'center',
+    marginTop: 6,
+  },
+  shareSeasonText: {
+    fontSize: 14,
     fontWeight: '700',
   },
 });

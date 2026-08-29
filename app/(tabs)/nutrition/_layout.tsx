@@ -10,6 +10,7 @@ export default function NutritionLayout() {
         headerStyle: { backgroundColor: colors.surface },
         headerTintColor: Colors.nutrition,
         headerTitleStyle: { color: colors.textPrimary },
+        contentStyle: { backgroundColor: colors.background },
         animation: 'slide_from_right',
       }}
     >
@@ -26,6 +27,7 @@ export default function NutritionLayout() {
       <Stack.Screen name="fasting-setup" options={{ title: 'Fasting Setup' }} />
       <Stack.Screen name="fasting-timer" options={{ title: 'Fasting Timer' }} />
       <Stack.Screen name="weight-log" options={{ title: 'Weight Log' }} />
+      <Stack.Screen name="voice-log" options={{ title: 'Voice Log', presentation: 'modal' }} />
       <Stack.Screen name="progress" options={{ title: 'Nutrition Trends' }} />
     </Stack>
   );

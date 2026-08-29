@@ -35,6 +35,7 @@ import { fetchCompareData, OWN_SCORES_MISSING } from '../../../src/services/comp
 import RadarChart, { filterAxes } from '../../../src/components/compare/RadarChart';
 import CompareStatRow from '../../../src/components/compare/CompareStatRow';
 import CompareModuleSection from '../../../src/components/compare/CompareModuleSection';
+import { CompareBattle } from '../../../src/components/pvp/CompareBattle';
 import {
   formatWeight,
   formatDistance,
@@ -406,6 +407,99 @@ export default function CompareScreen() {
           />
         </View>
 
+        {/* CompareBattle — head-to-head stat reveal */}
+        <View style={styles.compareBattleWrapper}>
+          <CompareBattle
+            myName={myName}
+            theirName={opponentDisplayName}
+            myTier="bronze"
+            theirTier="bronze"
+            stats={[
+              ...(gymVisible ? [
+                {
+                  label: 'Est. 1RM',
+                  myValue: myScores.estimatedOneRepMax,
+                  theirValue: opponentScores.estimatedOneRepMax,
+                  unit: units === 'imperial' ? 'lbs' : 'kg',
+                  higherIsBetter: true,
+                },
+                {
+                  label: 'Vol/Week',
+                  myValue: myScores.weeklyVolume,
+                  theirValue: opponentScores.weeklyVolume,
+                  unit: units === 'imperial' ? 'lbs' : 'kg',
+                  higherIsBetter: true,
+                },
+              ] : []),
+              ...(cardioVisible ? [
+                {
+                  label: 'Dist/Week',
+                  myValue: myScores.weeklyDistance,
+                  theirValue: opponentScores.weeklyDistance,
+                  unit: units === 'imperial' ? 'mi' : 'km',
+                  higherIsBetter: true,
+                },
+                {
+                  label: 'Avg Pace',
+                  myValue: myScores.avgPace,
+                  theirValue: opponentScores.avgPace,
+                  unit: 'min/km',
+                  higherIsBetter: false,
+                },
+              ] : []),
+              ...(nutritionVisible ? [
+                {
+                  label: 'Avg kcal',
+                  myValue: myScores.avgDailyCalories,
+                  theirValue: opponentScores.avgDailyCalories,
+                  unit: 'kcal',
+                  higherIsBetter: true,
+                },
+                ...(myScores.nutritionConsistency !== -1 && opponentScores.nutritionConsistency !== -1 ? [{
+                  label: 'Nutrition',
+                  myValue: myScores.nutritionConsistency,
+                  theirValue: opponentScores.nutritionConsistency,
+                  unit: 'pts',
+                  higherIsBetter: true,
+                }] : []),
+              ] : []),
+              ...(peptidesVisible ? [
+                {
+                  label: 'Active Peptides',
+                  myValue: myScores.activePeptideCount,
+                  theirValue: opponentScores.activePeptideCount,
+                  unit: '',
+                  higherIsBetter: true,
+                },
+              ] : []),
+              {
+                label: 'Consistency',
+                myValue: myScores.overallConsistency,
+                theirValue: opponentScores.overallConsistency,
+                unit: 'pts',
+                higherIsBetter: true,
+              },
+              {
+                label: 'XP Rank',
+                myValue: myScores.xpPercentile,
+                theirValue: opponentScores.xpPercentile,
+                unit: '%',
+                higherIsBetter: true,
+              },
+            ].filter((s) => s.myValue !== -1 && s.theirValue !== -1)}
+            onChallenge={() => {
+              router.push({
+                pathname: '/(tabs)/compete/create-duel',
+                params: {
+                  opponentId: opponentId ?? '',
+                  opponentName: opponentDisplayName,
+                },
+              });
+            }}
+            onDismiss={() => router.back()}
+          />
+        </View>
+
         {/* (1c) No module overlap banner */}
         {noModuleOverlap && (
           <View style={[styles.infoBanner, { backgroundColor: colors.surface }]}>
@@ -631,6 +725,14 @@ const styles = StyleSheet.create({
   // Radar chart
   radarWrapper: {
     alignItems: 'center',
+    marginBottom: 28,
+  },
+
+  // CompareBattle wrapper
+  compareBattleWrapper: {
+    height: 480,
+    borderRadius: 14,
+    overflow: 'hidden',
     marginBottom: 28,
   },
 

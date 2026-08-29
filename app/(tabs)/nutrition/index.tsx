@@ -116,19 +116,23 @@ function CalorieRing({
         ]}
       />
 
-      {/* Right half-circle clipper */}
-      <View style={[styles.halfClip, styles.rightClip]}>
-        <Reanimated.View
-          style={[styles.halfCircle, styles.rightHalf, rightStyle, { borderColor: ringColor }]}
-        />
-      </View>
+      {/* Right half-circle clipper — hidden when nothing consumed */}
+      {consumed > 0 && (
+        <View style={[styles.halfClip, styles.rightClip]}>
+          <Reanimated.View
+            style={[styles.halfCircle, styles.rightHalf, rightStyle, { borderColor: ringColor }]}
+          />
+        </View>
+      )}
 
-      {/* Left half-circle clipper */}
-      <View style={[styles.halfClip, styles.leftClip]}>
-        <Reanimated.View
-          style={[styles.halfCircle, styles.leftHalf, leftStyle, { borderColor: ringColor }]}
-        />
-      </View>
+      {/* Left half-circle clipper — hidden when nothing consumed */}
+      {consumed > 0 && (
+        <View style={[styles.halfClip, styles.leftClip]}>
+          <Reanimated.View
+            style={[styles.halfCircle, styles.leftHalf, leftStyle, { borderColor: ringColor }]}
+          />
+        </View>
+      )}
 
       {/* Center text */}
       <View style={styles.ringCenter}>
@@ -1010,7 +1014,7 @@ const styles = StyleSheet.create({
 
   // Calorie ring
   ringContainer: { width: RING_SIZE, height: RING_SIZE, alignSelf: 'center', marginVertical: 20 },
-  ringTrack: { position: 'absolute', borderWidth: RING_THICKNESS, opacity: 0.15 },
+  ringTrack: { position: 'absolute', borderWidth: RING_THICKNESS, opacity: 0.35 },
   halfClip: { position: 'absolute', width: HALF, height: RING_SIZE, overflow: 'hidden' },
   rightClip: { left: HALF },
   leftClip: { left: 0 },

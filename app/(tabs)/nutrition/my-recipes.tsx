@@ -389,7 +389,9 @@ export default function MyRecipesScreen() {
         onPress={() => router.push('/(tabs)/nutrition/create-recipe')}
         activeOpacity={0.7}
       >
-        <Ionicons name="add" size={28} color="white" />
+        <View style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name="add" size={28} color="white" />
+        </View>
       </TouchableOpacity>
 
       {logTarget && (

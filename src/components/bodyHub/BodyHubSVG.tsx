@@ -79,17 +79,17 @@ export default function BodyHubSVG({
           </Defs>
         )}
 
-        {/* Layer 1: Body outline silhouette — always visible */}
+        {/* Layer 1: Body outline silhouette */}
         <Path
           d={outlinePath}
-          fill={colors.surface}
-          stroke={dark ? '#AAAAAA' : '#555555'}
+          fill={dark ? '#2a3040' : '#c8cdd4'}
+          stroke={dark ? '#8899aa' : '#555555'}
           strokeWidth={1.2}
           strokeLinejoin="round"
         />
 
         {/* Layer 2: Muscle definition lines — subtle anatomy detail */}
-        <G opacity={0.2}>
+        <G opacity={0.5}>
           {MUSCLE_DETAIL_LINES
             .filter(line =>
               (line.sex === sex || line.sex === 'both') &&
@@ -100,7 +100,7 @@ export default function BodyHubSVG({
                 key={`detail-${i}`}
                 d={line.d}
                 fill="none"
-                stroke={dark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.35)'}
+                stroke={dark ? 'rgba(200,210,225,0.7)' : 'rgba(0,0,0,0.4)'}
                 strokeWidth={0.6}
                 strokeLinecap="round"
               />
@@ -129,12 +129,10 @@ export default function BodyHubSVG({
                 >
                   <Path
                     d={pathData}
-                    // Resting region fill — intentionally static for SVG rendering
-                    fill={isHighlighted ? `url(#grad-${regionId})` : '#2a3a4a'}
-                    fillOpacity={isHighlighted ? 1 : 0.4}
-                    // White stroke for selection contrast on dark SVG background
-                    stroke={isSelected ? '#FFFFFF' : 'transparent'}
-                    strokeWidth={isSelected ? 1.5 : 0}
+                    fill={isHighlighted ? `url(#grad-${regionId})` : (dark ? '#344055' : '#b8c0cc')}
+                    fillOpacity={isHighlighted ? 1 : 0.9}
+                    stroke={isSelected ? '#FFFFFF' : (dark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.2)')}
+                    strokeWidth={isSelected ? 1.5 : 0.5}
                     strokeLinejoin="round"
                   />
                 </G>

@@ -38,10 +38,14 @@ import {
   regenerateInviteCode,
 } from '../../../src/services/crewService';
 import { getCrewLeaderboard } from '../../../src/services/leaderboardService';
+import { getCrewChallenges, getCrewChallengeEntries } from '../../../src/services/eventService';
 import { LeaderboardRow } from '../../../src/components/social/LeaderboardRow';
+import { CrewVsCrewCard } from '../../../src/components/pvp/CrewVsCrewCard';
 import { LEADERBOARD_CATEGORIES, getCategoryConfig } from '../../../src/utils/leaderboardCategories';
+import { formatTimeRemaining } from '../../../src/utils/pvpLeagueUtils';
 import { analytics, AnalyticsEvent } from '../../../src/services/analytics';
 import type { CrewDoc, CrewMember, LeaderboardCategory, LeaderboardTimeframe, LeaderboardEntry } from '../../../src/types/social';
+import type { CrewChallenge, CrewChallengeEntry } from '../../../src/types/pvpEvents';
 
 // ─── Member row ───────────────────────────────────────────────────────────────
 
@@ -116,6 +120,11 @@ export default function CrewDetailScreen() {
   const [lbEntries, setLbEntries] = useState<LeaderboardEntry[]>([]);
   const [lbLoading, setLbLoading] = useState(false);
 
+  // ── Crew challenges state ──────────────────────────────────────────────────
+  const [crewChallenges, setCrewChallenges] = useState<
+    Array<{ challenge: CrewChallenge; entries: CrewChallengeEntry[]; myCrew?: CrewChallengeEntry }>
+  >([]);
+
   const fetchCrew = useCallback(async () => {
     if (!crewId) return;
     setLoading(true);
@@ -136,6 +145,25 @@ export default function CrewDetailScreen() {
     fetchCrew();
     analytics.track(AnalyticsEvent.CREW_DETAIL_VIEWED);
   }, [fetchCrew]);
+
+  // Fetch active crew challenges and their entries when crewId is available
+  useEffect(() => {
+    if (!crewId) return;
+    let cancelled = false;
+    getCrewChallenges().then(async (result) => {
+      if (cancelled || result.error || !result.data) return;
+      const withEntries = await Promise.all(
+        result.data.map(async (challenge) => {
+          const entriesResult = await getCrewChallengeEntries(challenge.id);
+          const entries = (!entriesResult.error && entriesResult.data) ? entriesResult.data : [];
+          const myCrew = entries.find((e) => e.crewId === crewId);
+          return { challenge, entries, myCrew };
+        }),
+      );
+      if (!cancelled) setCrewChallenges(withEntries);
+    });
+    return () => { cancelled = true; };
+  }, [crewId]);
 
   // Re-fetch leaderboard when crew loads or filters change
   useEffect(() => {
@@ -427,6 +455,24 @@ export default function CrewDetailScreen() {
             isCurrentUser={entry.uid === myUid}
           />
         ))
+      )}
+
+      {/* ── Crew Challenges (Crew vs Crew) ───────────────────────────────── */}
+      {crewChallenges.length > 0 && (
+        <>
+          <Text style={[styles.sectionHeader, { color: colors.textSecondary, marginTop: 16 }]}>
+            CREW CHALLENGES
+          </Text>
+          {crewChallenges.map(({ challenge, entries, myCrew }) => (
+            <CrewVsCrewCard
+              key={challenge.id}
+              challenge={challenge}
+              entries={entries}
+              myCrew={myCrew}
+              timeRemaining={formatTimeRemaining(challenge.endDate, Date.now())}
+            />
+          ))}
+        </>
       )}
 
       {/* Leave button */}

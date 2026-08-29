@@ -191,7 +191,9 @@ export default function CardioScreen() {
         style={[styles.fab, { backgroundColor: Colors.cardio }]}
         onPress={() => router.push('/(tabs)/cardio/start-session')}
       >
-        <Ionicons name="add" size={30} color="white" />
+        <View style={{ width: 30, height: 30, alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name="add" size={30} color="white" />
+        </View>
       </AnimatedPressable>
 
       <View style={[styles.footer, { borderTopColor: colors.glass.border }]}>

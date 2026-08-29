@@ -31,24 +31,26 @@ import { getDuelDetail, acceptDuel, declineDuel } from '../../../src/services/du
 import { analytics, AnalyticsEvent } from '../../../src/services/analytics';
 import { useDuels } from '../../../src/hooks/useDuels';
 import { DuelProgressBar } from '../../../src/components/pvp/DuelProgressBar';
+import { SuccessBurst } from '../../../src/components/animations/SuccessBurst';
 import { DuelResultScreen } from '../../../src/components/pvp/DuelResultScreen';
 import { WinStreakBadge } from '../../../src/components/pvp/WinStreakBadge';
+import { VSScreen } from '../../../src/components/pvp/VSScreen';
 import { getTierForRP } from '../../../src/utils/rankTierV2';
+import { ShareCardRenderer } from '../../../src/components/pvp/ShareCardRenderer';
+import { useTheme } from '../../../src/hooks/useTheme';
+import { Colors } from '../../../src/constants/theme';
+import { ArenaBackground } from '../../../src/components/ArenaBackground';
+import { arenaCardStyle, ARENA_GLOW } from '../../../src/constants/competeTheme';
 import type { DuelDoc, DuelMetric } from '../../../src/types/challenges';
 import type { RankTierV2 } from '../../../src/types/rankV2';
+import type { ShareCardData } from '../../../src/utils/shareCardUtils';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Shared color constants (non-BG/SURFACE — kept for semantic use) ──────────
 
-const BG = '#12121F';
-const SURFACE = '#1E1E2E';
-const SURFACE2 = '#252535';
-const TEXT_PRIMARY = '#FFFFFF';
-const TEXT_SECONDARY = '#A0A0B8';
-const BORDER = '#2E2E42';
-const ACCENT = '#6C5CE7';
-const GREEN = '#00B894';
-const RED = '#E17055';
-const GOLD = '#FFD700';
+const ACCENT = Colors.social;
+const GREEN = Colors.nutrition;
+const RED = Colors.cardio;
+const GOLD = Colors.gold;
 
 const METRIC_LABELS: Record<DuelMetric, string> = {
   volume_lifted: 'Volume Lifted (kg)',
@@ -131,6 +133,7 @@ function resolveRankTier(rp?: number): RankTierV2 {
 export default function DuelDetailScreen() {
   const router = useRouter();
   const { duelId } = useLocalSearchParams<{ duelId: string }>();
+  const { colors, dark } = useTheme();
   const myUid = auth.currentUser?.uid ?? '';
 
   const [duel, setDuel] = useState<DuelDoc | null>(null);
@@ -139,6 +142,20 @@ export default function DuelDetailScreen() {
   // Show result overlay once on first view of a completed duel
   const resultSeenRef = useRef(false);
   const [showResult, setShowResult] = useState(true);
+  // Show VS overlay once per session when duel is active
+  const vsSeenRef = useRef(false);
+  const [showVS, setShowVS] = useState(false);
+  // Share card state
+  const [shareVisible, setShareVisible] = useState(false);
+  // SuccessBurst on duel accept
+  const [showAcceptBurst, setShowAcceptBurst] = useState(false);
+
+  // Auto-hide accept burst after 800ms
+  useEffect(() => {
+    if (!showAcceptBurst) return;
+    const timer = setTimeout(() => setShowAcceptBurst(false), 800);
+    return () => clearTimeout(timer);
+  }, [showAcceptBurst]);
 
   const dismissResult = useCallback(() => {
     resultSeenRef.current = true;
@@ -154,7 +171,14 @@ export default function DuelDetailScreen() {
     if (!duelId) return;
     setLoading(true);
     const result = await getDuelDetail(duelId);
-    if (!result.error) setDuel(result.data);
+    if (!result.error) {
+      setDuel(result.data);
+      // Show VS overlay once per session when duel is active
+      if (result.data?.status === 'active' && !vsSeenRef.current) {
+        vsSeenRef.current = true;
+        setShowVS(true);
+      }
+    }
     setLoading(false);
   }, [duelId]);
 
@@ -185,6 +209,7 @@ export default function DuelDetailScreen() {
       return;
     }
     analytics.track(AnalyticsEvent.DUEL_ACCEPTED, { duelId });
+    setShowAcceptBurst(true);
     await load();
   }
 
@@ -214,17 +239,21 @@ export default function DuelDetailScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingScreen}>
-        <ActivityIndicator color={ACCENT} size="large" />
-      </View>
+      <ArenaBackground>
+        <View style={styles.loadingScreen}>
+          <ActivityIndicator color={ACCENT} size="large" />
+        </View>
+      </ArenaBackground>
     );
   }
 
   if (!duel) {
     return (
-      <View style={styles.loadingScreen}>
-        <Text style={styles.errorText}>Duel not found.</Text>
-      </View>
+      <ArenaBackground>
+        <View style={styles.loadingScreen}>
+          <Text style={[styles.errorText, { color: colors.textSecondary }]}>Duel not found.</Text>
+        </View>
+      </ArenaBackground>
     );
   }
 
@@ -276,21 +305,22 @@ export default function DuelDetailScreen() {
   };
 
   return (
+    <ArenaBackground>
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
         {/* ── Versus panel ──────────────────────────────────────────────── */}
-        <View style={styles.versusPanel}>
+        <View style={[styles.versusPanel, arenaCardStyle(dark, ARENA_GLOW.purple)]}>
           {/* Challenger column */}
           <View style={styles.playerColumn}>
             <View style={[styles.playerAvatar, isWinner(duel.challengerUid) && styles.playerAvatarWinner]}>
-              <Text style={styles.playerAvatarText}>
+              <Text style={[styles.playerAvatarText, { color: colors.textPrimary }]}>
                 {duel.challengerUsername.charAt(0).toUpperCase()}
               </Text>
             </View>
             <View style={styles.playerNameRow}>
               <Text
-                style={[styles.playerName, isWinner(duel.challengerUid) && styles.winnerName]}
+                style={[styles.playerName, { color: colors.textPrimary }, isWinner(duel.challengerUid) && styles.winnerName]}
                 numberOfLines={1}
               >
                 {duel.challengerUsername}
@@ -302,7 +332,7 @@ export default function DuelDetailScreen() {
             </View>
             {/* Vertical progress bar — kept for the versus panel visual */}
             <View style={styles.progressBarWrap}>
-              <View style={styles.progressTrack}>
+              <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
                 <View
                   style={[
                     styles.progressFill,
@@ -314,26 +344,26 @@ export default function DuelDetailScreen() {
                 />
               </View>
             </View>
-            <Text style={styles.progressNum}>{duel.challengerProgress}</Text>
+            <Text style={[styles.progressNum, { color: colors.textPrimary }]}>{duel.challengerProgress}</Text>
           </View>
 
           {/* VS badge */}
           <View style={styles.vsColumn}>
-            <View style={styles.vsBadge}>
-              <Text style={styles.vsText}>VS</Text>
+            <View style={[styles.vsBadge, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.vsText, { color: colors.textSecondary }]}>VS</Text>
             </View>
           </View>
 
           {/* Opponent column */}
           <View style={styles.playerColumn}>
             <View style={[styles.playerAvatar, styles.playerAvatarOpponent, isWinner(duel.opponentUid) && styles.playerAvatarWinner]}>
-              <Text style={styles.playerAvatarText}>
+              <Text style={[styles.playerAvatarText, { color: colors.textPrimary }]}>
                 {duel.opponentUsername.charAt(0).toUpperCase()}
               </Text>
             </View>
             <View style={styles.playerNameRow}>
               <Text
-                style={[styles.playerName, isWinner(duel.opponentUid) && styles.winnerName]}
+                style={[styles.playerName, { color: colors.textPrimary }, isWinner(duel.opponentUid) && styles.winnerName]}
                 numberOfLines={1}
               >
                 {duel.opponentUsername}
@@ -344,7 +374,7 @@ export default function DuelDetailScreen() {
               )}
             </View>
             <View style={styles.progressBarWrap}>
-              <View style={styles.progressTrack}>
+              <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
                 <View
                   style={[
                     styles.progressFill,
@@ -356,7 +386,7 @@ export default function DuelDetailScreen() {
                 />
               </View>
             </View>
-            <Text style={styles.progressNum}>{duel.opponentProgress}</Text>
+            <Text style={[styles.progressNum, { color: colors.textPrimary }]}>{duel.opponentProgress}</Text>
           </View>
         </View>
 
@@ -364,12 +394,12 @@ export default function DuelDetailScreen() {
         <View style={styles.metricSection}>
           <View style={styles.metricRow}>
             <Ionicons name={metricIcon} size={18} color={ACCENT} />
-            <Text style={styles.metricLabel}>{metricLabel}</Text>
+            <Text style={[styles.metricLabel, { color: colors.textPrimary }]}>{metricLabel}</Text>
           </View>
           {duel.status === 'active' && (
             <View style={styles.countdownRow}>
-              <Ionicons name="timer-outline" size={15} color={TEXT_SECONDARY} />
-              <Text style={styles.countdown}>{formatCountdown(duel.endDate as any)}</Text>
+              <Ionicons name="timer-outline" size={15} color={colors.textSecondary} />
+              <Text style={[styles.countdown, { color: colors.textSecondary }]}>{formatCountdown(duel.endDate as any)}</Text>
             </View>
           )}
         </View>
@@ -379,7 +409,7 @@ export default function DuelDetailScreen() {
           {duel.status === 'active' && (
             <>
               {/* DuelProgressBar — animated tug-of-war visualization */}
-              <View style={styles.tugCard}>
+              <View style={[styles.tugCard, arenaCardStyle(dark, ARENA_GLOW.purple)]}>
                 <DuelProgressBar
                   challengerProgress={duel.challengerProgress}
                   opponentProgress={duel.opponentProgress}
@@ -399,9 +429,9 @@ export default function DuelDetailScreen() {
           )}
 
           {isPendingForMe && (
-            <View style={styles.pendingCard}>
-              <Text style={styles.pendingTitle}>You've been challenged!</Text>
-              <Text style={styles.pendingSubtext}>
+            <View style={[styles.pendingCard, arenaCardStyle(dark, ARENA_GLOW.purple)]}>
+              <Text style={[styles.pendingTitle, { color: colors.textPrimary }]}>You've been challenged!</Text>
+              <Text style={[styles.pendingSubtext, { color: colors.textSecondary }]}>
                 {duel.challengerUsername} wants to compete on {metricLabel} for{' '}
                 {duel.durationWeeks} {duel.durationWeeks === 1 ? 'week' : 'weeks'}.
               </Text>
@@ -427,6 +457,10 @@ export default function DuelDetailScreen() {
                   )}
                 </TouchableOpacity>
               </View>
+              {/* SuccessBurst — shown briefly after accept succeeds */}
+              <View style={styles.acceptBurstWrap}>
+                <SuccessBurst visible={showAcceptBurst} color={GREEN} size={72} />
+              </View>
             </View>
           )}
 
@@ -438,11 +472,11 @@ export default function DuelDetailScreen() {
           )}
 
           {duel.status === 'completed' && (
-            <View style={styles.completedCard}>
+            <View style={[styles.completedCard, arenaCardStyle(dark, ARENA_GLOW.gold)]}>
               {isTie ? (
                 <View style={styles.resultRow}>
-                  <Ionicons name="medal-outline" size={22} color={TEXT_SECONDARY} />
-                  <Text style={styles.tieText}>It's a tie!</Text>
+                  <Ionicons name="medal-outline" size={22} color={colors.textSecondary} />
+                  <Text style={[styles.tieText, { color: colors.textSecondary }]}>It's a tie!</Text>
                 </View>
               ) : (
                 <View style={styles.resultRow}>
@@ -456,13 +490,13 @@ export default function DuelDetailScreen() {
                 </View>
               )}
               <View style={styles.finalScores}>
-                <Text style={styles.finalScoreLabel}>Final Scores</Text>
+                <Text style={[styles.finalScoreLabel, { color: colors.textSecondary }]}>Final Scores</Text>
                 <View style={styles.finalScoreRow}>
-                  <Text style={styles.finalScoreItem}>
-                    {duel.challengerUsername}: <Text style={styles.finalScoreNum}>{duel.challengerProgress}</Text>
+                  <Text style={[styles.finalScoreItem, { color: colors.textSecondary }]}>
+                    {duel.challengerUsername}: <Text style={[styles.finalScoreNum, { color: colors.textPrimary }]}>{duel.challengerProgress}</Text>
                   </Text>
-                  <Text style={styles.finalScoreItem}>
-                    {duel.opponentUsername}: <Text style={styles.finalScoreNum}>{duel.opponentProgress}</Text>
+                  <Text style={[styles.finalScoreItem, { color: colors.textSecondary }]}>
+                    {duel.opponentUsername}: <Text style={[styles.finalScoreNum, { color: colors.textPrimary }]}>{duel.opponentProgress}</Text>
                   </Text>
                 </View>
               </View>
@@ -485,6 +519,20 @@ export default function DuelDetailScreen() {
             >
               <Ionicons name="git-compare-outline" size={16} color={ACCENT} />
               <Text style={styles.compareLinkText}>See Full Comparison</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Share Victory button — only when completed and user won */}
+          {duel.status === 'completed' && duel.winnerId === myUid && (
+            <TouchableOpacity
+              style={styles.shareVictoryButton}
+              onPress={() => setShareVisible(true)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Share Victory"
+            >
+              <Ionicons name="share-outline" size={16} color={GREEN} />
+              <Text style={styles.shareVictoryText}>Share Victory</Text>
             </TouchableOpacity>
           )}
 
@@ -514,7 +562,40 @@ export default function DuelDetailScreen() {
           onRevenge={handleRevenge}
         />
       )}
+
+      {/* ── VSScreen overlay — shown once per session when duel is active ── */}
+      {showVS && duel && (
+        <VSScreen
+          challenger={{ name: duel.challengerUsername, tier: challengerTier }}
+          opponent={{ name: duel.opponentUsername, tier: opponentTier }}
+          metric={metricLabel}
+          onComplete={() => setShowVS(false)}
+        />
+      )}
+
+      {/* ── ShareCardRenderer — off-screen, fires when shareVisible=true ── */}
+      {shareVisible && duel && (() => {
+        const myName = iAmChallenger ? duel.challengerUsername : duel.opponentUsername;
+        const shareData: ShareCardData = {
+          username: myName,
+          tier: iAmChallenger ? challengerTier : opponentTier,
+          opponentName: theirName,
+          metric: metricLabel,
+          myValue: myProgress,
+          theirValue: theirProgress,
+          winStreak: winStreak > 1 ? winStreak : undefined,
+        };
+        return (
+          <ShareCardRenderer
+            type="duel_victory"
+            data={shareData}
+            visible={shareVisible}
+            onCapture={() => setShareVisible(false)}
+          />
+        );
+      })()}
     </SafeAreaView>
+    </ArenaBackground>
   );
 }
 
@@ -523,34 +604,30 @@ export default function DuelDetailScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: 'transparent',
   },
   loadingScreen: {
     flex: 1,
-    backgroundColor: BG,
     alignItems: 'center',
     justifyContent: 'center',
   },
   errorText: {
-    color: TEXT_SECONDARY,
     fontSize: 15,
   },
   scrollContent: {
     paddingBottom: 32,
   },
-  // Versus panel
+  // Versus panel — BG/border set inline with arenaCardStyle
   versusPanel: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: 16,
-    backgroundColor: SURFACE,
     marginHorizontal: 16,
     marginTop: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: BORDER,
   },
   playerColumn: {
     flex: 1,
@@ -583,12 +660,10 @@ const styles = StyleSheet.create({
     backgroundColor: GOLD + '22',
   },
   playerAvatarText: {
-    color: TEXT_PRIMARY,
     fontSize: 18,
     fontWeight: '800',
   },
   playerName: {
-    color: TEXT_PRIMARY,
     fontSize: 12,
     fontWeight: '700',
     textAlign: 'center',
@@ -603,7 +678,6 @@ const styles = StyleSheet.create({
   progressTrack: {
     width: 20,
     height: 70,
-    backgroundColor: BORDER,
     borderRadius: 10,
     overflow: 'hidden',
     justifyContent: 'flex-end',
@@ -613,7 +687,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   progressNum: {
-    color: TEXT_PRIMARY,
     fontSize: 14,
     fontWeight: '800',
   },
@@ -624,17 +697,14 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   vsBadge: {
-    backgroundColor: SURFACE2,
     borderRadius: 20,
     width: 36,
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: BORDER,
   },
   vsText: {
-    color: TEXT_SECONDARY,
     fontSize: 12,
     fontWeight: '900',
   },
@@ -650,7 +720,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   metricLabel: {
-    color: TEXT_PRIMARY,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -660,7 +729,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   countdown: {
-    color: TEXT_SECONDARY,
     fontSize: 13,
   },
   // Status sections
@@ -670,11 +738,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   tugCard: {
-    backgroundColor: SURFACE,
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
-    borderColor: BORDER,
   },
   inProgressCard: {
     flexDirection: 'row',
@@ -692,26 +758,29 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   pendingCard: {
-    backgroundColor: SURFACE,
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
-    borderColor: BORDER,
     gap: 10,
   },
   pendingTitle: {
-    color: TEXT_PRIMARY,
     fontSize: 16,
     fontWeight: '800',
   },
   pendingSubtext: {
-    color: TEXT_SECONDARY,
     fontSize: 13,
     lineHeight: 20,
   },
   pendingActions: {
     flexDirection: 'row',
     gap: 10,
+    marginTop: 4,
+  },
+  acceptBurstWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 0,
+    overflow: 'visible',
     marginTop: 4,
   },
   acceptButton: {
@@ -723,7 +792,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   acceptButtonText: {
-    color: TEXT_PRIMARY,
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
   },
@@ -757,11 +826,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   completedCard: {
-    backgroundColor: SURFACE,
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
-    borderColor: BORDER,
     gap: 12,
   },
   resultRow: {
@@ -775,7 +842,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   tieText: {
-    color: TEXT_SECONDARY,
     fontSize: 16,
     fontWeight: '700',
   },
@@ -783,7 +849,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   finalScoreLabel: {
-    color: TEXT_SECONDARY,
     fontSize: 12,
     fontWeight: '600',
     textTransform: 'uppercase',
@@ -794,11 +859,9 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   finalScoreItem: {
-    color: TEXT_SECONDARY,
     fontSize: 13,
   },
   finalScoreNum: {
-    color: TEXT_PRIMARY,
     fontWeight: '700',
   },
   declinedCard: {
@@ -828,5 +891,24 @@ const styles = StyleSheet.create({
     color: ACCENT,
     fontSize: 14,
     fontWeight: '600',
+  },
+  shareVictoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: GREEN + '18',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: GREEN + '55',
+    alignSelf: 'center',
+    marginTop: 4,
+  },
+  shareVictoryText: {
+    color: GREEN,
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

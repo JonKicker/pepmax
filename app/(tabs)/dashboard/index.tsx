@@ -42,6 +42,8 @@ import { useWorkoutSuggestion } from '../../../src/hooks/useWorkoutSuggestion';
 import { useXP } from '../../../src/hooks/useXP';
 import { useQuests } from '../../../src/hooks/useQuests';
 import { ACHIEVEMENT_DEFINITIONS } from '../../../src/utils/achievementDefinitions';
+import { useCelebration } from '../../../src/hooks/useCelebration';
+import { perfectWeek } from '../../../src/utils/celebrationPresets';
 import type { DashboardCardId } from '../../../src/types/dashboard';
 
 function AnimatedCard({ index, children }: { index: number; children: React.ReactNode }) {
@@ -81,6 +83,17 @@ export default function DashboardScreen() {
   const workoutSuggestion = useWorkoutSuggestion(recoveryZone, recoveryScore);
   const xp = useXP();
   const questData = useQuests();
+  const { triggerCelebration } = useCelebration();
+
+  // Perfect week celebration — fires once per session when weeklyScore hits 100
+  const perfectWeekFiredRef = useRef(false);
+  useEffect(() => {
+    const weeklyScore = data?.consistency?.weeklyScore;
+    if (weeklyScore === 100 && !perfectWeekFiredRef.current) {
+      perfectWeekFiredRef.current = true;
+      triggerCelebration(perfectWeek());
+    }
+  }, [data?.consistency?.weeklyScore]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Body Hub hero card hooks — deferred until dashboard data is ready and card is not hidden.
   // Hardcoded view='front' since the hero card is a summary preview only.

@@ -244,7 +244,9 @@ export default function TemplatesScreen() {
         }}
         activeOpacity={0.7}
       >
-        <Ionicons name="add" size={30} color="white" />
+        <View style={{ width: 30, height: 30, alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name="add" size={30} color="white" />
+        </View>
       </TouchableOpacity>
     </View>
   );

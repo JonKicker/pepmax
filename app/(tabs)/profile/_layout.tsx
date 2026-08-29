@@ -9,6 +9,7 @@ export default function ProfileLayout() {
         headerStyle: { backgroundColor: colors.surface },
         headerTintColor: colors.textPrimary,
         headerTitleStyle: { color: colors.textPrimary },
+        contentStyle: { backgroundColor: colors.background },
       }}
     >
       <Stack.Screen name="index" options={{ title: 'Settings' }} />

@@ -67,7 +67,7 @@ function TimeRangeTabs({
 }
 
 export function XPGrowthChart({ data, timeRange, onTimeRangeChange, colors }: Props) {
-  if (data.length === 0) {
+  if (data.length < 2) {
     return (
       <View style={styles.container}>
         <TimeRangeTabs selected={timeRange} onChange={onTimeRangeChange} colors={colors} />
@@ -155,6 +155,8 @@ export function XPGrowthChart({ data, timeRange, onTimeRangeChange, colors }: Pr
           data={data}
           size={4}
           style={{ data: { fill: GOLD } }}
+          labels={() => ''}
+          labelComponent={<VictoryTooltip active={false} />}
         />
       </VictoryChart>
     </View>

@@ -28,6 +28,7 @@ export default function TabLayout() {
           analytics.track(AnalyticsEvent.TAB_SWITCHED, { tab_name: e.target?.split('-')[0] ?? 'unknown' });
         },
       }}
+      sceneStyle={{ backgroundColor: colors.background }}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: Colors.accent,

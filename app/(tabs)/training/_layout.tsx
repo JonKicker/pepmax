@@ -11,6 +11,7 @@ export default function TrainingLayout() {
           headerStyle: { backgroundColor: colors.surface },
           headerTintColor: colors.textPrimary,
           headerTitleStyle: { color: colors.textPrimary },
+          contentStyle: { backgroundColor: colors.background },
           animation: 'slide_from_right',
         }}
       >
@@ -22,7 +23,7 @@ export default function TrainingLayout() {
         <Stack.Screen name="templates" options={{ title: 'Templates' }} />
         <Stack.Screen name="template-builder" options={{ title: 'Template Builder' }} />
         <Stack.Screen name="session-preview" options={{ title: 'Session Preview' }} />
-        <Stack.Screen name="active-session" options={{ headerShown: false, headerBackButtonMenuEnabled: false }} />
+        <Stack.Screen name="active-session" options={{ headerShown: false, headerBackButtonMenuEnabled: false, gestureEnabled: false }} />
         <Stack.Screen name="session-summary" options={{ title: 'Workout Summary' }} />
         <Stack.Screen name="history" options={{ title: 'Training History' }} />
         <Stack.Screen name="session-detail" options={{ title: 'Session Detail' }} />

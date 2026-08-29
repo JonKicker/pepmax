@@ -10,6 +10,7 @@ export default function PeptidesLayout() {
         headerStyle: { backgroundColor: colors.surface },
         headerTintColor: Colors.peptide,
         headerTitleStyle: { color: colors.textPrimary },
+        contentStyle: { backgroundColor: colors.background },
         animation: 'slide_from_right',
       }}
     >

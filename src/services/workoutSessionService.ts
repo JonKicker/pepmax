@@ -50,6 +50,14 @@ export async function getActiveSession(): Promise<ServiceResult<WorkoutSession |
   return { data: result.data?.[0] ?? null, error: null };
 }
 
+export const STALE_SESSION_HOURS = 4;
+
+export async function abandonStaleSession(
+  session: WorkoutSession,
+): Promise<ServiceResult<void>> {
+  return updateSession(session.id, { status: 'abandoned' });
+}
+
 export async function getRecentSessions(
   count: number,
 ): Promise<ServiceResult<WorkoutSession[]>> {

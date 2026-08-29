@@ -1,14 +1,18 @@
 import { Stack } from 'expo-router';
 import { useTheme } from '../../../src/hooks/useTheme';
+import { arenaColors } from '../../../src/constants/competeTheme';
 
 export default function CompeteLayout() {
-  const { colors } = useTheme();
+  const { colors, dark } = useTheme();
+  const arena = arenaColors(dark);
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: colors.surface },
+        headerStyle: { backgroundColor: arena.gradientStart },
         headerTintColor: colors.textPrimary,
         headerTitleStyle: { color: colors.textPrimary },
+        headerShadowVisible: false,
+        contentStyle: { backgroundColor: colors.background },
         animation: 'slide_from_right',
       }}
     >

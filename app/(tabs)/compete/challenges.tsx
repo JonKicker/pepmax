@@ -29,7 +29,8 @@ import { DuelCard } from '../../../src/components/challenges/DuelCard';
 import { getMyProgress } from '../../../src/services/challengeService';
 import type { ChallengeDoc, DuelDoc } from '../../../src/types/challenges';
 import { analytics, AnalyticsEvent } from '../../../src/services/analytics';
-import { GlassBackground } from '../../../src/components/GlassBackground';
+import { ArenaBackground } from '../../../src/components/ArenaBackground';
+import { arenaCardStyle, ARENA_GLOW } from '../../../src/constants/competeTheme';
 import * as Haptics from 'expo-haptics';
 import { Colors } from '../../../src/constants/theme';
 import { useTheme } from '../../../src/hooks/useTheme';
@@ -55,7 +56,7 @@ const FILTER_OPTIONS: { key: ChallengeFilter; label: string }[] = [
 
 export default function ChallengesHub(): React.ReactElement {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, dark } = useTheme();
   const currentUid = auth.currentUser?.uid ?? '';
 
   const [activeTab, setActiveTab] = useState<TabKey>('active');
@@ -225,7 +226,7 @@ export default function ChallengesHub(): React.ReactElement {
   const pendingCount = pendingDuels.length;
 
   return (
-    <GlassBackground>
+    <ArenaBackground>
     <View style={[styles.container, { backgroundColor: 'transparent' }]}>
       {/* Category filter row — only visible on non-duel tabs */}
       {activeTab !== 'duels' && (
@@ -238,7 +239,7 @@ export default function ChallengesHub(): React.ReactElement {
             <TouchableOpacity
               key={key}
               onPress={() => { Haptics.selectionAsync(); setFilter(key); }}
-              style={[styles.filterChip, { backgroundColor: colors.surface, borderColor: colors.border }, filter === key && styles.filterChipActive]}
+              style={[styles.filterChip, filter === key ? styles.filterChipActive : arenaCardStyle(dark)]}
               activeOpacity={0.7}
               accessibilityRole="button"
               accessibilityLabel={`Filter by ${label}`}
@@ -252,7 +253,7 @@ export default function ChallengesHub(): React.ReactElement {
       )}
 
       {/* Tab segmented control */}
-      <View style={[styles.tabRow, { backgroundColor: colors.surface }]}>
+      <View style={[styles.tabRow, arenaCardStyle(dark)]}>
         {TABS.map(({ key, label }) => {
           const isActive = activeTab === key;
           return (
@@ -333,12 +334,14 @@ export default function ChallengesHub(): React.ReactElement {
           accessibilityRole="button"
           accessibilityLabel="Create new duel"
         >
-          <Ionicons name="flash" size={20} color="#FFFFFF" />
+          <View style={{ width: 20, height: 20, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="flash" size={20} color="#FFFFFF" />
+          </View>
           <Text style={styles.fabText}>New Duel</Text>
         </TouchableOpacity>
       )}
     </View>
-    </GlassBackground>
+    </ArenaBackground>
   );
 }
 

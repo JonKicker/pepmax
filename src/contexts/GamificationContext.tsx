@@ -17,6 +17,8 @@ import React, {
 import { XPToast } from '../components/gamification/XPToast';
 import { LevelUpModal } from '../components/gamification/LevelUpModal';
 import type { ToastItem } from '../components/gamification/XPToast';
+import { useCelebration } from '../hooks/useCelebration';
+import { dailyQuest } from '../utils/celebrationPresets';
 
 type GamificationUIContextType = {
   showXPToast: (amount: number, source: string) => void;
@@ -39,6 +41,8 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
   const [levelUpLevel, setLevelUpLevel] = useState<number | null>(null);
   const [levelUpTotalXP, setLevelUpTotalXP] = useState<number>(0);
 
+  const { triggerCelebration } = useCelebration();
+
   const showXPToast = useCallback((amount: number, source: string) => {
     if (amount <= 0) return;
     const item: ToastItem = {
@@ -52,7 +56,8 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
   const showLevelUpModal = useCallback((level: number, totalXP: number) => {
     setLevelUpLevel(level);
     setLevelUpTotalXP(totalXP);
-  }, []);
+    triggerCelebration(dailyQuest({ title: `Level ${level}!`, subtitle: 'Keep it up!' }));
+  }, [triggerCelebration]);
 
   // Called by XPToast when its animation completes.
   // Removes the head of the queue so the next item can animate.
